@@ -1,0 +1,57 @@
+# =============================================================================
+# CHATBOT TESTER - Settings Globali
+# =============================================================================
+# Configurazioni che si applicano a tutti i progetti.
+# Modificare con cautela.
+# =============================================================================
+
+app:
+  version: "1.0.0"
+  language: "it"  # Lingua default (it | en), override con --lang=en
+
+# -----------------------------------------------------------------------------
+# Configurazione Browser
+# -----------------------------------------------------------------------------
+browser:
+  headless: false           # true = browser nascosto, false = visibile
+  slow_mo: 0                # Millisecondi di pausa tra azioni (debug)
+  viewport:
+    width: 1280
+    height: 720
+  device_scale_factor: 2    # Per screenshot retina
+
+# -----------------------------------------------------------------------------
+# Configurazione Test
+# -----------------------------------------------------------------------------
+test:
+  max_turns: 15             # Massimo turni per conversazione
+  screenshot_on_complete: true
+  default_wait_after_send: 1000  # ms di attesa dopo invio messaggio
+
+# -----------------------------------------------------------------------------
+# Report
+# -----------------------------------------------------------------------------
+reports:
+  local:
+    enabled: true
+    formats:
+      - html
+      - csv
+    keep_last_n: 50         # Mantieni ultimi N run (0 = tutti)
+  
+# -----------------------------------------------------------------------------
+# UI Terminal
+# -----------------------------------------------------------------------------
+ui:
+  colors: true              # Colori nel terminale
+  progress_bar: true        # Mostra progress bar
+  clear_screen: true        # Pulisce schermo tra step wizard
+
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+logging:
+  level: "INFO"             # DEBUG | INFO | WARNING | ERROR
+  file: "chatbot-tester.log"
+  max_size_mb: 10
+  backup_count: 3

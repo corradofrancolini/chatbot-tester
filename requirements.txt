@@ -1,0 +1,22 @@
+# Chatbot Tester - Dipendenze Python
+# Versione: 1.0.0
+
+# Core
+playwright>=1.40.0
+rich>=13.0.0
+requests>=2.31.0
+pyyaml>=6.0.0
+python-dotenv>=1.0.0
+
+# Google APIs (opzionale, per report su Sheets)
+gspread>=5.12.0
+google-auth>=2.25.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.110.0
+
+# Import test da Excel (opzionale)
+openpyxl>=3.1.0
+pandas>=2.0.0
+
+# Utilities
+questionary>=2.0.0  # Per prompt interattivi nel wizard
