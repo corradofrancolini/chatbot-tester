@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "project": "{{PROJECT_NAME}}",
+    "created": "{{CREATED_DATE}}",
+    "description": "Test cases per il chatbot"
+  },
+  "tests": [
+    {
+      "id": "test-001",
+      "category": "generale",
+      "question": "Ciao, come posso aiutarti?",
+      "description": "Test saluto iniziale",
+      "expected_behavior": "Il chatbot risponde con un saluto cordiale",
+      "followups": []
+    },
+    {
+      "id": "test-002",
+      "category": "generale",
+      "question": "Quali servizi offrite?",
+      "description": "Test informazioni servizi",
+      "expected_behavior": "Il chatbot elenca i servizi disponibili",
+      "followups": [
+        {
+          "question": "Dimmi di più sul primo servizio",
+          "expected_behavior": "Dettagli sul servizio richiesto"
+        }
+      ]
+    }
+  ]
+}

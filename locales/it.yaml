@@ -1,0 +1,419 @@
+# Traduzioni Italiano - Chatbot Tester
+# =====================================
+
+app:
+  title: "CHATBOT TESTER"
+  subtitle: "Setup Wizard"
+  version: "v1.0.0"
+
+nav:
+  step: "Step"
+  of: "di"
+  remaining: "~{mins} min rimanenti"
+  press_enter: "[INVIO] Continua"
+  press_back: "[←] Indietro"
+  press_help: "[?] Help"
+  press_quit: "[q] Esci"
+  press_skip: "[s] Salta"
+  continue_session: "Trovata sessione precedente (step {step}/{total})."
+  continue_option: "[c] Continua da dove eri"
+  restart_option: "[r] Ricomincia da capo"
+
+common:
+  yes: "Sì"
+  no: "No"
+  ok: "OK"
+  cancel: "Annulla"
+  back: "Indietro"
+  next: "Avanti"
+  skip: "Salta"
+  retry: "Riprova"
+  exit: "Esci"
+  save: "Salva"
+  loading: "Caricamento..."
+  checking: "Verifica in corso..."
+  success: "Completato"
+  error: "Errore"
+  warning: "Attenzione"
+  info: "Info"
+  recommended: "raccomandato"
+  optional: "opzionale"
+  required: "richiesto"
+  enabled: "Abilitato"
+  disabled: "Disabilitato"
+  configured: "Configurato"
+  not_configured: "Non configurato"
+
+status:
+  success: "✅ {message}"
+  error: "❌ {message}"
+  warning: "⚠️  {message}"
+  info: "💡 {message}"
+  working: "⏳ {message}"
+  question: "❓ {message}"
+
+errors:
+  generic: "Si è verificato un errore"
+  connection: "Errore di connessione"
+  timeout: "Timeout scaduto"
+  invalid_input: "Input non valido"
+  file_not_found: "File non trovato"
+  permission_denied: "Permesso negato"
+  already_exists: "Esiste già"
+  solutions: "POSSIBILI SOLUZIONI"
+  show_log: "Mostra log"
+
+confirm:
+  exit: "Sei sicuro di voler uscire?"
+  exit_save: "Vuoi salvare i progressi prima di uscire?"
+  overwrite: "Il file esiste già. Sovrascrivere?"
+  delete: "Sei sicuro di voler eliminare?"
+
+# Step 1: Prerequisiti
+step1:
+  title: "Verifica Prerequisiti"
+  description: "Verifico che il tuo sistema abbia tutto il necessario per eseguire il tool."
+  checking_os: "Verifica sistema operativo..."
+  checking_python: "Verifica Python..."
+  checking_homebrew: "Verifica Homebrew..."
+  checking_git: "Verifica Git..."
+  checking_disk: "Verifica spazio disco..."
+  checking_network: "Verifica connessione internet..."
+  
+  os_ok: "macOS {version} rilevato"
+  os_fail: "Richiesto macOS 12.0 o superiore"
+  python_ok: "Python {version} installato"
+  python_fail: "Richiesto Python 3.10 o superiore"
+  homebrew_ok: "Homebrew installato"
+  homebrew_fail: "Homebrew non trovato"
+  homebrew_install: "Vuoi installare Homebrew ora?"
+  git_ok: "Git {version} installato"
+  git_fail: "Git non trovato"
+  disk_ok: "{space} MB disponibili"
+  disk_fail: "Spazio insufficiente (richiesti 500 MB)"
+  network_ok: "Connessione internet attiva"
+  network_fail: "Nessuna connessione internet"
+  
+  all_ok: "Tutti i prerequisiti soddisfatti!"
+  some_fail: "Alcuni prerequisiti non sono soddisfatti"
+  
+  help: |
+    Questo step verifica che il tuo Mac abbia:
+    - macOS 12.0 (Monterey) o superiore
+    - Python 3.10 o superiore
+    - Homebrew (gestore pacchetti)
+    - Git (per aggiornamenti)
+    - Almeno 500 MB di spazio disco
+    - Connessione internet attiva
+
+# Step 2: Info Progetto
+step2:
+  title: "Informazioni Progetto"
+  description: "Inserisci le informazioni base per il tuo progetto di test."
+  
+  name_prompt: "Nome progetto"
+  name_hint: "es. my-chatbot (solo lettere minuscole, numeri e trattini)"
+  name_invalid: "Nome non valido. Usa solo a-z, 0-9 e trattini."
+  name_exists: "Un progetto con questo nome esiste già"
+  name_ok: "Nome disponibile"
+  
+  description_prompt: "Descrizione"
+  description_hint: "es. Chatbot assistenza clienti (opzionale)"
+  
+  help: |
+    Il nome del progetto viene usato per:
+    - Creare la cartella del progetto
+    - Identificare i report
+    - Riferirsi al progetto nei comandi CLI
+    
+    Scegli un nome breve e descrittivo.
+    Esempi: "example-bot", "support-bot", "sales-assistant"
+
+# Step 3: URL Chatbot
+step3:
+  title: "URL Chatbot"
+  description: "Inserisci l'URL della pagina dove si trova il chatbot da testare."
+  
+  url_prompt: "URL completo"
+  url_hint: "es. https://chat.example.com/assistant"
+  url_invalid: "URL non valido. Deve iniziare con http:// o https://"
+  
+  testing_connection: "Test connessione in corso..."
+  connection_ok: "Pagina raggiungibile"
+  connection_fail: "Impossibile raggiungere la pagina"
+  
+  needs_login: "La pagina richiede autenticazione?"
+  login_prompt: "Apro il browser per il login manuale..."
+  login_instructions: |
+    1. Effettua il login nella finestra del browser
+    2. Naviga fino alla pagina del chatbot
+    3. Premi INVIO qui quando sei pronto
+  login_saved: "Sessione salvata"
+  
+  help: |
+    Inserisci l'URL completo della pagina web che contiene
+    il chatbot da testare.
+    
+    Se la pagina richiede login:
+    - Aprirò un browser
+    - Effettua il login manualmente
+    - La sessione verrà salvata per i test futuri
+
+# Step 4: Selettori
+step4:
+  title: "Rilevamento Selettori"
+  description: "Identifico gli elementi dell'interfaccia del chatbot (textarea, bottone invio, messaggi)."
+  
+  auto_detect: "Provo il rilevamento automatico..."
+  auto_success: "Selettori rilevati automaticamente!"
+  auto_partial: "Alcuni selettori rilevati, altri mancanti"
+  auto_fail: "Rilevamento automatico non riuscito"
+  
+  found_textarea: "Textarea trovata"
+  found_button: "Bottone invio trovato"
+  found_messages: "Messaggi bot trovati"
+  found_container: "Container thread trovato"
+  
+  manual_mode: "Modalità apprendimento manuale"
+  manual_instructions: |
+    Apro il browser. Segui questi passaggi:
+    1. Clicca sulla textarea dove scrivi i messaggi
+    2. Clicca sul bottone per inviare
+    3. Scrivi "test" e invia
+    4. Clicca su una risposta del bot
+  
+  click_textarea: "Clicca sulla TEXTAREA del chat..."
+  click_button: "Clicca sul BOTTONE di invio..."
+  click_message: "Clicca su un MESSAGGIO del bot..."
+  click_container: "Clicca sul CONTAINER del thread (opzionale, INVIO per saltare)..."
+  
+  selector_captured: "Selettore catturato: {selector}"
+  
+  confirm_selectors: "Confermi questi selettori?"
+  test_selectors: "Vuoi testare i selettori con un messaggio?"
+  test_message: "Messaggio di test"
+  test_success: "Test riuscito! Il chatbot ha risposto."
+  test_fail: "Test fallito. Riprova o modifica i selettori."
+  
+  help: |
+    I selettori CSS identificano gli elementi della pagina:
+    - Textarea: dove l'utente scrive i messaggi
+    - Bottone: per inviare il messaggio
+    - Messaggi bot: le risposte del chatbot
+    - Container: l'area della conversazione (per screenshot)
+    
+    Se il rilevamento automatico fallisce, ti guiderò
+    nel cliccare manualmente sugli elementi.
+
+# Step 5: Google Sheets
+step5:
+  title: "Google Sheets"
+  description: "Configura l'integrazione con Google Sheets per i report dei test."
+  
+  options_title: "Come vuoi gestire i report?"
+  option_local: "Solo report locali (HTML/CSV)"
+  option_sheets: "Google Sheets + report locali"
+  option_later: "Configuro dopo"
+  
+  setup_title: "Configurazione Google Sheets"
+  setup_instructions: |
+    Per usare Google Sheets hai bisogno di:
+    1. Un progetto Google Cloud
+    2. Credenziali OAuth 2.0
+    3. L'ID del foglio di calcolo
+    
+  credentials_prompt: "Hai già le credenziali OAuth?"
+  credentials_guide: "Apro la guida per creare le credenziali..."
+  credentials_path: "Percorso file credentials.json"
+  credentials_invalid: "File credenziali non valido"
+  credentials_ok: "Credenziali valide"
+  
+  auth_prompt: "Autenticazione Google..."
+  auth_instructions: "Autorizza l'accesso nel browser che si aprirà"
+  auth_success: "Autenticazione completata"
+  auth_fail: "Autenticazione fallita"
+  
+  spreadsheet_prompt: "ID Spreadsheet (lascia vuoto per crearne uno nuovo)"
+  spreadsheet_new: "Creo nuovo spreadsheet..."
+  spreadsheet_created: "Spreadsheet creato: {name}"
+  spreadsheet_found: "Spreadsheet trovato: {name}"
+  spreadsheet_invalid: "Spreadsheet non trovato o non accessibile"
+  
+  folder_prompt: "ID cartella Drive per screenshot"
+  folder_found: "Cartella trovata: {name}"
+  folder_invalid: "Cartella non trovata o non accessibile"
+  
+  help: |
+    Google Sheets ti permette di:
+    - Visualizzare i risultati dei test online
+    - Condividere i report con il team
+    - Storicizzare tutte le run
+    
+    I report locali (HTML/CSV) vengono sempre generati,
+    Google Sheets è un'opzione aggiuntiva.
+
+# Step 6: LangSmith
+step6:
+  title: "LangSmith"
+  description: "Configura LangSmith per il debug avanzato delle conversazioni."
+  
+  options_title: "Usi LangSmith per tracciare il chatbot?"
+  option_no: "Non uso LangSmith"
+  option_yes: "Sì, configura LangSmith"
+  option_later: "Configuro dopo"
+  
+  api_key_prompt: "API Key LangSmith"
+  api_key_hint: "Inizia con 'lsv2_sk_'"
+  api_key_invalid: "API Key non valida"
+  api_key_ok: "API Key valida"
+  
+  project_prompt: "Project ID"
+  org_prompt: "Organization ID"
+  
+  testing: "Test connessione LangSmith..."
+  test_ok: "Connessione riuscita"
+  test_fail: "Connessione fallita"
+  
+  detect_tools: "Cerco tool names dalle trace recenti..."
+  tools_found: "Tool trovati: {tools}"
+  tools_not_found: "Nessun tool rilevato"
+  tools_confirm: "Confermi questi tool names?"
+  tools_manual: "Inserisci tool names manualmente (separati da virgola)"
+  
+  help: |
+    LangSmith è un tool di Langchain per tracciare
+    le conversazioni con LLM.
+    
+    Se il chatbot usa LangSmith, puoi:
+    - Vedere quali tool vengono chiamati
+    - Analizzare il context envelope
+    - Debug avanzato dei fallimenti
+
+# Step 7: Ollama
+step7:
+  title: "Ollama (LLM Locale)"
+  description: "Configura Ollama per le modalità Assisted e Auto."
+  
+  info: |
+    Ollama permette di usare un LLM locale per:
+    - Valutare automaticamente le risposte del chatbot
+    - Generare followup intelligenti
+    - Eseguire test in modalità Auto
+    
+    Senza Ollama puoi usare solo la modalità Train.
+  
+  checking: "Verifico installazione Ollama..."
+  installed: "Ollama installato"
+  not_installed: "Ollama non installato"
+  
+  running: "Ollama in esecuzione"
+  not_running: "Ollama non in esecuzione"
+  start_prompt: "Vuoi avviare Ollama?"
+  starting: "Avvio Ollama..."
+  
+  model_checking: "Verifico modello Mistral..."
+  model_installed: "Modello Mistral disponibile"
+  model_not_installed: "Modello Mistral non trovato"
+  model_install_prompt: "Vuoi scaricare il modello Mistral? (~4 GB)"
+  model_installing: "Download Mistral in corso..."
+  model_installed_ok: "Modello Mistral installato"
+  
+  options_title: "Come vuoi procedere?"
+  option_install: "Installa Ollama + Mistral"
+  option_configure: "Già installato, configura"
+  option_skip: "Salta (solo modalità Train)"
+  
+  test_prompt: "Test generazione..."
+  test_ok: "LLM funzionante"
+  test_fail: "Errore generazione LLM"
+  
+  help: |
+    Ollama è un runtime per LLM locali.
+    Mistral è il modello consigliato per questo tool.
+    
+    Modalità disponibili:
+    - Train: funziona sempre (registra conversazioni)
+    - Assisted: richiede Ollama (suggerisce risposte)
+    - Auto: richiede Ollama (test completamente automatici)
+
+# Step 8: Test Cases
+step8:
+  title: "Test Cases"
+  description: "Importa o crea i casi di test per il chatbot."
+  
+  options_title: "Come vuoi procedere con i test?"
+  option_import: "Importa da file (JSON/CSV/Excel)"
+  option_create: "Crea manualmente"
+  option_skip: "Inizio senza test (li aggiungo dopo)"
+  
+  import_path: "Percorso file"
+  import_format_detect: "Formato rilevato: {format}"
+  import_preview: "Anteprima test importati"
+  import_count: "{count} test trovati"
+  import_confirm: "Confermi l'importazione?"
+  import_success: "Test importati con successo"
+  import_fail: "Errore importazione: {error}"
+  
+  create_title: "Creazione Test"
+  create_question: "Domanda del test"
+  create_question_hint: "es. Come posso prenotare una sala riunioni?"
+  create_followup_prompt: "Vuoi aggiungere followup per questo test?"
+  create_followup: "Followup {n}"
+  create_another: "Vuoi aggiungere un altro test?"
+  create_saved: "{count} test salvati"
+  
+  preview_header: "| ID | Domanda | Followups |"
+  
+  help: |
+    I test cases definiscono le domande da fare al chatbot.
+    
+    Formato JSON supportato:
+    [
+      {
+        "id": "TEST-001",
+        "question": "Come faccio...",
+        "followups": ["E se...", "Inoltre..."]
+      }
+    ]
+    
+    Puoi anche usare CSV o Excel con colonne:
+    id, question, followup1, followup2, ...
+
+# Step 9: Riepilogo
+step9:
+  title: "Riepilogo Configurazione"
+  description: "Ecco la configurazione completa del tuo progetto."
+  
+  section_project: "📁 PROGETTO"
+  section_chatbot: "🤖 CHATBOT"
+  section_selectors: "🎯 SELETTORI"
+  section_google: "📊 GOOGLE SHEETS"
+  section_langsmith: "🔍 LANGSMITH"
+  section_ollama: "🧠 OLLAMA"
+  section_tests: "📝 TEST CASES"
+  
+  save_prompt: "Salvo la configurazione?"
+  saving: "Salvataggio in corso..."
+  saved: "Configurazione salvata!"
+  
+  next_steps: |
+    
+    🎉 SETUP COMPLETATO!
+    
+    Prossimi passi:
+    1. Avvia il tool: python run.py --project={project}
+    2. Inizia in modalità Train per familiarizzare
+    3. Passa a Assisted quando pronto
+    4. Usa Auto per regression testing
+    
+  launch_prompt: "Vuoi avviare il tool ora?"
+  
+  help: |
+    Questo è il riepilogo di tutte le impostazioni.
+    
+    Puoi modificare la configurazione in seguito:
+    - projects/{project}/project.yaml
+    - config/.env (credenziali)
+    
+    Per riconfigurare un progetto:
+    python run.py --project={project} --reconfigure
