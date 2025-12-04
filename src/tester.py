@@ -80,6 +80,7 @@ class TestExecution:
     langsmith_url: str = ""
     notes: str = ""
     llm_evaluation: Optional[Dict] = None
+    model_version: str = ""  # da LangSmith
 
 
 class ChatbotTester:
@@ -707,12 +708,14 @@ class ChatbotTester:
             # LangSmith debug
             langsmith_url = ""
             langsmith_notes = ""
+            model_version = ""
             if self.langsmith:
                 try:
                     report = self.langsmith.get_report_for_question(test.question)
                     if report.trace_url:
                         langsmith_url = report.trace_url
                         langsmith_notes = report.format_for_sheets()
+                        model_version = report.get_model_version()
                 except Exception as e:
                     self.on_status(f"⚠️ Errore LangSmith: {e}")
             
@@ -735,7 +738,8 @@ class ChatbotTester:
                 screenshot_path=screenshot_path,
                 langsmith_url=langsmith_url,
                 notes=combined_notes,
-                llm_evaluation=evaluation
+                llm_evaluation=evaluation,
+                model_version=model_version
             )
             
         except Exception as e:
@@ -861,6 +865,9 @@ class ChatbotTester:
                 question=result.test_case.question,
                 conversation=conv_str[:5000],  # Limite Sheets
                 screenshot_url=screenshot_url,
+                prompt_version="",
+                model_version=result.model_version,
+                environment="",
                 esito=result.esito,
                 notes=result.notes,
                 langsmith_url=result.langsmith_url
