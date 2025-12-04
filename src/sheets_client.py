@@ -3,15 +3,17 @@ Google Sheets Client - Integrazione report su Google Sheets
 
 Gestisce:
 - Autenticazione OAuth
+- Creazione/gestione fogli per RUN
 - Creazione/aggiornamento report
 - Upload screenshot su Drive
-- Skip test già completati
+- Skip test già completati nella RUN corrente
 """
 
 import os
+import re
 import json
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from datetime import datetime
 from dataclasses import dataclass
 
@@ -25,6 +27,10 @@ try:
     GOOGLE_AVAILABLE = True
 except ImportError:
     GOOGLE_AVAILABLE = False
+
+# Per type hints senza import circolari
+if TYPE_CHECKING:
+    from .config_loader import RunConfig
 
 
 # Scopes necessari
@@ -53,12 +59,13 @@ class TestResult:
 
 class GoogleSheetsClient:
     """
-    Client per Google Sheets con supporto OAuth.
+    Client per Google Sheets con supporto OAuth e gestione RUN.
     
     Features:
     - Autenticazione OAuth con token refresh
+    - Creazione fogli per ogni RUN
     - Append righe al report
-    - Check test già eseguiti (per skip)
+    - Check test già eseguiti nella RUN corrente
     - Upload screenshot su Drive
     
     Usage:
@@ -69,6 +76,8 @@ class GoogleSheetsClient:
         )
         
         if client.authenticate():
+            # Crea o riprende RUN
+            client.setup_run_sheet(run_config)
             client.append_result(result)
     """
     
@@ -87,6 +96,9 @@ class GoogleSheetsClient:
         "NOTES",
         "LANGSMITH"
     ]
+    
+    # Larghezze colonne in pixel
+    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 300, 100, 100, 60, 80, 200, 350]
     
     def __init__(self,
                  credentials_path: str,
@@ -120,15 +132,23 @@ class GoogleSheetsClient:
         self._gspread_client = None
         self._drive_service = None
         self._spreadsheet = None
-        self._worksheet = None
+        self._worksheet = None  # Foglio RUN corrente
         
-        # Cache test esistenti
+        # Stato RUN
+        self._current_run: Optional[int] = None
+        
+        # Cache test esistenti nella RUN corrente
         self._existing_tests: set = set()
     
     @property
     def is_authenticated(self) -> bool:
         """Verifica se autenticato"""
         return self._credentials is not None and self._credentials.valid
+    
+    @property
+    def current_run(self) -> Optional[int]:
+        """Numero RUN corrente"""
+        return self._current_run
     
     def authenticate(self) -> bool:
         """
@@ -171,26 +191,253 @@ class GoogleSheetsClient:
             # Inizializza clients
             self._gspread_client = gspread.authorize(creds)
             self._spreadsheet = self._gspread_client.open_by_key(self.spreadsheet_id)
-            self._worksheet = self._spreadsheet.sheet1
             
             # Drive service per upload
             if self.drive_folder_id:
                 self._drive_service = build('drive', 'v3', credentials=creds)
             
-            # Carica test esistenti
-            self._load_existing_tests()
-            
-            print("✅ Google Sheets autenticato")
+            pass  # Feedback gestito dal chiamante
             return True
             
         except Exception as e:
             print(f"❌ Errore autenticazione Google: {e}")
             return False
     
-    def _load_existing_tests(self) -> None:
-        """Carica gli ID dei test già nel report"""
+    # ==================== GESTIONE RUN ====================
+    
+    def get_next_run_number(self) -> int:
+        """
+        Trova il prossimo numero RUN disponibile.
+        Scansiona i fogli esistenti con pattern "Run NNN".
+        
+        Returns:
+            Prossimo numero RUN (1 se nessuna RUN esiste)
+        """
+        if not self._spreadsheet:
+            return 1
+        
+        run_numbers = []
+        for worksheet in self._spreadsheet.worksheets():
+            match = re.match(r'^Run (\d{3})', worksheet.title)
+            if match:
+                run_numbers.append(int(match.group(1)))
+        
+        return max(run_numbers) + 1 if run_numbers else 1
+    
+    def get_run_sheet(self, run_number: int) -> Optional[Any]:
+        """
+        Trova il foglio di una RUN esistente.
+        
+        Args:
+            run_number: Numero RUN da cercare
+            
+        Returns:
+            Worksheet o None se non trovato
+        """
+        if not self._spreadsheet:
+            return None
+        
+        pattern = f"Run {run_number:03d}"
+        for worksheet in self._spreadsheet.worksheets():
+            if worksheet.title.startswith(pattern):
+                return worksheet
+        
+        return None
+    
+    def create_run_sheet(self, 
+                         run_number: int,
+                         env: str = "DEV",
+                         mode: str = "train",
+                         prompt_version: str = "",
+                         model_version: str = "") -> Optional[Any]:
+        """
+        Crea un nuovo foglio per una RUN.
+        
+        Args:
+            run_number: Numero RUN
+            env: Ambiente (DEV/PROD)
+            mode: Modalità test (train/assisted/auto)
+            prompt_version: Versione prompt (opzionale)
+            model_version: Versione modello (opzionale)
+            
+        Returns:
+            Worksheet creato o None
+        """
+        if not self._spreadsheet:
+            return None
+        
         try:
-            # Leggi colonna TEST ID
+            # Costruisci nome foglio
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+            sheet_name = f"Run {run_number:03d} [{env}] {mode} - {timestamp}"
+            
+            # Crea foglio
+            worksheet = self._spreadsheet.add_worksheet(
+                title=sheet_name,
+                rows=1000,
+                cols=len(self.COLUMNS)
+            )
+            
+            # Aggiungi header
+            worksheet.update('A1', [self.COLUMNS])
+            
+            # Formatta header (bold, centrato)
+            worksheet.format('A1:L1', {
+                'textFormat': {'bold': True},
+                'horizontalAlignment': 'CENTER'
+            })
+            
+            # Imposta larghezze colonne
+            self._set_column_widths(worksheet)
+            
+            print(f"✅ Creato foglio: {sheet_name}")
+            return worksheet
+            
+        except Exception as e:
+            print(f"❌ Errore creazione foglio RUN: {e}")
+            return None
+    
+    def _set_column_widths(self, worksheet) -> None:
+        """Imposta le larghezze delle colonne"""
+        try:
+            requests = []
+            for i, width in enumerate(self.COLUMN_WIDTHS):
+                requests.append({
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": worksheet.id,
+                            "dimension": "COLUMNS",
+                            "startIndex": i,
+                            "endIndex": i + 1
+                        },
+                        "properties": {"pixelSize": width},
+                        "fields": "pixelSize"
+                    }
+                })
+            
+            self._spreadsheet.batch_update({"requests": requests})
+        except Exception as e:
+            print(f"⚠️ Errore impostazione larghezze colonne: {e}")
+    
+    def setup_run_sheet(self, 
+                        run_config: 'RunConfig',
+                        force_new: bool = False) -> bool:
+        """
+        Imposta il foglio per la RUN corrente.
+        Riprende RUN esistente o ne crea una nuova.
+        
+        Args:
+            run_config: Configurazione RUN
+            force_new: Forza creazione nuova RUN
+            
+        Returns:
+            True se setup riuscito
+        """
+        # Se c'è una RUN attiva e non forziamo, riprendi
+        if run_config.active_run and not force_new:
+            worksheet = self.get_run_sheet(run_config.active_run)
+            if worksheet:
+                self._worksheet = worksheet
+                self._current_run = run_config.active_run
+                self._load_existing_tests()
+                print(f"✅ Continuo su: {worksheet.title}")
+                return True
+        
+        # Crea nuova RUN
+        run_number = self.get_next_run_number()
+        worksheet = self.create_run_sheet(
+            run_number=run_number,
+            env=run_config.env,
+            mode=run_config.mode,
+            prompt_version=run_config.prompt_version,
+            model_version=run_config.model_version
+        )
+        
+        if worksheet:
+            self._worksheet = worksheet
+            self._current_run = run_number
+            self._existing_tests = set()  # Nuova RUN, nessun test
+            
+            # Aggiorna run_config
+            run_config.active_run = run_number
+            run_config.run_start = datetime.now().isoformat()
+            run_config.tests_completed = 0
+            
+            return True
+        
+        return False
+    
+    def get_all_run_numbers(self) -> List[int]:
+        """
+        Ottiene tutti i numeri RUN esistenti.
+        
+        Returns:
+            Lista ordinata di numeri RUN
+        """
+        if not self._spreadsheet:
+            return []
+        
+        run_numbers = []
+        for worksheet in self._spreadsheet.worksheets():
+            match = re.match(r'^Run (\d{3})', worksheet.title)
+            if match:
+                run_numbers.append(int(match.group(1)))
+        
+        return sorted(run_numbers)
+    
+    def get_run_info(self, run_number: int) -> Optional[Dict[str, Any]]:
+        """
+        Ottiene informazioni su una RUN specifica.
+        
+        Args:
+            run_number: Numero RUN
+            
+        Returns:
+            Dizionario con info o None
+        """
+        worksheet = self.get_run_sheet(run_number)
+        if not worksheet:
+            return None
+        
+        try:
+            # Parse nome foglio
+            # Format: "Run 015 [DEV] train - 2025-12-02 10:30"
+            title = worksheet.title
+            match = re.match(
+                r'Run (\d{3}) \[(\w+)\] (\w+) - (.+)',
+                title
+            )
+            
+            # Conta test
+            test_ids = worksheet.col_values(1)[1:]  # Skip header
+            
+            info = {
+                'run_number': run_number,
+                'title': title,
+                'tests_count': len(test_ids),
+                'worksheet': worksheet
+            }
+            
+            if match:
+                info['env'] = match.group(2)
+                info['mode'] = match.group(3)
+                info['timestamp'] = match.group(4)
+            
+            return info
+            
+        except Exception as e:
+            print(f"⚠️ Errore lettura info RUN: {e}")
+            return None
+    
+    # ==================== GESTIONE TEST ====================
+    
+    def _load_existing_tests(self) -> None:
+        """Carica gli ID dei test già nel foglio RUN corrente"""
+        if not self._worksheet:
+            self._existing_tests = set()
+            return
+        
+        try:
             col_values = self._worksheet.col_values(1)  # Prima colonna
             self._existing_tests = set(col_values[1:])  # Skip header
         except:
@@ -198,7 +445,7 @@ class GoogleSheetsClient:
     
     def is_test_completed(self, test_id: str) -> bool:
         """
-        Verifica se un test è già nel report.
+        Verifica se un test è già nella RUN corrente.
         
         Args:
             test_id: ID del test
@@ -209,11 +456,14 @@ class GoogleSheetsClient:
         return test_id in self._existing_tests
     
     def get_completed_tests(self) -> set[str]:
-        """Ritorna set dei test già completati"""
+        """Ritorna set dei test già completati nella RUN corrente"""
         return self._existing_tests.copy()
     
     def ensure_headers(self) -> None:
         """Assicura che le intestazioni siano presenti"""
+        if not self._worksheet:
+            return
+        
         try:
             first_row = self._worksheet.row_values(1)
             if not first_row or first_row != self.COLUMNS:
@@ -231,6 +481,10 @@ class GoogleSheetsClient:
         Returns:
             True se aggiunta riuscita
         """
+        if not self._worksheet:
+            print("❌ Nessun foglio RUN attivo")
+            return False
+        
         try:
             row = [
                 result.test_id,
@@ -268,6 +522,10 @@ class GoogleSheetsClient:
         if not results:
             return 0
         
+        if not self._worksheet:
+            print("❌ Nessun foglio RUN attivo")
+            return 0
+        
         try:
             rows = []
             for r in results:
@@ -286,6 +544,8 @@ class GoogleSheetsClient:
         except Exception as e:
             print(f"❌ Errore batch append: {e}")
             return 0
+    
+    # ==================== UPLOAD & UTILITY ====================
     
     def upload_screenshot(self, 
                           file_path: Path,
@@ -307,9 +567,12 @@ class GoogleSheetsClient:
             return None
         
         try:
+            # Aggiungi RUN al nome file
+            run_prefix = f"Run{self._current_run:03d}_" if self._current_run else ""
+            
             # Metadata file
             file_metadata = {
-                'name': f"{test_id}_{file_path.name}",
+                'name': f"{run_prefix}{test_id}_{file_path.name}",
                 'parents': [self.drive_folder_id]
             }
             
@@ -350,6 +613,9 @@ class GoogleSheetsClient:
         Returns:
             True se aggiornamento riuscito
         """
+        if not self._worksheet:
+            return False
+        
         try:
             self._worksheet.update_cell(row, col, value)
             return True
@@ -366,6 +632,9 @@ class GoogleSheetsClient:
         Returns:
             Numero riga o None
         """
+        if not self._worksheet:
+            return None
+        
         try:
             cell = self._worksheet.find(test_id)
             return cell.row if cell else None
@@ -374,11 +643,14 @@ class GoogleSheetsClient:
     
     def get_all_results(self) -> List[Dict[str, Any]]:
         """
-        Ottiene tutti i risultati dal report.
+        Ottiene tutti i risultati dal foglio RUN corrente.
         
         Returns:
             Lista di dizionari con i risultati
         """
+        if not self._worksheet:
+            return []
+        
         try:
             records = self._worksheet.get_all_records()
             return records

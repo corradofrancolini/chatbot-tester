@@ -9,6 +9,7 @@ Gestisce:
 """
 
 import os
+import json
 import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -125,6 +126,78 @@ class GlobalSettings:
     screenshot_on_complete: bool = True
     colors: bool = True
     progress_bar: bool = True
+
+
+@dataclass
+class RunConfig:
+    """Configurazione della RUN attiva"""
+    env: str = "DEV"
+    prompt_version: str = ""
+    model_version: str = ""
+    active_run: Optional[int] = None
+    run_start: Optional[str] = None
+    tests_completed: int = 0
+    mode: str = "train"
+    last_test_id: Optional[str] = None
+    # Toggle runtime
+    dry_run: bool = False          # Se True, non salva su Google Sheets
+    use_langsmith: bool = True     # Se False, disabilita LangSmith
+    use_rag: bool = False          # Se True, usa RAG locale
+    
+    @classmethod
+    def load(cls, file_path: Path) -> 'RunConfig':
+        """Carica RunConfig da file JSON con gestione errori"""
+        if not file_path.exists():
+            return cls()
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return cls(
+                env=data.get('env', 'DEV'),
+                prompt_version=data.get('prompt_version', ''),
+                model_version=data.get('model_version', ''),
+                active_run=data.get('active_run'),
+                run_start=data.get('run_start'),
+                tests_completed=data.get('tests_completed', 0),
+                mode=data.get('mode', 'train'),
+                last_test_id=data.get('last_test_id'),
+                dry_run=data.get('dry_run', False),
+                use_langsmith=data.get('use_langsmith', True),
+                use_rag=data.get('use_rag', False)
+            )
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"⚠️ Errore caricamento run_config: {e}")
+            return cls()
+    
+    def save(self, file_path: Path) -> bool:
+        """Salva RunConfig su file JSON"""
+        try:
+            data = {
+                'env': self.env,
+                'prompt_version': self.prompt_version,
+                'model_version': self.model_version,
+                'active_run': self.active_run,
+                'run_start': self.run_start,
+                'tests_completed': self.tests_completed,
+                'mode': self.mode,
+                'last_test_id': self.last_test_id,
+                'dry_run': self.dry_run,
+                'use_langsmith': self.use_langsmith,
+                'use_rag': self.use_rag
+            }
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            return True
+        except IOError as e:
+            print(f"❌ Errore salvataggio run_config: {e}")
+            return False
+    
+    def reset(self) -> None:
+        """Reset della RUN attiva (mantiene toggle)"""
+        self.active_run = None
+        self.run_start = None
+        self.tests_completed = 0
+        self.last_test_id = None
 
 
 class ConfigLoader:

@@ -7,11 +7,15 @@ Gestisce:
 - Tabelle e pannelli
 - Input interattivo
 - Menu di selezione
+- Wizard UI
 """
 
 from typing import Optional, List, Callable, Any
 from dataclasses import dataclass
 from enum import Enum
+from functools import wraps
+import sys
+import os
 
 try:
     from rich.console import Console
@@ -266,28 +270,29 @@ class ConsoleUI:
                 style = None
                 suffix = ""
             
-            line = f"  [{item.key}] {item.label}{suffix}"
+            # Escape delle parentesi quadre per Rich
+            key_display = item.key.replace("[", "\\[").replace("]", "\\]")
+            line = f"  \\[{key_display}] {item.label}{suffix}"
             if item.description:
                 line += f"\n      {item.description}"
             
             self.print(line, style)
         
         if allow_back:
-            self.print("  [←] Indietro", UIStyle.MUTED.value)
+            self.print("  \\[back] Indietro", UIStyle.MUTED.value)
         
         self.print("")
         
         # Ottieni input
         valid_keys = [i.key for i in items if not i.disabled]
         if allow_back:
-            valid_keys.append('←')
-            valid_keys.append('b')
+            valid_keys.append('back')
         
         while True:
             choice = self.input(prompt).strip()
             
             if choice in valid_keys:
-                if choice in ['←', 'b']:
+                if choice == 'back':
                     return None
                 return choice
             
@@ -488,7 +493,365 @@ class SpinnerContext:
             self._progress.update(self._task, description=message)
 
 
-# Singleton globale
+# ==================== WIZARD UI ====================
+
+class WizardUI:
+    """
+    UI specifica per il wizard di setup.
+    Fornisce metodi per navigazione step, progress, input guidato.
+    """
+    
+    def __init__(self, total_steps: int = 9):
+        self.console = Console() if RICH_AVAILABLE else None
+        self.total_steps = total_steps
+        self.current_step = 0
+    
+    def show_header(self, step_number: int, title: str, description: str = "", time_remaining: str = "") -> None:
+        """Mostra header dello step"""
+        self.current_step = step_number
+        progress_pct = int((step_number / self.total_steps) * 100)
+        bar_filled = int(progress_pct / 5)
+        bar = "█" * bar_filled + "░" * (20 - bar_filled)
+        
+        if self.console:
+            self.console.print(Panel(
+                f"[bold]Step {step_number}/{self.total_steps}[/bold] {bar} {time_remaining}\n\n"
+                f"[bold cyan]{title}[/bold cyan]\n"
+                f"[dim]{description}[/dim]",
+                border_style="blue",
+                title="CHATBOT TESTER - SETUP"
+            ))
+        else:
+            print(f"\n{'='*60}")
+            print(f"CHATBOT TESTER - SETUP")
+            print(f"Step {step_number}/{self.total_steps} [{bar}] {time_remaining}")
+            print(f"\n{title}")
+            if description:
+                print(f"{description}")
+            print(f"{'='*60}\n")
+    
+    def show_success(self, message: str) -> None:
+        """Messaggio successo"""
+        if self.console:
+            self.console.print(f"[green]✅ {message}[/green]")
+        else:
+            print(f"✅ {message}")
+    
+    def show_error(self, message: str) -> None:
+        """Messaggio errore"""
+        if self.console:
+            self.console.print(f"[red]❌ {message}[/red]")
+        else:
+            print(f"❌ {message}")
+    
+    def show_warning(self, message: str) -> None:
+        """Messaggio warning"""
+        if self.console:
+            self.console.print(f"[yellow]⚠️ {message}[/yellow]")
+        else:
+            print(f"⚠️ {message}")
+    
+    def show_info(self, message: str) -> None:
+        """Messaggio informativo"""
+        if self.console:
+            self.console.print(f"[blue]ℹ️ {message}[/blue]")
+        else:
+            print(f"ℹ️ {message}")
+    
+    def show_tip(self, message: str) -> None:
+        """Suggerimento"""
+        if self.console:
+            self.console.print(f"[dim]💡 {message}[/dim]")
+        else:
+            print(f"💡 {message}")
+    
+    def ask_input(self, prompt: str, default: str = "") -> str:
+        """Chiedi input"""
+        if self.console:
+            return Prompt.ask(prompt, default=default)
+        else:
+            if default:
+                result = input(f"{prompt} [{default}]: ").strip()
+                return result if result else default
+            return input(f"{prompt}: ").strip()
+    
+    def ask_confirm(self, question: str, default: bool = False) -> bool:
+        """Chiedi conferma"""
+        if self.console:
+            return Confirm.ask(question, default=default)
+        else:
+            suffix = "[Y/n]" if default else "[y/N]"
+            response = input(f"{question} {suffix}: ").strip().lower()
+            if not response:
+                return default
+            return response in ['y', 'yes', 's', 'sì', 'si']
+    
+    def show_options(self, options: List[tuple], prompt: str = "Scelta") -> str:
+        """Mostra opzioni e ritorna scelta"""
+        print("")
+        for key, label, desc in options:
+            if self.console:
+                if desc:
+                    self.console.print(f"  \\[{key}] {label}\n      [dim]{desc}[/dim]")
+                else:
+                    self.console.print(f"  \\[{key}] {label}")
+            else:
+                print(f"  [{key}] {label}")
+                if desc:
+                    print(f"      {desc}")
+        print("")
+        
+        valid_keys = [opt[0] for opt in options]
+        while True:
+            choice = self.ask_input(prompt)
+            if choice in valid_keys:
+                return choice
+            self.show_warning(f"Opzione non valida: {choice}")
+    
+    def show_summary(self, settings: dict) -> None:
+        """Mostra riepilogo configurazione"""
+        if self.console:
+            table = Table(title="Riepilogo Configurazione", show_header=True)
+            table.add_column("Impostazione", style="cyan")
+            table.add_column("Valore")
+            
+            for key, value in settings.items():
+                if isinstance(value, bool):
+                    val_str = "✅ Sì" if value else "❌ No"
+                elif isinstance(value, list):
+                    val_str = ", ".join(str(v) for v in value) or "(vuoto)"
+                elif value is None or value == "":
+                    val_str = "(non configurato)"
+                else:
+                    val_str = str(value)
+                table.add_row(key, val_str)
+            
+            self.console.print(table)
+        else:
+            print("\n--- Riepilogo ---")
+            for key, value in settings.items():
+                print(f"  {key}: {value}")
+    
+    def show_spinner(self, message: str):
+        """Ritorna context manager per spinner"""
+        return SpinnerContext(ConsoleUI(), message)
+    
+    def show_step(self, step_num: int, title: str, description: str = "", 
+                  content: str = "", show_skip: bool = False) -> None:
+        """
+        Mostra step del wizard.
+        
+        Args:
+            step_num: Numero step corrente
+            title: Titolo step
+            description: Descrizione
+            content: Contenuto principale
+            show_skip: Mostra opzione skip
+        """
+        self.current_step = step_num
+        progress_pct = int((step_num / self.total_steps) * 100)
+        bar_filled = int(progress_pct / 5)
+        bar = "█" * bar_filled + "░" * (20 - bar_filled)
+        
+        if self.console:
+            header_text = (
+                f"[bold]Step {step_num}/{self.total_steps}[/bold] {bar}\n\n"
+                f"[bold cyan]{title}[/bold cyan]"
+            )
+            if description:
+                header_text += f"\n[dim]{description}[/dim]"
+            
+            self.console.print(Panel(
+                header_text,
+                border_style="blue",
+                title="CHATBOT TESTER - SETUP"
+            ))
+            
+            if content:
+                self.console.print(content)
+            
+            if show_skip:
+                self.console.print("\n[dim]Premi [s] per saltare questo step[/dim]")
+        else:
+            print(f"\n{'='*60}")
+            print(f"CHATBOT TESTER - SETUP")
+            print(f"Step {step_num}/{self.total_steps} [{bar}]")
+            print(f"\n{title}")
+            if description:
+                print(f"{description}")
+            print(f"{'='*60}")
+            if content:
+                print(content)
+            if show_skip:
+                print("\nPremi [s] per saltare questo step")
+    
+    def show_help(self, help_text: str) -> None:
+        """
+        Mostra testo di aiuto.
+        
+        Args:
+            help_text: Testo markdown di aiuto
+        """
+        if self.console:
+            self.console.print(Panel(
+                Markdown(help_text),
+                border_style="green",
+                title="💡 Aiuto"
+            ))
+        else:
+            print("\n--- Aiuto ---")
+            print(help_text)
+            print("-" * 40)
+    
+    def clear(self) -> None:
+        """Pulisce schermo"""
+        if self.console:
+            self.console.clear()
+        else:
+            os.system('cls' if os.name == 'nt' else 'clear')
+
+
+# ==================== FUNZIONI GLOBALI ====================
+
+# Console globale per import diretto
+console = Console() if RICH_AVAILABLE else None
+
+
+def clear_screen() -> None:
+    """Pulisce lo schermo"""
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+
+def ask_session_recovery(session_info: dict) -> bool:
+    """
+    Chiede se riprendere sessione precedente.
+    
+    Args:
+        session_info: Info sulla sessione (step, data, etc.)
+    
+    Returns:
+        True se l'utente vuole continuare
+    """
+    if console:
+        console.print(Panel(
+            f"[bold]Trovata sessione precedente[/bold]\n\n"
+            f"Step: {session_info.get('current_step', '?')}/{session_info.get('total_steps', '?')}\n"
+            f"Ultimo aggiornamento: {session_info.get('last_updated', 'N/A')[:19]}",
+            border_style="yellow",
+            title="Sessione Precedente"
+        ))
+        return Confirm.ask("Vuoi continuare da dove eri rimasto?", default=True)
+    else:
+        print("\n--- Sessione Precedente ---")
+        print(f"Step: {session_info.get('current_step', '?')}/{session_info.get('total_steps', '?')}")
+        response = input("Vuoi continuare da dove eri rimasto? [Y/n]: ").strip().lower()
+        return response != 'n'
+
+
+def confirm_exit() -> bool:
+    """
+    Conferma uscita dal wizard.
+    
+    Returns:
+        True se l'utente vuole uscire
+    """
+    if console:
+        return Confirm.ask("[yellow]Vuoi davvero uscire?[/yellow] Il progresso sarà salvato", default=False)
+    else:
+        response = input("Vuoi davvero uscire? Il progresso sarà salvato [y/N]: ").strip().lower()
+        return response in ['y', 'yes', 's', 'sì']
+
+
+def with_spinner(message: str):
+    """
+    Decorator per eseguire funzione con spinner.
+    
+    Usage:
+        @with_spinner("Caricamento...")
+        def do_something():
+            ...
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if console:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console
+                ) as progress:
+                    progress.add_task(message, total=None)
+                    return func(*args, **kwargs)
+            else:
+                print(f"⏳ {message}...", end="", flush=True)
+                result = func(*args, **kwargs)
+                print(" fatto")
+                return result
+        return wrapper
+    return decorator
+
+
+def ask_confirm(question: str, default: bool = False) -> bool:
+    """
+    Chiede conferma sì/no.
+    
+    Args:
+        question: Domanda da porre
+        default: Valore default se l'utente preme solo INVIO
+    
+    Returns:
+        True/False
+    """
+    if console:
+        return Confirm.ask(question, default=default)
+    else:
+        suffix = "[Y/n]" if default else "[y/N]"
+        response = input(f"{question} {suffix}: ").strip().lower()
+        if not response:
+            return default
+        return response in ['y', 'yes', 's', 'sì', 'si']
+
+
+def ask(prompt: str, default: str = "") -> str:
+    """
+    Chiede input testuale.
+    
+    Args:
+        prompt: Messaggio prompt
+        default: Valore default
+    
+    Returns:
+        Input dell'utente
+    """
+    if console:
+        return Prompt.ask(prompt, default=default)
+    else:
+        if default:
+            result = input(f"{prompt} [{default}]: ").strip()
+            return result if result else default
+        return input(f"{prompt}: ").strip()
+
+
+def show_key_value(key: str, value: Any, style: str = "") -> None:
+    """
+    Mostra coppia chiave-valore.
+    
+    Args:
+        key: Nome chiave
+        value: Valore
+        style: Stile Rich opzionale
+    """
+    if console:
+        if style:
+            console.print(f"  [bold]{key}:[/bold] [{style}]{value}[/{style}]")
+        else:
+            console.print(f"  [bold]{key}:[/bold] {value}")
+    else:
+        print(f"  {key}: {value}")
+
+
+# ==================== SINGLETON ====================
+
 _default_ui: Optional[ConsoleUI] = None
 
 
