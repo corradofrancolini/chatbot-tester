@@ -1,31 +1,14 @@
 # Chatbot Tester - Backlog
 
-Versione attuale: **v1.0.0** (2025-12-02)
+Versione attuale: **v1.1.0** (2025-12-04)
 
 ---
 
 ## Da fare
 
-### 1. Fix Report LangSmith
-**Problema**: Il report attuale ha perso informazioni rispetto alla versione precedente.
+### Prossimi step
 
-Mancano:
-- Domanda/Query inviata
-- Fonti/Documenti consultati
-- First Token time
-- Latency dettagliata (P50/P99)
-
-Riferimento: screenshot LangSmith con dati completi
-
----
-
-### 2. Setup Git privato
-**Obiettivo**: Versionare il codice per manutenzione personale.
-
-Task:
-- [ ] Creare repo privato GitHub
-- [ ] Push v1.0.0 con tag
-- [ ] Definire workflow release
+(aggiungere qui man mano)
 
 ---
 
@@ -37,4 +20,29 @@ Task:
 
 ## Completati
 
-- [x] v1.0.0 - Release iniziale (2025-12-02)
+### v1.1.0 (2025-12-04)
+- [x] **LangSmith Report avanzato**
+  - Sources/fonti consultate con preview contenuto
+  - Waterfall tree completo (tutti gli step con timing)
+  - Query estratta dal trace
+  - First Token Time (TTFT)
+  - Token breakdown (input/output)
+  - Model version auto-extract
+- [x] **Fine-tuning pipeline** (`src/finetuning.py`)
+- [x] **Training module** (`src/training.py`)
+- [x] **Ollama toggle** - on/off dinamico
+- [x] **UI migliorata** (`src/ui.py`)
+  - Selezione test interattiva
+  - Menu quit/back
+  - WizardUI class
+
+### v1.0.1 (2025-12-02)
+- [x] Setup Git privato
+- [x] Initial commit con struttura base
+
+### v1.0.0 (2025-12-02)
+- [x] Release iniziale
+- [x] Core tester (Train/Assisted/Auto modes)
+- [x] Google Sheets integration
+- [x] Playwright browser automation
+- [x] Wizard setup progetti
