@@ -29,13 +29,14 @@ class BrowserSettings:
     timeout_bot_response: int = 60000
 
 
-@dataclass 
+@dataclass
 class ChatbotSelectors:
     """Selettori CSS del chatbot"""
     textarea: str
     submit_button: str
     bot_messages: str
     thread_container: str = ""
+    loading_indicator: str = ""
 
 
 class BrowserManager:
@@ -161,6 +162,11 @@ class BrowserManager:
             if wait_for_selector:
                 await self._page.wait_for_selector(wait_for_selector, timeout=self.settings.timeout_page_load)
             
+            # Reset contatore messaggi dopo navigazione
+            await asyncio.sleep(0.5)  # Attendi che la pagina sia stabile
+            if self.selectors:
+                self._last_message_count = await self._count_bot_messages()
+            
             return True
         except Exception as e:
             print(f"Errore navigazione a {url}: {e}")
@@ -233,41 +239,84 @@ class BrowserManager:
     async def wait_for_response(self, timeout_ms: Optional[int] = None) -> Optional[str]:
         """
         Attende la risposta del chatbot.
-        
+
         Args:
             timeout_ms: Timeout in millisecondi (default: bot_response timeout)
-            
+
         Returns:
             Testo della risposta o None se timeout
         """
         if not self.selectors:
             raise ValueError("Selettori non configurati")
-        
+
         timeout = timeout_ms or self.settings.timeout_bot_response
-        
+
         try:
-            # Attendi nuovo messaggio bot
             start_time = asyncio.get_event_loop().time()
-            
+            initial_count = self._last_message_count
+            check_interval = 0.2
+
+            print(f"  [DEBUG] wait_for_response: initial_count={initial_count}, timeout={timeout}ms")
+
+            # Breve pausa iniziale per dare tempo al DOM di aggiornarsi
+            await asyncio.sleep(0.1)
+
+            loop_count = 0
             while (asyncio.get_event_loop().time() - start_time) * 1000 < timeout:
+                loop_count += 1
+                
+                # Se c'è un loading indicator, aspetta che scompaia
+                if self.selectors.loading_indicator:
+                    loading = self._page.locator(self.selectors.loading_indicator)
+                    if await loading.count() > 0:
+                        try:
+                            if await loading.first.is_visible():
+                                if loop_count <= 3:
+                                    print(f"  [DEBUG] Loading indicator visibile, aspetto...")
+                                await asyncio.sleep(check_interval)
+                                continue
+                        except:
+                            pass
+
                 current_count = await self._count_bot_messages()
                 
-                if current_count > self._last_message_count:
-                    # Nuovo messaggio! Attendi che sia completo
-                    await self._wait_for_message_complete()
+                if loop_count <= 5 or loop_count % 10 == 0:
+                    print(f"  [DEBUG] loop {loop_count}: current_count={current_count}, initial_count={initial_count}")
+
+                # Nuovo messaggio apparso rispetto a quando abbiamo inviato
+                if current_count > initial_count:
+                    print(f"  [DEBUG] Nuovo messaggio rilevato! ({current_count} > {initial_count})")
                     
-                    # Ottieni testo ultimo messaggio
+                    # Attendi che il messaggio sia completo (testo stabile)
+                    await self._wait_for_message_complete()
+
+                    # Aggiorna il conteggio per prossimi messaggi
+                    self._last_message_count = current_count
+
+                    # Ottieni testo ultimo messaggio (escludendo feedback form)
                     messages = self._page.locator(self.selectors.bot_messages)
                     last_message = messages.last
-                    text = await last_message.text_content()
-                    
+
+                    # Prova a estrarre solo il contenuto (.llm__inner), escludendo feedback
+                    inner_content = last_message.locator(".llm__inner")
+                    if await inner_content.count() > 0:
+                        texts = []
+                        for i in range(await inner_content.count()):
+                            t = await inner_content.nth(i).text_content()
+                            if t:
+                                texts.append(t.strip())
+                        text = "\n".join(texts)
+                    else:
+                        text = await last_message.text_content()
+
+                    print(f"  [DEBUG] Risposta catturata: {text[:50] if text else 'vuoto'}...")
                     return text.strip() if text else None
-                
-                await asyncio.sleep(0.5)
-            
-            print("⚠️ Timeout attesa risposta bot")
+
+                await asyncio.sleep(check_interval)
+
+            print(f"⚠️ Timeout attesa risposta bot (loop_count={loop_count})")
             return None
-            
+
         except Exception as e:
             print(f"Errore attesa risposta: {e}")
             return None

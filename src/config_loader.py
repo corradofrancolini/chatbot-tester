@@ -24,6 +24,7 @@ class SelectorsConfig:
     submit_button: str = ""
     bot_messages: str = ""
     thread_container: str = ""
+    loading_indicator: str = ""
 
 
 @dataclass
@@ -143,6 +144,7 @@ class RunConfig:
     dry_run: bool = False          # Se True, non salva su Google Sheets
     use_langsmith: bool = True     # Se False, disabilita LangSmith
     use_rag: bool = False          # Se True, usa RAG locale
+    use_ollama: bool = True        # Se False, disabilita Ollama (solo Train mode)
     
     @classmethod
     def load(cls, file_path: Path) -> 'RunConfig':
@@ -163,7 +165,8 @@ class RunConfig:
                 last_test_id=data.get('last_test_id'),
                 dry_run=data.get('dry_run', False),
                 use_langsmith=data.get('use_langsmith', True),
-                use_rag=data.get('use_rag', False)
+                use_rag=data.get('use_rag', False),
+                use_ollama=data.get('use_ollama', True)
             )
         except (json.JSONDecodeError, IOError) as e:
             print(f"⚠️ Errore caricamento run_config: {e}")
@@ -183,7 +186,8 @@ class RunConfig:
                 'last_test_id': self.last_test_id,
                 'dry_run': self.dry_run,
                 'use_langsmith': self.use_langsmith,
-                'use_rag': self.use_rag
+                'use_rag': self.use_rag,
+                'use_ollama': self.use_ollama
             }
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
@@ -316,7 +320,8 @@ class ConfigLoader:
             textarea=selectors.get('textarea', ''),
             submit_button=selectors.get('submit_button', ''),
             bot_messages=selectors.get('bot_messages', ''),
-            thread_container=selectors.get('thread_container', '')
+            thread_container=selectors.get('thread_container', ''),
+            loading_indicator=selectors.get('loading_indicator', '')
         )
         
         timeouts = chatbot.get('timeouts', {})

@@ -24,7 +24,7 @@ from .config_loader import (
 )
 from .browser import BrowserManager, BrowserSettings, ChatbotSelectors
 from .ollama_client import OllamaClient
-from .langsmith_client import LangSmithClient, LangSmithDebugger
+from .langsmith_client import LangSmithClient, LangSmithDebugger, LangSmithReport
 from .sheets_client import GoogleSheetsClient, TestResult
 from .report_local import ReportGenerator, TestResultLocal
 from .training import TrainingData, TrainModeUI
@@ -80,7 +80,7 @@ class TestExecution:
     langsmith_url: str = ""
     notes: str = ""
     llm_evaluation: Optional[Dict] = None
-    model_version: str = ""  # da LangSmith
+    model_version: str = ""
 
 
 class ChatbotTester:
@@ -174,7 +174,8 @@ class ChatbotTester:
             textarea=self.project.chatbot.selectors.textarea,
             submit_button=self.project.chatbot.selectors.submit_button,
             bot_messages=self.project.chatbot.selectors.bot_messages,
-            thread_container=self.project.chatbot.selectors.thread_container
+            thread_container=self.project.chatbot.selectors.thread_container,
+            loading_indicator=self.project.chatbot.selectors.loading_indicator
         )
         
         self.browser = BrowserManager(browser_settings, selectors)
@@ -368,7 +369,7 @@ class ChatbotTester:
     async def _execute_train_test(self, test: TestCase) -> TestExecution:
         """
         Esegue un singolo test in modalità train con loop interattivo.
-        
+
         L'utente può:
         - Scegliere suggerimenti numerati [1] [2] [3]
         - Usare followup predefinito [f]
@@ -383,11 +384,15 @@ class ChatbotTester:
         turn = 0
         max_turns = 15
         skipped = False
-        
+
         # UI helper
         ui = TrainModeUI(self.training) if self.training else None
-        
+
         try:
+            # Ricarica la pagina per iniziare una nuova conversazione
+            await self.browser.navigate(self.project.chatbot.url)
+            await asyncio.sleep(0.5)
+
             # Invia domanda iniziale
             await self.browser.send_message(test.question)
             print(f"\nYOU → {test.question}")
@@ -533,13 +538,35 @@ class ChatbotTester:
             else:
                 print(f"\n✓ {test.id} completato │ {turn} turni")
             
+            # LangSmith debug (anche in Train mode per estrarre model_version e report)
+            langsmith_url = ""
+            langsmith_notes = ""
+            model_version = ""
+            if self.langsmith:
+                try:
+                    report = self.langsmith.get_report_for_question(test.question)
+                    if report.trace_url:
+                        langsmith_url = report.trace_url
+                        langsmith_notes = report.format_for_sheets()
+                        model_version = report.get_model_version()
+                except:
+                    pass
+
+            # Combina notes: train info + LangSmith report
+            train_notes = f"Train mode - {patterns_learned} pattern appresi"
+            combined_notes = train_notes
+            if langsmith_notes:
+                combined_notes += "\n---\n" + langsmith_notes
+
             return TestExecution(
                 test_case=test,
                 conversation=conversation,
                 esito="SKIP" if skipped else "PASS",
                 duration_ms=duration_ms,
                 screenshot_path=screenshot_path,
-                notes=f"Train mode - {patterns_learned} pattern appresi"
+                notes=combined_notes,
+                langsmith_url=langsmith_url,
+                model_version=model_version
             )
             
         except Exception as e:
@@ -630,8 +657,12 @@ class ChatbotTester:
         conversation = []
         start_time = datetime.utcnow()
         remaining_followups = test.followups.copy()
-        
+
         try:
+            # Ricarica la pagina per iniziare una nuova conversazione
+            await self.browser.navigate(self.project.chatbot.url)
+            await asyncio.sleep(0.5)
+
             # Invia domanda iniziale
             self.on_status(f"📤 {test.question[:60]}...")
             await self.browser.send_message(test.question)
@@ -865,12 +896,10 @@ class ChatbotTester:
                 question=result.test_case.question,
                 conversation=conv_str[:5000],  # Limite Sheets
                 screenshot_url=screenshot_url,
-                prompt_version="",
-                model_version=result.model_version,
-                environment="",
                 esito=result.esito,
                 notes=result.notes,
-                langsmith_url=result.langsmith_url
+                langsmith_url=result.langsmith_url,
+                model_version=result.model_version
             ))
         
         # Aggiorna test completati

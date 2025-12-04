@@ -132,20 +132,21 @@ Esempi:
 def show_main_menu(ui: ConsoleUI, loader: ConfigLoader) -> str:
     """Mostra menu principale e ritorna scelta"""
     projects = loader.list_projects()
-    
+
     ui.header(
         t('app_name'),
         t('welcome')
     )
-    
+
     items = [
         MenuItem('1', t('menu_new_project'), ''),
         MenuItem('2', t('menu_open_project'), f'{len(projects)} progetti disponibili' if projects else 'Nessun progetto'),
-        MenuItem('3', t('menu_settings'), ''),
-        MenuItem('4', t('menu_help'), ''),
+        MenuItem('3', 'Fine-tuning', 'Addestra modello valutatore'),
+        MenuItem('4', t('menu_settings'), ''),
+        MenuItem('5', t('menu_help'), ''),
         MenuItem('quit', t('menu_exit'), '')
     ]
-    
+
     return ui.menu(items, t('confirm'))
 
 
@@ -173,22 +174,25 @@ def show_project_menu(ui: ConsoleUI, loader: ConfigLoader) -> str:
     return projects[idx] if 0 <= idx < len(projects) else None
 
 
-def show_mode_menu(ui: ConsoleUI, project: ProjectConfig) -> str:
+def show_mode_menu(ui: ConsoleUI, project: ProjectConfig, run_config: RunConfig) -> str:
     """Mostra menu modalità test"""
     ui.section("Seleziona Modalità")
-    
+
     # Verifica disponibilità Ollama per modalità avanzate
-    ollama_available = project.ollama.enabled
-    
+    # Ollama disponibile se: configurato nel progetto E abilitato nel run_config
+    ollama_available = project.ollama.enabled and run_config.use_ollama
+
     items = [
         MenuItem('1', t('mode_train'), t('mode_train_desc')),
         MenuItem('2', t('mode_assisted'), t('mode_assisted_desc'), disabled=not ollama_available),
         MenuItem('3', t('mode_auto'), t('mode_auto_desc'), disabled=not ollama_available),
     ]
-    
-    if not ollama_available:
-        ui.warning("Ollama non configurato - modalità Assisted/Auto non disponibili")
-    
+
+    if not project.ollama.enabled:
+        ui.warning("Ollama non configurato nel progetto - modalità Assisted/Auto non disponibili")
+    elif not run_config.use_ollama:
+        ui.warning("Ollama disabilitato (Toggle opzioni) - modalità Assisted/Auto non disponibili")
+
     return ui.menu(items, t('confirm'), allow_back=True)
 
 
@@ -341,7 +345,8 @@ def show_run_menu(ui: ConsoleUI, project: ProjectConfig, run_config: RunConfig) 
     dry_status = "[yellow]ON[/yellow]" if run_config.dry_run else "[dim]OFF[/dim]"
     ls_status = "[green]ON[/green]" if run_config.use_langsmith else "[dim]OFF[/dim]"
     rag_status = "[green]ON[/green]" if run_config.use_rag else "[dim]OFF[/dim]"
-    ui.print(f"\n  Toggle: Dry run: {dry_status} | LangSmith: {ls_status} | RAG: {rag_status}")
+    ollama_status = "[green]ON[/green]" if run_config.use_ollama else "[dim]OFF[/dim]"
+    ui.print(f"\n  Toggle: Dry run: {dry_status} | LangSmith: {ls_status} | RAG: {rag_status} | Ollama: {ollama_status}")
     
     # Mostra stato RUN attuale
     if run_config.active_run:
@@ -406,35 +411,39 @@ def configure_run_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
 def toggle_options_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
     """
     Menu toggle opzioni runtime.
-    
+
     Returns:
         True se modificato qualcosa
     """
     while True:
         ui.section("Toggle Opzioni")
-        
+
         # Status attuale
         dry_status = "[yellow]ON[/yellow]" if run_config.dry_run else "[dim]OFF[/dim]"
         ls_status = "[green]ON[/green]" if run_config.use_langsmith else "[dim]OFF[/dim]"
         rag_status = "[green]ON[/green]" if run_config.use_rag else "[dim]OFF[/dim]"
-        
+        ollama_status = "[green]ON[/green]" if run_config.use_ollama else "[dim]OFF[/dim]"
+
         ui.print(f"\n  Stato attuale:")
         ui.print(f"  [1] Dry run:    {dry_status}  {'(non salva su Sheets)' if run_config.dry_run else ''}")
         ui.print(f"  [2] LangSmith:  {ls_status}")
         ui.print(f"  [3] RAG locale: {rag_status}")
+        ui.print(f"  [4] Ollama:     {ollama_status}  {'(Assisted/Auto disponibili)' if run_config.use_ollama else '(solo Train mode)'}")
         ui.print("")
-        
+
         items = [
-            MenuItem('1', f"Dry run: {'OFF→ON' if not run_config.dry_run else 'ON→OFF'}", 
+            MenuItem('1', f"Dry run: {'OFF→ON' if not run_config.dry_run else 'ON→OFF'}",
                      'Disabilita salvataggio su Sheets' if not run_config.dry_run else 'Riabilita salvataggio'),
             MenuItem('2', f"LangSmith: {'OFF→ON' if not run_config.use_langsmith else 'ON→OFF'}",
                      'Abilita tracking' if not run_config.use_langsmith else 'Disabilita tracking'),
             MenuItem('3', f"RAG: {'OFF→ON' if not run_config.use_rag else 'ON→OFF'}",
                      'Abilita RAG locale' if not run_config.use_rag else 'Disabilita RAG'),
+            MenuItem('4', f"Ollama: {'OFF→ON' if not run_config.use_ollama else 'ON→OFF'}",
+                     'Abilita modalità Assisted/Auto' if not run_config.use_ollama else 'Disabilita (solo Train)'),
         ]
-        
+
         choice = ui.menu(items, "Toggle", allow_back=True)
-        
+
         if choice == 'b' or choice == '':
             return True
         elif choice == '1':
@@ -449,6 +458,290 @@ def toggle_options_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
             run_config.use_rag = not run_config.use_rag
             status = "ON" if run_config.use_rag else "OFF"
             ui.success(f"RAG locale: {status}")
+        elif choice == '4':
+            run_config.use_ollama = not run_config.use_ollama
+            status = "ON - Assisted/Auto disponibili" if run_config.use_ollama else "OFF - solo Train mode"
+            ui.success(f"Ollama: {status}")
+
+
+def show_finetuning_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
+    """Menu per fine-tuning del modello valutatore"""
+    from src.finetuning import FineTuningPipeline, DatasetStats
+
+    # Seleziona progetto
+    project_name = show_project_menu(ui, loader)
+    if not project_name:
+        return
+
+    try:
+        project = loader.load_project(project_name)
+    except FileNotFoundError:
+        ui.error(f"Progetto '{project_name}' non trovato")
+        return
+
+    pipeline = FineTuningPipeline(project.project_dir)
+
+    while True:
+        ui.section(f"Fine-tuning - {project_name}")
+
+        # Mostra statistiche dataset corrente
+        stats = pipeline.validate_dataset()
+        ui.print(f"\n  Dataset attuale: [cyan]{stats.total_examples}[/cyan] esempi")
+        ui.print(f"  PASS: [green]{stats.pass_count}[/green] | FAIL: [red]{stats.fail_count}[/red] | SKIP: [dim]{stats.skip_count}[/dim]")
+
+        if stats.is_valid:
+            ui.print("  Status: [green]Pronto per fine-tuning[/green]")
+        else:
+            ui.print("  Status: [yellow]Dataset insufficiente[/yellow]")
+
+        ui.print("")
+
+        items = [
+            MenuItem('1', 'Statistiche dettagliate', 'Analizza qualità dataset'),
+            MenuItem('2', 'Esporta dataset', 'Genera file JSONL/Modelfile'),
+            MenuItem('3', 'Fine-tune Ollama', 'Crea modello locale', disabled=not stats.is_valid),
+            MenuItem('4', 'Fine-tune OpenAI', 'Usa API OpenAI (a pagamento)', disabled=not stats.is_valid),
+            MenuItem('5', 'Testa modello', 'Valuta accuracy su test set'),
+            MenuItem('6', 'Modelli disponibili', 'Lista modelli Ollama/OpenAI'),
+        ]
+
+        choice = ui.menu(items, "Scelta", allow_back=True)
+
+        if choice is None:
+            return
+
+        elif choice == '1':
+            # Statistiche dettagliate
+            _show_dataset_stats(ui, stats)
+
+        elif choice == '2':
+            # Esporta dataset
+            _export_dataset_menu(ui, pipeline)
+
+        elif choice == '3':
+            # Fine-tune Ollama
+            _finetune_ollama_menu(ui, pipeline)
+
+        elif choice == '4':
+            # Fine-tune OpenAI
+            _finetune_openai_menu(ui, pipeline)
+
+        elif choice == '5':
+            # Testa modello
+            _test_model_menu(ui, pipeline)
+
+        elif choice == '6':
+            # Lista modelli
+            _show_available_models(ui, pipeline)
+
+
+def _show_dataset_stats(ui: ConsoleUI, stats) -> None:
+    """Mostra statistiche dettagliate del dataset"""
+    ui.section("Statistiche Dataset")
+
+    ui.print(f"\n  Totale esempi: [cyan]{stats.total_examples}[/cyan]")
+    ui.print(f"  PASS: [green]{stats.pass_count}[/green] ({stats.pass_count/stats.total_examples*100:.1f}%)" if stats.total_examples > 0 else "")
+    ui.print(f"  FAIL: [red]{stats.fail_count}[/red] ({stats.fail_count/stats.total_examples*100:.1f}%)" if stats.total_examples > 0 else "")
+    ui.print(f"  SKIP: [dim]{stats.skip_count}[/dim] ({stats.skip_count/stats.total_examples*100:.1f}%)" if stats.total_examples > 0 else "")
+
+    ui.print(f"\n  Lunghezza media domanda: {stats.avg_question_length} caratteri")
+    ui.print(f"  Lunghezza media risposta: {stats.avg_response_length} caratteri")
+
+    if stats.categories:
+        ui.print("\n  Categorie:")
+        for cat, count in sorted(stats.categories.items(), key=lambda x: -x[1]):
+            ui.print(f"    {cat}: {count}")
+
+    if stats.issues:
+        ui.print("\n  [yellow]Problemi rilevati:[/yellow]")
+        for issue in stats.issues:
+            ui.print(f"    - {issue}")
+
+    ui.print(f"\n  Validità: {'[green]OK[/green]' if stats.is_valid else '[red]NON VALIDO[/red]'}")
+    ui.print("\n  [dim]Requisiti minimi: 50+ esempi, 10+ PASS, 10+ FAIL[/dim]")
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
+
+
+def _export_dataset_menu(ui: ConsoleUI, pipeline) -> None:
+    """Menu esportazione dataset"""
+    ui.section("Esporta Dataset")
+
+    items = [
+        MenuItem('1', 'JSONL (OpenAI)', 'Formato standard per fine-tuning'),
+        MenuItem('2', 'Modelfile (Ollama)', 'Per ollama create'),
+    ]
+
+    choice = ui.menu(items, "Formato", allow_back=True)
+
+    if choice == '1':
+        try:
+            path = pipeline.export_training_data(output_format="jsonl")
+            ui.success(f"Dataset esportato: {path}")
+        except Exception as e:
+            ui.error(f"Errore: {e}")
+
+    elif choice == '2':
+        try:
+            path = pipeline.export_training_data(output_format="ollama")
+            ui.success(f"Modelfile creato: {path}")
+        except Exception as e:
+            ui.error(f"Errore: {e}")
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
+
+
+def _finetune_ollama_menu(ui: ConsoleUI, pipeline) -> None:
+    """Menu fine-tuning Ollama"""
+    ui.section("Fine-tune con Ollama")
+
+    # Lista modelli disponibili
+    models = pipeline.get_available_models()
+    ollama_models = models.get("ollama", [])
+
+    if not ollama_models:
+        ui.warning("Nessun modello Ollama trovato. Installa con: ollama pull llama3.2:3b")
+        ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+        input()
+        return
+
+    ui.print("\n  Modelli Ollama disponibili:")
+    for i, model in enumerate(ollama_models[:10], 1):
+        ui.print(f"    [{i}] {model}")
+
+    base_model = input("\n  Modello base (default: llama3.2:3b): ").strip() or "llama3.2:3b"
+    output_name = input("  Nome modello output (default: chatbot-evaluator): ").strip() or "chatbot-evaluator"
+
+    ui.print(f"\n  Creazione modello '{output_name}' da '{base_model}'...")
+
+    success, message = pipeline.finetune_ollama(base_model, output_name)
+
+    if success:
+        ui.success(message)
+        ui.print(f"\n  Usa il modello con: ollama run {output_name}")
+    else:
+        ui.error(message)
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
+
+
+def _finetune_openai_menu(ui: ConsoleUI, pipeline) -> None:
+    """Menu fine-tuning OpenAI"""
+    import os
+
+    ui.section("Fine-tune con OpenAI")
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        ui.warning("OPENAI_API_KEY non trovata nelle variabili d'ambiente")
+        api_key = input("  Inserisci API key: ").strip()
+        if not api_key:
+            return
+
+    # Esporta dataset
+    ui.print("\n  Esportazione dataset JSONL...")
+    try:
+        jsonl_path = pipeline.export_training_data(output_format="jsonl")
+    except Exception as e:
+        ui.error(f"Errore esportazione: {e}")
+        return
+
+    ui.print(f"  Dataset: {jsonl_path}")
+
+    base_model = input("\n  Modello base (default: gpt-4o-mini-2024-07-18): ").strip() or "gpt-4o-mini-2024-07-18"
+    suffix = input("  Suffisso modello (default: chatbot-evaluator): ").strip() or "chatbot-evaluator"
+
+    ui.warning("\n  ATTENZIONE: Il fine-tuning OpenAI ha un costo!")
+    confirm = input("  Confermi? (s/n): ").strip().lower()
+
+    if confirm != 's':
+        ui.info("Operazione annullata")
+        return
+
+    ui.print("\n  Avvio job fine-tuning...")
+
+    success, message = pipeline.finetune_openai(api_key, jsonl_path, base_model, suffix)
+
+    if success:
+        ui.success(message)
+        ui.print("\n  Controlla lo stato su: https://platform.openai.com/finetune")
+    else:
+        ui.error(message)
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
+
+
+def _test_model_menu(ui: ConsoleUI, pipeline) -> None:
+    """Menu test modello"""
+    ui.section("Testa Modello")
+
+    model_name = input("  Nome modello da testare: ").strip()
+    if not model_name:
+        return
+
+    provider = input("  Provider (ollama/openai, default: ollama): ").strip() or "ollama"
+
+    # Split dataset
+    ui.print("\n  Divisione dataset in train/test (80/20)...")
+    train_set, test_set = pipeline.split_dataset(test_ratio=0.2)
+
+    ui.print(f"  Test set: {len(test_set)} esempi")
+
+    if len(test_set) < 5:
+        ui.warning("Test set troppo piccolo")
+        ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+        input()
+        return
+
+    ui.print(f"\n  Valutazione modello '{model_name}'...")
+
+    results = pipeline.evaluate_model(model_name, test_set, provider)
+
+    # Mostra risultati
+    ui.section("Risultati")
+
+    ui.print(f"\n  Accuracy: [cyan]{results['accuracy']*100:.1f}%[/cyan]")
+    ui.print(f"  Corretti: [green]{results['correct']}[/green] / {results['total']}")
+
+    ui.print(f"\n  FAIL Precision: {results['fail_precision']*100:.1f}%")
+    ui.print(f"  FAIL Recall: {results['fail_recall']*100:.1f}%")
+
+    ui.print("\n  Confusion Matrix:")
+    cm = results['confusion_matrix']
+    ui.print("            Predetto")
+    ui.print("            PASS  FAIL  SKIP")
+    ui.print(f"  Vero PASS   {cm['PASS']['PASS']:3d}   {cm['PASS']['FAIL']:3d}   {cm['PASS']['SKIP']:3d}")
+    ui.print(f"       FAIL   {cm['FAIL']['PASS']:3d}   {cm['FAIL']['FAIL']:3d}   {cm['FAIL']['SKIP']:3d}")
+    ui.print(f"       SKIP   {cm['SKIP']['PASS']:3d}   {cm['SKIP']['FAIL']:3d}   {cm['SKIP']['SKIP']:3d}")
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
+
+
+def _show_available_models(ui: ConsoleUI, pipeline) -> None:
+    """Mostra modelli disponibili"""
+    ui.section("Modelli Disponibili")
+
+    models = pipeline.get_available_models()
+
+    ui.print("\n  [bold]Ollama (locale):[/bold]")
+    if models['ollama']:
+        for model in models['ollama']:
+            ui.print(f"    - {model}")
+    else:
+        ui.print("    [dim]Nessun modello installato[/dim]")
+        ui.print("    [dim]Installa con: ollama pull llama3.2:3b[/dim]")
+
+    ui.print("\n  [bold]OpenAI (API):[/bold]")
+    for model in models['openai']:
+        ui.print(f"    - {model}")
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
 
 
 def start_new_run_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
@@ -670,7 +963,7 @@ async def main_interactive(args):
                         continue
                     
                     # Scegli modalità
-                    mode_choice = show_mode_menu(ui, project)
+                    mode_choice = show_mode_menu(ui, project, run_config)
                     if mode_choice:
                         mode_map = {'1': TestMode.TRAIN, '2': TestMode.ASSISTED, '3': TestMode.AUTO}
                         mode = mode_map.get(mode_choice, TestMode.TRAIN)
@@ -702,10 +995,14 @@ async def main_interactive(args):
                     ui.error(f"Progetto '{project_name}' non trovato")
         
         elif choice == '3':
+            # Fine-tuning
+            show_finetuning_menu(ui, loader)
+
+        elif choice == '4':
             # Impostazioni
             ui.info("Impostazioni non ancora implementate")
-        
-        elif choice == '4':
+
+        elif choice == '5':
             # Aiuto
             ui.help_text("""
 # Chatbot Tester - Guida Rapida

@@ -6,7 +6,6 @@ Gestisce:
 - Analisi tool routing
 - Estrazione metriche performance
 - Context envelope inspection
-- Estrazione automatica modello/provider
 """
 
 import requests
@@ -44,6 +43,28 @@ class TraceInfo:
 
 
 @dataclass
+class WaterfallStep:
+    """Singolo step nel waterfall tree"""
+    name: str
+    run_type: str  # llm, tool, chain, retriever, etc.
+    duration_ms: int = 0
+    start_offset_ms: int = 0  # Offset dall'inizio del trace
+    status: str = ""
+    error: Optional[str] = None
+    depth: int = 0  # Livello di nesting
+
+
+@dataclass
+class SourceDocument:
+    """Documento fonte recuperato durante la ricerca"""
+    title: str = ""
+    source: str = ""  # URL o path
+    content_preview: str = ""
+    score: float = 0.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class LangSmithReport:
     """Report strutturato per un trace LangSmith"""
     trace_url: str = ""
@@ -59,37 +80,74 @@ class LangSmithReport:
     failed_tools: int = 0
     first_token_ms: int = 0
     error: str = ""
-    
+    # Campi estesi
+    query: str = ""  # Query/input eseguita
+    response: str = ""  # Risposta/output
+    waterfall: List[WaterfallStep] = field(default_factory=list)  # Tree della run
+    sources: List[SourceDocument] = field(default_factory=list)  # Fonti consultate
+
     def format_for_sheets(self) -> str:
         """Formatta il report per inserimento in Google Sheets (colonna NOTES)"""
-        parts = []
-        
+        lines = []
+
+        # Query eseguita
+        if self.query:
+            query_preview = self.query[:150] + "..." if len(self.query) > 150 else self.query
+            lines.append(f"Query: {query_preview}")
+
+        # Info modello e performance su una riga
+        info_parts = []
         if self.model:
-            parts.append(f"Model: {self.model}")
-        
+            info_parts.append(f"Model: {self.model}")
         if self.duration_ms:
-            parts.append(f"Duration: {self.duration_ms}ms")
-        
+            info_parts.append(f"Duration: {self.duration_ms}ms")
         if self.first_token_ms:
-            parts.append(f"First token: {self.first_token_ms}ms")
-        
+            info_parts.append(f"TTFT: {self.first_token_ms}ms")
         if self.tokens_total:
-            parts.append(f"Tokens: {self.tokens_input}in/{self.tokens_output}out ({self.tokens_total} total)")
-        
-        if self.tools_used:
-            parts.append(f"Tools: {', '.join(self.tools_used)}")
-        
+            info_parts.append(f"Tokens: {self.tokens_input}in/{self.tokens_output}out")
+        if info_parts:
+            lines.append(" | ".join(info_parts))
+
+        # Fonti consultate
+        if self.sources:
+            lines.append("")
+            lines.append(f"Sources ({len(self.sources)}):")
+            for src in self.sources:
+                src_line = f"  • {src.title or src.source}"
+                if src.score:
+                    src_line += f" (score: {src.score:.2f})"
+                lines.append(src_line)
+                if src.content_preview:
+                    preview = src.content_preview[:100] + "..." if len(src.content_preview) > 100 else src.content_preview
+                    lines.append(f"    {preview}")
+
+        # Waterfall tree (sempre completo)
+        if self.waterfall:
+            lines.append("")
+            lines.append(f"Waterfall ({len(self.waterfall)} steps):")
+            for step in self.waterfall:
+                indent = "  " * step.depth
+                status_icon = "✓" if step.status == "success" else "✗" if step.error else "→"
+                step_info = f"{indent}{status_icon} {step.name} [{step.run_type}] {step.duration_ms}ms"
+                if step.error:
+                    step_info += f" ERROR: {step.error[:50]}"
+                lines.append(step_info)
+
+        # Tools usati (se non già nel waterfall)
+        if self.tools_used and not self.waterfall:
+            lines.append(f"Tools: {', '.join(self.tools_used)}")
+
         if self.failed_tools:
-            parts.append(f"Failed: {self.failed_tools}")
-        
+            lines.append(f"Failed tools: {self.failed_tools}")
+
         if self.status and self.status != "success":
-            parts.append(f"Status: {self.status}")
-        
+            lines.append(f"Status: {self.status}")
+
         if self.error:
-            parts.append(f"Error: {self.error[:100]}")
-        
-        return " | ".join(parts) if parts else ""
-    
+            lines.append(f"Error: {self.error[:100]}")
+
+        return "\n".join(lines) if lines else ""
+
     def get_model_version(self) -> str:
         """Restituisce stringa model version per il report"""
         if self.model_provider and self.model:
@@ -106,7 +164,16 @@ class LangSmithClient:
     - Estrazione tool calls
     - Metriche performance
     - Link diretto al trace
-    - Estrazione automatica modello/provider
+    
+    Usage:
+        client = LangSmithClient(
+            api_key="lsv2_sk_...",
+            project_id="xxx",
+            org_id="yyy"
+        )
+        
+        trace = client.get_latest_trace()
+        tools = client.extract_tool_calls(trace)
     """
     
     BASE_URL = "https://api.smith.langchain.com/api/v1"
@@ -116,6 +183,15 @@ class LangSmithClient:
                  project_id: str,
                  org_id: str = "",
                  tool_names: Optional[List[str]] = None):
+        """
+        Inizializza il client.
+        
+        Args:
+            api_key: API key LangSmith
+            project_id: ID progetto LangSmith
+            org_id: ID organizzazione (opzionale)
+            tool_names: Lista nomi tool da tracciare (auto-detect se None)
+        """
         self.api_key = api_key
         self.project_id = project_id
         self.org_id = org_id
@@ -136,7 +212,12 @@ class LangSmithClient:
         return f"{base}/projects/p/{self.project_id}"
     
     def is_available(self) -> bool:
-        """Verifica se LangSmith è raggiungibile."""
+        """
+        Verifica se LangSmith è raggiungibile.
+        
+        Returns:
+            True se connessione OK
+        """
         try:
             response = self._session.get(
                 f"{self.BASE_URL}/sessions/{self.project_id}",
@@ -151,24 +232,26 @@ class LangSmithClient:
                    start_time: Optional[datetime] = None,
                    end_time: Optional[datetime] = None) -> List[TraceInfo]:
         """Ottiene i trace recenti."""
-        params = {
+        payload = {
+            'session': [self.project_id],
             'limit': limit,
-            'session': self.project_id
+            'is_root': True
         }
         
         if start_time:
-            params['start_time'] = start_time.isoformat()
+            payload['start_time'] = start_time.isoformat()
         if end_time:
-            params['end_time'] = end_time.isoformat()
+            payload['end_time'] = end_time.isoformat()
         
         try:
-            response = self._session.get(
-                f"{self.BASE_URL}/runs",
-                params=params,
+            response = self._session.post(
+                f"{self.BASE_URL}/runs/query",
+                json=payload,
                 timeout=30
             )
             
             if response.status_code != 200:
+                print(f"⚠️ LangSmith API error: {response.status_code}")
                 return []
             
             runs = response.json().get('runs', [])
@@ -188,7 +271,16 @@ class LangSmithClient:
     def get_latest_trace(self, 
                          after: Optional[datetime] = None,
                          input_contains: Optional[str] = None) -> Optional[TraceInfo]:
-        """Ottiene il trace più recente."""
+        """
+        Ottiene il trace più recente.
+        
+        Args:
+            after: Solo trace dopo questa data
+            input_contains: Filtra per contenuto input
+            
+        Returns:
+            TraceInfo o None
+        """
         start_time = after or (datetime.utcnow() - timedelta(hours=1))
         traces = self.get_traces(limit=20, start_time=start_time)
         
@@ -202,7 +294,15 @@ class LangSmithClient:
         return None
     
     def get_trace_by_id(self, trace_id: str) -> Optional[TraceInfo]:
-        """Ottiene un trace specifico per ID."""
+        """
+        Ottiene un trace specifico per ID.
+        
+        Args:
+            trace_id: ID del trace
+            
+        Returns:
+            TraceInfo o None
+        """
         try:
             response = self._session.get(
                 f"{self.BASE_URL}/runs/{trace_id}",
@@ -211,18 +311,27 @@ class LangSmithClient:
             
             if response.status_code == 200:
                 return self._parse_run(response.json())
+            
         except:
             pass
         
         return None
     
     def get_child_runs(self, parent_id: str) -> List[Dict]:
-        """Ottiene i run figli (tool calls, chain steps)."""
+        """
+        Ottiene tutti i run nel trace (tool calls, LLM, chain steps).
+        
+        Args:
+            parent_id: ID del trace padre
+            
+        Returns:
+            Lista di run nel trace
+        """
         try:
-            response = self._session.get(
-                f"{self.BASE_URL}/runs",
-                params={
-                    'parent_run': parent_id,
+            response = self._session.post(
+                f"{self.BASE_URL}/runs/query",
+                json={
+                    'trace': parent_id,
                     'limit': 100
                 },
                 timeout=30
@@ -230,13 +339,22 @@ class LangSmithClient:
             
             if response.status_code == 200:
                 return response.json().get('runs', [])
+            
         except:
             pass
         
         return []
     
     def extract_tool_calls(self, trace: TraceInfo) -> List[ToolCall]:
-        """Estrae le chiamate ai tool da un trace."""
+        """
+        Estrae le chiamate ai tool da un trace.
+        
+        Args:
+            trace: TraceInfo da analizzare
+            
+        Returns:
+            Lista ToolCall
+        """
         child_runs = self.get_child_runs(trace.id)
         
         tool_calls = []
@@ -254,14 +372,30 @@ class LangSmithClient:
         return tool_calls
     
     def get_trace_url(self, trace_id: str) -> str:
-        """Costruisce URL diretto al trace."""
+        """
+        Costruisce URL diretto al trace.
+        
+        Args:
+            trace_id: ID del trace
+            
+        Returns:
+            URL completo
+        """
         base = "https://smith.langchain.com"
         if self.org_id:
             return f"{base}/o/{self.org_id}/projects/p/{self.project_id}/r/{trace_id}"
         return f"{base}/projects/p/{self.project_id}/r/{trace_id}"
     
     def auto_detect_tool_names(self, sample_size: int = 10) -> List[str]:
-        """Auto-rileva i nomi dei tool usati nel progetto."""
+        """
+        Auto-rileva i nomi dei tool usati nel progetto.
+        
+        Args:
+            sample_size: Numero trace da analizzare
+            
+        Returns:
+            Lista nomi tool unici
+        """
         traces = self.get_traces(limit=sample_size)
         
         tool_names = set()
@@ -273,7 +407,15 @@ class LangSmithClient:
         return sorted(list(tool_names))
     
     def analyze_trace(self, trace: TraceInfo) -> Dict[str, Any]:
-        """Analisi completa di un trace."""
+        """
+        Analisi completa di un trace.
+        
+        Args:
+            trace: TraceInfo da analizzare
+            
+        Returns:
+            Dict con analisi dettagliata
+        """
         tool_calls = self.extract_tool_calls(trace)
         
         analysis = {
@@ -303,36 +445,42 @@ class LangSmithClient:
         
         return analysis
     
-    def get_report_for_question(self, 
+    def get_report_for_question(self,
                                  question: str,
-                                 search_window_minutes: int = 5) -> LangSmithReport:
+                                 search_window_minutes: int = 30) -> LangSmithReport:
         """
         Ottiene report completo per una domanda, incluso modello.
-        
+
         Args:
             question: Domanda inviata al chatbot
             search_window_minutes: Finestra temporale di ricerca
-            
+
         Returns:
             LangSmithReport con tutti i dati estratti
         """
         start_time = datetime.utcnow() - timedelta(minutes=search_window_minutes)
-        
+
         # Cerca il trace
         trace = self.get_latest_trace(
             after=start_time,
             input_contains=question[:50] if question else None
         )
-        
+
         if not trace:
             return LangSmithReport(error=f"Trace non trovato per: {question[:50]}...")
-        
+
         # Analizza il trace
         analysis = self.analyze_trace(trace)
-        
+
         # Estrai info modello dai child runs
         model_info = self._extract_model_info(trace.id)
-        
+
+        # Estrai waterfall tree
+        waterfall = self._extract_waterfall(trace.id, trace.start_time)
+
+        # Estrai sources/documenti consultati
+        sources = self._extract_sources(trace.id)
+
         return LangSmithReport(
             trace_url=analysis['trace_url'],
             duration_ms=analysis['duration_ms'],
@@ -345,7 +493,11 @@ class LangSmithClient:
             tools_used=analysis['tool_summary']['tools_used'],
             tool_count=analysis['tool_summary']['total_calls'],
             failed_tools=analysis['tool_summary']['failed_calls'],
-            first_token_ms=model_info.get('first_token_ms', 0)
+            first_token_ms=model_info.get('first_token_ms', 0),
+            query=trace.input,
+            response=trace.output,
+            waterfall=waterfall,
+            sources=sources
         )
     
     def _extract_model_info(self, trace_id: str) -> Dict[str, Any]:
@@ -403,13 +555,16 @@ class LangSmithClient:
                 
                 # Token usage
                 outputs = run.get('outputs', {})
-                usage = outputs.get('llm_output', {}).get('token_usage', {})
+                usage = {}
+                if isinstance(outputs, dict):
+                    llm_output = outputs.get('llm_output', {})
+                    if isinstance(llm_output, dict):
+                        usage = llm_output.get('token_usage', {})
                 
-                if not usage:
-                    # Prova formato alternativo
+                if not usage and isinstance(outputs, dict):
                     usage = outputs.get('usage', {}) or run.get('metrics', {})
                 
-                if usage:
+                if usage and isinstance(usage, dict):
                     model_info['tokens_input'] += usage.get('prompt_tokens', 0) or usage.get('input_tokens', 0)
                     model_info['tokens_output'] += usage.get('completion_tokens', 0) or usage.get('output_tokens', 0)
                     model_info['tokens_total'] += usage.get('total_tokens', 0)
@@ -444,7 +599,186 @@ class LangSmithClient:
                 pass
         
         return model_info
-    
+
+    def _extract_waterfall(self, trace_id: str, trace_start: datetime) -> List[WaterfallStep]:
+        """
+        Estrae il waterfall tree (sequenza di step con timing).
+
+        Args:
+            trace_id: ID del trace
+            trace_start: Timestamp di inizio del trace
+
+        Returns:
+            Lista di WaterfallStep ordinati per tempo
+        """
+        child_runs = self.get_child_runs(trace_id)
+
+        if not child_runs:
+            return []
+
+        # Mappa parent_id -> depth per calcolare nesting
+        id_to_depth = {trace_id: 0}
+        steps = []
+
+        # Prima passata: costruisci mappa depth
+        for run in child_runs:
+            run_id = run.get('id', '')
+            parent_id = run.get('parent_run_id', '')
+
+            if parent_id in id_to_depth:
+                id_to_depth[run_id] = id_to_depth[parent_id] + 1
+            else:
+                id_to_depth[run_id] = 1
+
+        # Seconda passata: estrai step
+        for run in child_runs:
+            run_id = run.get('id', '')
+            run_type = run.get('run_type', 'unknown')
+            name = run.get('name', 'unnamed')
+            status = run.get('status', '')
+            error = run.get('error')
+
+            # Calcola offset dall'inizio
+            start_offset_ms = 0
+            duration_ms = 0
+            try:
+                run_start = run.get('start_time', '')
+                if run_start:
+                    run_start_dt = datetime.fromisoformat(run_start.replace('Z', '+00:00'))
+                    # Rendi trace_start timezone-aware se necessario
+                    if trace_start.tzinfo is None:
+                        from datetime import timezone
+                        trace_start_aware = trace_start.replace(tzinfo=timezone.utc)
+                    else:
+                        trace_start_aware = trace_start
+                    start_offset_ms = int((run_start_dt - trace_start_aware).total_seconds() * 1000)
+
+                run_end = run.get('end_time', '')
+                if run_start and run_end:
+                    run_start_dt = datetime.fromisoformat(run_start.replace('Z', '+00:00'))
+                    run_end_dt = datetime.fromisoformat(run_end.replace('Z', '+00:00'))
+                    duration_ms = int((run_end_dt - run_start_dt).total_seconds() * 1000)
+            except:
+                pass
+
+            depth = id_to_depth.get(run_id, 1)
+
+            steps.append(WaterfallStep(
+                name=name,
+                run_type=run_type,
+                duration_ms=duration_ms,
+                start_offset_ms=start_offset_ms,
+                status=status,
+                error=error,
+                depth=depth
+            ))
+
+        # Ordina per start_offset_ms
+        steps.sort(key=lambda s: s.start_offset_ms)
+
+        return steps
+
+    def _extract_sources(self, trace_id: str) -> List[SourceDocument]:
+        """
+        Estrae i documenti fonte consultati durante la ricerca.
+
+        Cerca nei run di tipo 'retriever' o tool di ricerca per estrarre
+        i documenti recuperati dal vector store o altri sistemi RAG.
+
+        Args:
+            trace_id: ID del trace
+
+        Returns:
+            Lista di SourceDocument
+        """
+        child_runs = self.get_child_runs(trace_id)
+        sources = []
+        seen_sources = set()  # Per evitare duplicati
+
+        for run in child_runs:
+            run_type = run.get('run_type', '')
+            run_name = run.get('name', '').lower()
+
+            # Cerca nei retriever runs
+            if run_type == 'retriever' or 'retriev' in run_name or 'search' in run_name:
+                outputs = run.get('outputs', {})
+
+                # I documenti possono essere in vari formati
+                docs = []
+
+                # Formato LangChain standard: {'documents': [...]}
+                if isinstance(outputs, dict):
+                    docs = outputs.get('documents', [])
+                    if not docs:
+                        docs = outputs.get('output', [])
+                    if not docs:
+                        docs = outputs.get('results', [])
+
+                # Se outputs è direttamente una lista
+                if isinstance(outputs, list):
+                    docs = outputs
+
+                for doc in docs:
+                    if isinstance(doc, dict):
+                        # Estrai metadata
+                        metadata = doc.get('metadata', {})
+                        page_content = doc.get('page_content', '') or doc.get('content', '')
+
+                        # Identifica source per evitare duplicati
+                        source_id = metadata.get('source', '') or metadata.get('url', '') or page_content[:50]
+                        if source_id in seen_sources:
+                            continue
+                        seen_sources.add(source_id)
+
+                        source_doc = SourceDocument(
+                            title=metadata.get('title', '') or metadata.get('name', ''),
+                            source=metadata.get('source', '') or metadata.get('url', '') or metadata.get('file', ''),
+                            content_preview=page_content[:300] if page_content else '',
+                            score=float(metadata.get('score', 0) or doc.get('score', 0) or 0),
+                            metadata=metadata
+                        )
+                        sources.append(source_doc)
+
+                    elif isinstance(doc, str):
+                        # Documento come stringa semplice
+                        if doc[:50] not in seen_sources:
+                            seen_sources.add(doc[:50])
+                            sources.append(SourceDocument(
+                                content_preview=doc[:300],
+                                source="inline"
+                            ))
+
+            # Cerca anche nei tool che potrebbero restituire documenti
+            if run_type == 'tool':
+                tool_name = run.get('name', '').lower()
+                if any(kw in tool_name for kw in ['search', 'retriev', 'lookup', 'query', 'get_doc', 'fetch']):
+                    outputs = run.get('outputs', {})
+
+                    if isinstance(outputs, dict):
+                        # Tool output come dict
+                        content = outputs.get('output', '') or outputs.get('result', '') or str(outputs)
+                        if content and len(content) > 20:
+                            source_key = f"{tool_name}:{content[:50]}"
+                            if source_key not in seen_sources:
+                                seen_sources.add(source_key)
+                                sources.append(SourceDocument(
+                                    title=f"Tool: {run.get('name', 'unknown')}",
+                                    source=tool_name,
+                                    content_preview=str(content)[:300]
+                                ))
+
+                    elif isinstance(outputs, str) and len(outputs) > 20:
+                        source_key = f"{tool_name}:{outputs[:50]}"
+                        if source_key not in seen_sources:
+                            seen_sources.add(source_key)
+                            sources.append(SourceDocument(
+                                title=f"Tool: {run.get('name', 'unknown')}",
+                                source=tool_name,
+                                content_preview=outputs[:300]
+                            ))
+
+        return sources
+
     def _guess_provider(self, model_name: str) -> str:
         """Indovina il provider dal nome del modello"""
         if not model_name:
@@ -523,7 +857,11 @@ class LangSmithClient:
 
 
 class LangSmithDebugger:
-    """Helper per debugging avanzato con LangSmith."""
+    """
+    Helper per debugging avanzato con LangSmith.
+    
+    Fornisce report dettagliati per analisi problemi.
+    """
     
     def __init__(self, client: LangSmithClient):
         self.client = client
@@ -531,7 +869,16 @@ class LangSmithDebugger:
     def debug_conversation(self, 
                            question: str,
                            search_window_minutes: int = 5) -> Dict[str, Any]:
-        """Debug completo di una conversazione."""
+        """
+        Debug completo di una conversazione.
+        
+        Args:
+            question: Domanda inviata al chatbot
+            search_window_minutes: Finestra temporale ricerca
+            
+        Returns:
+            Report debug dettagliato
+        """
         start_time = datetime.utcnow() - timedelta(minutes=search_window_minutes)
         
         trace = self.client.get_latest_trace(
@@ -563,7 +910,16 @@ class LangSmithDebugger:
     def get_performance_summary(self, 
                                  hours: int = 24,
                                  limit: int = 100) -> Dict[str, Any]:
-        """Riassunto performance delle ultime ore."""
+        """
+        Riassunto performance delle ultime ore.
+        
+        Args:
+            hours: Ore da analizzare
+            limit: Numero massimo trace
+            
+        Returns:
+            Statistiche performance
+        """
         start_time = datetime.utcnow() - timedelta(hours=hours)
         traces = self.client.get_traces(limit=limit, start_time=start_time)
         
@@ -582,6 +938,64 @@ class LangSmithDebugger:
             'success_rate': statuses.count('success') / len(statuses) if statuses else 0,
             'status_breakdown': {s: statuses.count(s) for s in set(statuses)}
         }
+    
+    def find_slow_traces(self, 
+                          threshold_ms: int = 5000,
+                          limit: int = 20) -> List[Dict]:
+        """
+        Trova trace lenti.
+        
+        Args:
+            threshold_ms: Soglia in millisecondi
+            limit: Numero massimo risultati
+            
+        Returns:
+            Lista trace lenti con analisi
+        """
+        traces = self.client.get_traces(limit=100)
+        
+        slow = [t for t in traces if t.duration_ms > threshold_ms]
+        slow.sort(key=lambda x: x.duration_ms, reverse=True)
+        
+        results = []
+        for trace in slow[:limit]:
+            analysis = self.client.analyze_trace(trace)
+            results.append({
+                'trace_url': analysis['trace_url'],
+                'duration_ms': trace.duration_ms,
+                'input_preview': trace.input[:100],
+                'tools_used': analysis['tool_summary']['tools_used']
+            })
+        
+        return results
+    
+    def find_failed_traces(self, limit: int = 20) -> List[Dict]:
+        """
+        Trova trace falliti.
+        
+        Args:
+            limit: Numero massimo risultati
+            
+        Returns:
+            Lista trace falliti con errori
+        """
+        traces = self.client.get_traces(limit=100)
+        
+        failed = [t for t in traces if t.status != 'success']
+        
+        results = []
+        for trace in failed[:limit]:
+            tool_calls = self.client.extract_tool_calls(trace)
+            failed_tools = [t for t in tool_calls if t.error]
+            
+            results.append({
+                'trace_url': trace.url,
+                'status': trace.status,
+                'input_preview': trace.input[:100],
+                'failed_tools': [{'name': t.name, 'error': t.error} for t in failed_tools]
+            })
+        
+        return results
 
 
 class LangSmithSetup:
@@ -589,24 +1003,40 @@ class LangSmithSetup:
     
     @staticmethod
     def get_setup_instructions() -> str:
+        """Istruzioni per setup LangSmith"""
         return """
 📋 SETUP LANGSMITH
 
 1. Vai su smith.langchain.com e accedi
+
 2. Crea un nuovo progetto o seleziona esistente
-3. Copia Project ID dalla URL del progetto
-4. Genera API Key: Settings > API Keys > Create API Key
-5. Inserisci i valori nel wizard o in .env
+
+3. Copia i seguenti valori:
+   - Project ID: dalla URL del progetto
+   - Org ID: Settings > Organization (se presente)
+
+4. Genera API Key:
+   Settings > API Keys > Create API Key
+
+5. Inserisci i valori nel wizard o in .env:
+   LANGSMITH_API_KEY=lsv2_sk_xxxxx
 """
     
     @staticmethod
-    def validate_api_key(api_key: str) -> tuple:
+    def validate_api_key(api_key: str) -> tuple[bool, str]:
+        """
+        Valida una API key LangSmith.
+        
+        Returns:
+            (is_valid, message)
+        """
         if not api_key:
             return False, "API key vuota"
         
         if not api_key.startswith('lsv2_'):
-            return False, "Formato API key non valido"
+            return False, "Formato API key non valido (deve iniziare con lsv2_)"
         
+        # Test connessione
         try:
             response = requests.get(
                 "https://api.smith.langchain.com/api/v1/info",
@@ -625,16 +1055,41 @@ class LangSmithSetup:
     
     @staticmethod
     def extract_project_id(url: str) -> Optional[str]:
+        """
+        Estrae project ID da URL LangSmith.
+        
+        Args:
+            url: URL del progetto
+            
+        Returns:
+            Project ID o None
+        """
+        # Format: https://smith.langchain.com/o/ORG/projects/p/PROJECT_ID
+        # o: https://smith.langchain.com/projects/p/PROJECT_ID
+        
         if '/projects/p/' in url:
             parts = url.split('/projects/p/')
             if len(parts) > 1:
-                return parts[1].split('/')[0].split('?')[0]
+                project_id = parts[1].split('/')[0].split('?')[0]
+                return project_id
+        
         return None
     
     @staticmethod
     def extract_org_id(url: str) -> Optional[str]:
+        """
+        Estrae org ID da URL LangSmith.
+        
+        Args:
+            url: URL del progetto
+            
+        Returns:
+            Org ID o None
+        """
         if '/o/' in url:
             parts = url.split('/o/')
             if len(parts) > 1:
-                return parts[1].split('/')[0]
+                org_id = parts[1].split('/')[0]
+                return org_id
+        
         return None
