@@ -80,7 +80,7 @@ class GoogleSheetsStep(BaseStep):
             # If no valid credentials, authenticate
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
-                    console.print("  ⏳ Aggiornamento token...")
+                    console.print("   Aggiornamento token...")
                     creds.refresh(Request())
                 else:
                     console.print(f"  {t('step5.auth_instructions')}")
@@ -93,11 +93,11 @@ class GoogleSheetsStep(BaseStep):
                 with open(token_path, 'wb') as token:
                     pickle.dump(creds, token)
             
-            console.print(f"  [green]✅ {t('step5.auth_success')}[/green]")
+            console.print(f"  [green]✓ {t('step5.auth_success')}[/green]")
             return True
             
         except Exception as e:
-            console.print(f"  [red]❌ {t('step5.auth_fail')}: {e}[/red]")
+            console.print(f"  [red]✗ {t('step5.auth_fail')}: {e}[/red]")
             return False
     
     def _test_spreadsheet(self, spreadsheet_id: str) -> Tuple[bool, str]:
@@ -180,12 +180,12 @@ class GoogleSheetsStep(BaseStep):
         if choice == "1":
             # Local only
             self.state.google_sheets_enabled = False
-            console.print("\n  [green]✅ Report salvati solo localmente (HTML/CSV)[/green]")
+            console.print("\n  [green]✓ Report salvati solo localmente (HTML/CSV)[/green]")
             
         elif choice == "3":
             # Configure later
             self.state.google_sheets_enabled = False
-            console.print("\n  [cyan]ℹ️  Potrai configurare Google Sheets in seguito modificando project.yaml[/cyan]")
+            console.print("\n  [cyan]>  Potrai configurare Google Sheets in seguito modificando project.yaml[/cyan]")
             
         else:
             # Configure Google Sheets
@@ -209,7 +209,7 @@ class GoogleSheetsStep(BaseStep):
                 is_valid, error = self._validate_credentials(creds_path)
                 
                 if is_valid:
-                    console.print(f"  [green]✅ {t('step5.credentials_ok')}[/green]")
+                    console.print(f"  [green]✓ {t('step5.credentials_ok')}[/green]")
                     
                     # Copy to config folder
                     config_dir = PROJECT_ROOT / "config"
@@ -221,15 +221,15 @@ class GoogleSheetsStep(BaseStep):
                     
                     break
                 else:
-                    console.print(f"  [red]❌ {t('step5.credentials_invalid')}: {error}[/red]")
+                    console.print(f"  [red]✗ {t('step5.credentials_invalid')}: {error}[/red]")
             
             # Authenticate
-            console.print(f"\n  ⏳ {t('step5.auth_prompt')}")
+            console.print(f"\n   {t('step5.auth_prompt')}")
             
             if not self._authenticate_google(str(dest_path)):
                 # Auth failed, skip
                 self.state.google_sheets_enabled = False
-                console.print("\n  [yellow]⚠️  Autenticazione fallita, continuo senza Sheets[/yellow]")
+                console.print("\n  [yellow]!  Autenticazione fallita, continuo senza Sheets[/yellow]")
             else:
                 # Get spreadsheet ID
                 console.print(f"\n  {t('step5.spreadsheet_prompt')}")
@@ -242,27 +242,27 @@ class GoogleSheetsStep(BaseStep):
                     success, name = self._test_spreadsheet(spreadsheet_id)
                     
                     if success:
-                        console.print(f"  [green]✅ {t('step5.spreadsheet_found', name=name)}[/green]")
+                        console.print(f"  [green]✓ {t('step5.spreadsheet_found', name=name)}[/green]")
                         self.state.spreadsheet_id = spreadsheet_id
                     else:
-                        console.print(f"  [red]❌ {t('step5.spreadsheet_invalid')}: {name}[/red]")
+                        console.print(f"  [red]✗ {t('step5.spreadsheet_invalid')}: {name}[/red]")
                         
                         if Confirm.ask("  Vuoi crearne uno nuovo?", default=True):
                             spreadsheet_id = ""
                 
                 if not spreadsheet_id:
                     # Create new spreadsheet
-                    console.print(f"\n  ⏳ {t('step5.spreadsheet_new')}")
+                    console.print(f"\n   {t('step5.spreadsheet_new')}")
                     
                     name = f"Chatbot Tests - {self.state.project_name}"
                     success, new_id, new_name = self._create_spreadsheet(name)
                     
                     if success:
-                        console.print(f"  [green]✅ {t('step5.spreadsheet_created', name=new_name)}[/green]")
+                        console.print(f"  [green]✓ {t('step5.spreadsheet_created', name=new_name)}[/green]")
                         console.print(f"  [cyan]ID: {new_id}[/cyan]")
                         self.state.spreadsheet_id = new_id
                     else:
-                        console.print(f"  [red]❌ Errore creazione: {new_name}[/red]")
+                        console.print(f"  [red]✗ Errore creazione: {new_name}[/red]")
                 
                 # Get Drive folder ID (for screenshots)
                 console.print(f"\n  {t('step5.folder_prompt')}")
@@ -274,20 +274,20 @@ class GoogleSheetsStep(BaseStep):
                     success, name = self._test_drive_folder(folder_id)
                     
                     if success:
-                        console.print(f"  [green]✅ {t('step5.folder_found', name=name)}[/green]")
+                        console.print(f"  [green]✓ {t('step5.folder_found', name=name)}[/green]")
                         self.state.drive_folder_id = folder_id
                     else:
-                        console.print(f"  [yellow]⚠️  {t('step5.folder_invalid')}: {name}[/yellow]")
+                        console.print(f"  [yellow]!  {t('step5.folder_invalid')}: {name}[/yellow]")
                 
                 self.state.google_sheets_enabled = True
         
         # Summary
         console.print()
         console.print("  [cyan]─" * 50 + "[/cyan]")
-        console.print(f"  📊 Google Sheets: {'Abilitato' if self.state.google_sheets_enabled else 'Disabilitato'}")
+        console.print(f"  · Google Sheets: {'Abilitato' if self.state.google_sheets_enabled else 'Disabilitato'}")
         if self.state.google_sheets_enabled:
-            console.print(f"  📋 Spreadsheet ID: {self.state.spreadsheet_id or 'Non configurato'}")
-            console.print(f"  📁 Drive Folder ID: {self.state.drive_folder_id or 'Non configurato'}")
+            console.print(f"  · Spreadsheet ID: {self.state.spreadsheet_id or 'Non configurato'}")
+            console.print(f"  · Drive Folder ID: {self.state.drive_folder_id or 'Non configurato'}")
         console.print("  [cyan]─" * 50 + "[/cyan]")
         console.print()
         

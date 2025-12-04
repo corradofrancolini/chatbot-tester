@@ -105,7 +105,7 @@ class Wizard:
         clear_screen()
         
         welcome = Text()
-        welcome.append("\n🚀 ", style="bold")
+        welcome.append("\n* ", style="bold")
         welcome.append("Benvenuto nel Chatbot Tester Setup Wizard!\n\n", style="bold cyan")
         welcome.append("  Questo wizard ti guiderà nella configurazione del tool.\n", style="white")
         welcome.append("  Tempo stimato: ~15-30 minuti\n", style="dim")
@@ -119,7 +119,7 @@ class Wizard:
             # Save state before exiting
             if self.state and self.state.project_name:
                 self.state_manager.save(self.state)
-                console.print(f"\n  💾 Stato salvato. Riprendi eseguendo di nuovo il wizard.")
+                console.print(f"\n  [dim]>  Stato salvato. Riprendi eseguendo di nuovo il wizard.[/dim]")
             return True
         return False
     
@@ -189,7 +189,7 @@ class Wizard:
         """Finalize wizard - save all configs."""
         clear_screen()
         
-        console.print("\n  ⏳ Salvataggio configurazione...\n")
+        console.print("\n  Salvataggio configurazione...\n")
         
         # Ensure directories exist
         ensure_project_dirs(self.state.project_name)
@@ -207,7 +207,7 @@ class Wizard:
         # Show completion message
         console.print(Panel(
             t('step9.next_steps', project=self.state.project_name),
-            title="🎉 Setup Completato!",
+            title="Setup Completato",
             border_style="green",
             box=box.DOUBLE
         ))

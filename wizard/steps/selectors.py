@@ -47,11 +47,11 @@ class SelectorsStep(BaseStep):
         for key, label in elements:
             value = selectors.get(key, '')
             if value:
-                status = "[green]✅[/green]"
+                status = "[green]✓[/green]"
             elif key in ['thread_container', 'loading_indicator', 'content_inner']:
-                status = "[dim]⏭️ Opzionale[/dim]"
+                status = "[dim]- Opzionale[/dim]"
             else:
-                status = "[red]❌ Mancante[/red]"
+                status = "[red]✗ Mancante[/red]"
 
             table.add_row(label, value or "-", status)
 
@@ -82,7 +82,7 @@ class SelectorsStep(BaseStep):
         try:
             from wizard.steps.selectors_detector import SelectorDetectorStep
 
-            console.print("\n  🚀 Avvio rilevamento interattivo...")
+            console.print("\n  > Avvio rilevamento interattivo...")
             console.print("  [dim]Potrai testare con più domande per rilevare tutti i tipi di risposta.[/dim]\n")
 
             # Run async detector
@@ -99,7 +99,7 @@ class SelectorsStep(BaseStep):
                 input()
                 return True, 'next'
             else:
-                console.print("\n  [yellow]⚠️ Rilevamento annullato[/yellow]")
+                console.print("\n  [yellow]! Rilevamento annullato[/yellow]")
                 retry = Confirm.ask("  Vuoi riprovare?", default=True)
                 if retry:
                     return self.run()
@@ -107,12 +107,12 @@ class SelectorsStep(BaseStep):
                     return False, 'quit'
 
         except ImportError as e:
-            console.print(f"\n  [red]❌ Modulo non trovato: {e}[/red]")
+            console.print(f"\n  [red]✗ Modulo non trovato: {e}[/red]")
             console.print("  [dim]Fallback alla modalità rapida...[/dim]")
             return self._run_quick()
 
         except Exception as e:
-            console.print(f"\n  [red]❌ Errore: {e}[/red]")
+            console.print(f"\n  [red]✗ Errore: {e}[/red]")
 
             choice = self.ui.show_error(
                 "Errore durante il rilevamento interattivo",
@@ -155,7 +155,7 @@ class SelectorsStep(BaseStep):
         playwright_instance = None
 
         try:
-            console.print("\n  ⏳ Apertura browser...")
+            console.print("\n   Apertura browser...")
 
             browser_data_dir = get_project_dir(self.state.project_name) / "browser-data"
             browser_data_dir.mkdir(parents=True, exist_ok=True)
@@ -169,11 +169,11 @@ class SelectorsStep(BaseStep):
 
             page = browser.pages[0] if browser.pages else browser.new_page()
 
-            console.print(f"  ⏳ Navigazione a {self.state.chatbot_url}...")
+            console.print(f"   Navigazione a {self.state.chatbot_url}...")
             page.goto(self.state.chatbot_url, wait_until='networkidle', timeout=30000)
             time.sleep(1)
 
-            console.print(f"\n  🔍 Auto-detect selettori...\n")
+            console.print(f"\n  > Auto-detect selettori...\n")
 
             detected = {}
 
@@ -199,9 +199,9 @@ class SelectorsStep(BaseStep):
 
                 detected[key] = found or ''
                 if found:
-                    console.print(f"  [green]✅ {label}: {found}[/green]")
+                    console.print(f"  [green]✓ {label}: {found}[/green]")
                 else:
-                    console.print(f"  [yellow]⚠️  {label}: non trovato[/yellow]")
+                    console.print(f"  [yellow]!  {label}: non trovato[/yellow]")
 
                 time.sleep(0.2)
 
@@ -212,7 +212,7 @@ class SelectorsStep(BaseStep):
             missing = [k for k in required if not detected.get(k)]
 
             if missing:
-                console.print(f"  [yellow]⚠️ Mancano selettori obbligatori: {', '.join(missing)}[/yellow]")
+                console.print(f"  [yellow]! Mancano selettori obbligatori: {', '.join(missing)}[/yellow]")
                 console.print("  [bold]Opzioni:[/bold]")
                 console.print("  [1] Prova modalità interattiva")
                 console.print("  [2] Inserisci manualmente")
@@ -243,7 +243,7 @@ class SelectorsStep(BaseStep):
                 return self.run()
 
         except Exception as e:
-            console.print(f"\n  [red]❌ Errore: {e}[/red]")
+            console.print(f"\n  [red]✗ Errore: {e}[/red]")
             return False, 'quit'
 
         finally:
@@ -279,7 +279,7 @@ class SelectorsStep(BaseStep):
             value = Prompt.ask(f"  {label}{suffix}", default="")
 
             if required and not value:
-                console.print(f"  [red]❌ {label} è obbligatorio[/red]")
+                console.print(f"  [red]✗ {label} è obbligatorio[/red]")
                 return self._run_manual()
 
             selectors[key] = value

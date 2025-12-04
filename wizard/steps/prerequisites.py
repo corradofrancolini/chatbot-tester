@@ -63,7 +63,7 @@ class PrerequisitesStep(BaseStep):
         table.add_column("Result", width=30)
         
         for check in self.checks:
-            status = "✅" if check['passed'] else "❌"
+            status = "✓" if check['passed'] else "✗"
             style = "green" if check['passed'] else "red"
             
             table.add_row(
@@ -93,9 +93,9 @@ class PrerequisitesStep(BaseStep):
         self.checks.append(result)
         
         if result['passed']:
-            console.print(f"  ✅ {t('step1.os_ok', version=result['value'])}")
+            console.print(f"  ✓ {t('step1.os_ok', version=result['value'])}")
         else:
-            console.print(f"  ❌ {t('step1.os_fail')}")
+            console.print(f"  ✗ {t('step1.os_fail')}")
             all_passed = False
         
         # Python check
@@ -106,9 +106,9 @@ class PrerequisitesStep(BaseStep):
         self.checks.append(result)
         
         if result['passed']:
-            console.print(f"  ✅ {t('step1.python_ok', version=result['value'])}")
+            console.print(f"  ✓ {t('step1.python_ok', version=result['value'])}")
         else:
-            console.print(f"  ❌ {t('step1.python_fail')}")
+            console.print(f"  ✗ {t('step1.python_fail')}")
             all_passed = False
         
         # Homebrew check
@@ -123,9 +123,9 @@ class PrerequisitesStep(BaseStep):
         })
         
         if homebrew_ok:
-            console.print(f"  ✅ {t('step1.homebrew_ok')}")
+            console.print(f"  ✓ {t('step1.homebrew_ok')}")
         else:
-            console.print(f"  ❌ {t('step1.homebrew_fail')}")
+            console.print(f"  ✗ {t('step1.homebrew_fail')}")
             all_passed = False
         
         # Git check
@@ -136,9 +136,9 @@ class PrerequisitesStep(BaseStep):
         self.checks.append(result)
         
         if result['passed']:
-            console.print(f"  ✅ {t('step1.git_ok', version=result['value'])}")
+            console.print(f"  ✓ {t('step1.git_ok', version=result['value'])}")
         else:
-            console.print(f"  ❌ {t('step1.git_fail')}")
+            console.print(f"  ✗ {t('step1.git_fail')}")
             all_passed = False
         
         # Disk space check
@@ -149,9 +149,9 @@ class PrerequisitesStep(BaseStep):
         self.checks.append(result)
         
         if result['passed']:
-            console.print(f"  ✅ {t('step1.disk_ok', space=result['value'])}")
+            console.print(f"  ✓ {t('step1.disk_ok', space=result['value'])}")
         else:
-            console.print(f"  ❌ {t('step1.disk_fail')}")
+            console.print(f"  ✗ {t('step1.disk_fail')}")
             all_passed = False
         
         # Network check
@@ -166,37 +166,37 @@ class PrerequisitesStep(BaseStep):
         })
         
         if network_ok:
-            console.print(f"  ✅ {t('step1.network_ok')}")
+            console.print(f"  ✓ {t('step1.network_ok')}")
         else:
-            console.print(f"  ❌ {t('step1.network_fail')}")
+            console.print(f"  ✗ {t('step1.network_fail')}")
             all_passed = False
         
         console.print()
         
         # Summary
         if all_passed:
-            console.print(f"\n  [bold green]✅ {t('step1.all_ok')}[/bold green]\n")
+            console.print(f"\n  [bold green]✓ {t('step1.all_ok')}[/bold green]\n")
             console.print("  [dim]Premi INVIO per continuare...[/dim]")
             input()
             return True, 'next'
         else:
-            console.print(f"\n  [bold red]❌ {t('step1.some_fail')}[/bold red]\n")
+            console.print(f"\n  [bold red]✗ {t('step1.some_fail')}[/bold red]\n")
             
             # Show solutions for failed checks
             failed = [c for c in self.checks if not c['passed']]
             
             if any(c['name'] == 'Homebrew' for c in failed):
-                console.print("  [yellow]💡 Installa Homebrew con:[/yellow]")
+                console.print("  [yellow]~ Installa Homebrew con:[/yellow]")
                 console.print('  [dim]/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"[/dim]')
                 console.print()
             
             if any('Python' in c['name'] for c in failed):
-                console.print("  [yellow]💡 Installa Python 3.10+ con:[/yellow]")
+                console.print("  [yellow]~ Installa Python 3.10+ con:[/yellow]")
                 console.print("  [dim]brew install python@3.11[/dim]")
                 console.print()
             
             if any(c['name'] == 'Git' for c in failed):
-                console.print("  [yellow]💡 Installa Git con:[/yellow]")
+                console.print("  [yellow]~ Installa Git con:[/yellow]")
                 console.print("  [dim]xcode-select --install[/dim]")
                 console.print()
             
@@ -213,7 +213,7 @@ class PrerequisitesStep(BaseStep):
             if choice == 'r':
                 return self.run()  # Retry
             elif choice == 'c':
-                console.print("\n  [yellow]⚠️  Alcuni prerequisiti mancano, potrebbero esserci problemi.[/yellow]\n")
+                console.print("\n  [yellow]!  Alcuni prerequisiti mancano, potrebbero esserci problemi.[/yellow]\n")
                 return True, 'next'
             else:
                 return False, 'quit'

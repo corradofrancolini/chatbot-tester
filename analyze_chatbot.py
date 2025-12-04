@@ -14,7 +14,7 @@ async def analyze():
         browser = await p.chromium.launch(headless=False)
         page = await browser.new_page()
 
-        print(f"🌐 Navigazione a {URL}...")
+        print(f"Navigazione a {URL}...")
         await page.goto(URL, wait_until='networkidle')
         await asyncio.sleep(2)
 
@@ -62,7 +62,7 @@ async def analyze():
         }
 
         for category, selectors in selectors_to_check.items():
-            print(f"\n📌 {category.upper()}:")
+            print(f"\n{category.upper()}:")
             for sel in selectors:
                 try:
                     count = await page.locator(sel).count()
@@ -71,7 +71,7 @@ async def analyze():
                         visible = await el.is_visible()
                         tag = await el.evaluate("el => el.tagName")
                         classes = await el.evaluate("el => el.className")
-                        print(f"  ✅ {sel}")
+                        print(f"  ✓ {sel}")
                         print(f"     count={count}, visible={visible}, tag={tag}")
                         print(f"     classes: {classes[:80]}..." if len(str(classes)) > 80 else f"     classes: {classes}")
                 except Exception as e:
@@ -106,17 +106,17 @@ async def analyze():
 
         textarea = page.locator("#llm-prompt-textarea")
         if await textarea.count() > 0:
-            print("✅ Textarea trovata, invio messaggio di test...")
+            print("Textarea trovata, invio messaggio di test...")
             await textarea.fill("Cosa fa Silicon?")
             await asyncio.sleep(0.3)
 
             submit = page.locator("button.llm__prompt-submit")
             if await submit.count() > 0:
                 await submit.click()
-                print("✅ Messaggio inviato")
+                print("Messaggio inviato")
 
                 # Monitora DOM per 10 secondi
-                print("\n⏳ Monitoraggio DOM per 10 secondi...")
+                print("\nMonitoraggio DOM per 10 secondi...")
 
                 for i in range(20):
                     await asyncio.sleep(0.5)
@@ -132,7 +132,7 @@ async def analyze():
                             if await loc.count() > 0 and await loc.first.is_visible():
                                 loading_visible = True
                                 loading_classes = await loc.first.evaluate("el => el.className")
-                                print(f"  [{i*0.5:.1f}s] 🔄 LOADING: {loading_sel} -> {loading_classes}")
+                                print(f"  [{i*0.5:.1f}s] LOADING: {loading_sel} -> {loading_classes}")
                                 break
                         except:
                             pass
@@ -154,7 +154,7 @@ async def analyze():
                         print(f"\n... [{len(html)} caratteri totali]")
 
                     # Cerca elementi interni
-                    print("\n📌 ELEMENTI INTERNI:")
+                    print("\nELEMENTI INTERNI:")
                     inner_selectors = [
                         ".llm__text-body",
                         ".llm__inner",
@@ -172,7 +172,7 @@ async def analyze():
 
                     # Mostra il testo estratto
                     text = await bot_msg.text_content()
-                    print(f"\n📌 TESTO ESTRATTO ({len(text)} caratteri):")
+                    print(f"\nTESTO ESTRATTO ({len(text)} caratteri):")
                     print(text[:1000] if text else "(vuoto)")
                     if text and len(text) > 1000:
                         print(f"... [{len(text)} caratteri totali]")

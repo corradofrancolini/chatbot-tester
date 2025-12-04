@@ -25,7 +25,7 @@ from .config_loader import (
 from .browser import BrowserManager, BrowserSettings, ChatbotSelectors
 from .ollama_client import OllamaClient
 from .langsmith_client import LangSmithClient, LangSmithDebugger, LangSmithReport
-from .sheets_client import GoogleSheetsClient, TestResult
+from .sheets_client import GoogleSheetsClient, TestResult, ScreenshotUrls
 from .report_local import ReportGenerator, TestResultLocal
 from .training import TrainingData, TrainModeUI
 from rich.console import Console
@@ -157,7 +157,7 @@ class ChatbotTester:
         Returns:
             True se inizializzazione riuscita
         """
-        self.on_status("🔧 Inizializzazione componenti...")
+        self.on_status("Inizializzazione componenti...")
         
         # Browser
         browser_settings = BrowserSettings(
@@ -182,14 +182,14 @@ class ChatbotTester:
         
         try:
             await self.browser.start()
-            self.on_status("✅ Browser avviato")
+            self.on_status("✓ Browser avviato")
         except Exception as e:
-            self.on_status(f"❌ Errore browser: {e}")
+            self.on_status(f"✗ Errore browser: {e}")
             return False
-        
+
         # Carica training data PRIMA di Ollama (serve per in-context learning)
         self.training = TrainingData.load(self.project.training_file)
-        
+
         # Ollama (opzionale)
         if self.project.ollama.enabled:
             self.ollama = OllamaClient(
@@ -197,14 +197,14 @@ class ChatbotTester:
                 url=self.project.ollama.url
             )
             if self.ollama.is_available():
-                self.on_status(f"✅ Ollama ({self.project.ollama.model}) disponibile")
+                self.on_status(f"✓ Ollama ({self.project.ollama.model}) disponibile")
                 # Passa training context per in-context learning
                 if self.training:
                     self.ollama.set_training_context(self.training)
             else:
-                self.on_status("⚠️ Ollama non disponibile")
+                self.on_status("! Ollama non disponibile")
                 self.ollama = None
-        
+
         # LangSmith (opzionale) - rispetta toggle use_langsmith
         if self.use_langsmith and self.project.langsmith.enabled and self.project.langsmith.api_key:
             self.langsmith = LangSmithClient(
@@ -214,17 +214,17 @@ class ChatbotTester:
                 tool_names=self.project.langsmith.tool_names
             )
             if self.langsmith.is_available():
-                self.on_status("✅ LangSmith connesso")
+                self.on_status("✓ LangSmith connesso")
             else:
-                self.on_status("⚠️ LangSmith non raggiungibile")
+                self.on_status("! LangSmith non raggiungibile")
                 self.langsmith = None
         elif not self.use_langsmith:
-            self.on_status("ℹ️ LangSmith disabilitato (toggle)")
-        
+            self.on_status("> LangSmith disabilitato (toggle)")
+
         # Google Sheets (opzionale) - rispetta toggle dry_run
         # Nota: il foglio RUN viene configurato da run.py dopo initialize()
         if self.dry_run:
-            self.on_status("ℹ️ Google Sheets disabilitato (dry run)")
+            self.on_status("> Google Sheets disabilitato (dry run)")
         elif self.project.google_sheets.enabled:
             try:
                 self.sheets = GoogleSheetsClient(
@@ -233,15 +233,15 @@ class ChatbotTester:
                     drive_folder_id=self.project.google_sheets.drive_folder_id
                 )
                 if self.sheets.authenticate():
-                    self.on_status("✅ Google Sheets autenticato")
+                    self.on_status("✓ Google Sheets autenticato")
                     # Il foglio RUN e i test completati vengono configurati
                     # da run.py tramite sheets.setup_run_sheet()
                 else:
                     self.sheets = None
             except Exception as e:
-                self.on_status(f"⚠️ Google Sheets non disponibile: {e}")
+                self.on_status(f"! Google Sheets non disponibile: {e}")
                 self.sheets = None
-        
+
         return True
     
     async def shutdown(self) -> None:
@@ -255,7 +255,7 @@ class ChatbotTester:
     
     async def navigate_to_chatbot(self) -> bool:
         """Naviga al chatbot e gestisce login se necessario"""
-        self.on_status(f"🌐 Navigazione a {self.project.chatbot.url}")
+        self.on_status(f"Navigazione a {self.project.chatbot.url}")
         
         success = await self.browser.navigate(self.project.chatbot.url)
         if not success:
@@ -268,7 +268,7 @@ class ChatbotTester:
         )
         
         if not is_ready:
-            self.on_status("🔐 Login richiesto...")
+            self.on_status("Login richiesto...")
             success = await self.browser.wait_for_login(
                 check_selector=self.project.chatbot.selectors.textarea,
                 timeout_minutes=5
@@ -276,7 +276,7 @@ class ChatbotTester:
             if not success:
                 return False
         
-        self.on_status("✅ Chatbot pronto")
+        self.on_status("✓ Chatbot pronto")
         return True
     
     def load_test_cases(self) -> List[TestCase]:
@@ -324,7 +324,7 @@ class ChatbotTester:
             tests = self.filter_pending_tests(tests)
         
         if not tests:
-            self.on_status("ℹ️ Nessun test da eseguire")
+            self.on_status("> Nessun test da eseguire")
             return []
         
         self.on_status(f"📚 TRAIN MODE - {len(tests)} test")
@@ -342,14 +342,14 @@ class ChatbotTester:
             self.current_test = test
             
             self.on_status(f"\n--- Test {i+1}/{len(tests)}: {test.id} ---")
-            self.on_status(f"📝 {test.question}")
+            self.on_status(f"{test.question}")
             
             result = await self._execute_train_test(test)
             results.append(result)
             
             # Check quit
             if self._quit_requested:
-                self.on_status("\n🛑 Sessione interrotta")
+                self.on_status("\nSessione interrotta")
                 break
             
             # Salva nel report
@@ -362,7 +362,7 @@ class ChatbotTester:
         
         # Genera report finale
         report_paths = self.report.generate()
-        self.on_status(f"\n📊 Report generato: {report_paths['html']}")
+        self.on_status(f"\nReport generato: {report_paths['html']}")
         
         return results
     
@@ -603,7 +603,7 @@ class ChatbotTester:
             Lista risultati
         """
         if not self.ollama:
-            self.on_status("❌ Modalità Auto richiede Ollama")
+            self.on_status("✗ Modalità Auto richiede Ollama")
             return []
         
         self.current_mode = TestMode.AUTO
@@ -613,10 +613,10 @@ class ChatbotTester:
             tests = self.filter_pending_tests(tests)
         
         if not tests:
-            self.on_status("ℹ️ Nessun test da eseguire")
+            self.on_status("> Nessun test da eseguire")
             return []
         
-        self.on_status(f"🤖 AUTO MODE - {len(tests)} test")
+        self.on_status(f"AUTO MODE - {len(tests)} test")
         
         # Setup report
         loader = ConfigLoader()
@@ -637,7 +637,7 @@ class ChatbotTester:
             
             # Check quit
             if self._quit_requested:
-                self.on_status("\n🛑 Sessione interrotta")
+                self.on_status("\nSessione interrotta")
                 break
             
             # Salva nel report
@@ -648,7 +648,7 @@ class ChatbotTester:
         
         # Genera report finale
         report_paths = self.report.generate()
-        self.on_status(f"\n📊 Report generato: {report_paths['html']}")
+        self.on_status(f"\nReport generato: {report_paths['html']}")
         
         return results
     
@@ -664,7 +664,7 @@ class ChatbotTester:
             await asyncio.sleep(0.5)
 
             # Invia domanda iniziale
-            self.on_status(f"📤 {test.question[:60]}...")
+            self.on_status(f"{test.question[:60]}...")
             await self.browser.send_message(test.question)
             
             conversation.append(ConversationTurn(
@@ -682,7 +682,7 @@ class ChatbotTester:
                 response = await self.browser.wait_for_response()
                 
                 if not response:
-                    self.on_status("⚠️ Nessuna risposta dal bot")
+                    self.on_status("! Nessuna risposta dal bot")
                     break
                 
                 conversation.append(ConversationTurn(
@@ -701,7 +701,7 @@ class ChatbotTester:
                 )
                 
                 if not next_message:
-                    self.on_status("✅ Conversazione completata")
+                    self.on_status("✓ Conversazione completata")
                     break
                 
                 # Rimuovi followup usato
@@ -709,7 +709,7 @@ class ChatbotTester:
                     remaining_followups.remove(next_message)
                 
                 # Invia followup
-                self.on_status(f"📤 {next_message[:60]}...")
+                self.on_status(f"{next_message[:60]}...")
                 await self.browser.send_message(next_message)
                 
                 conversation.append(ConversationTurn(
@@ -748,7 +748,7 @@ class ChatbotTester:
                         langsmith_notes = report.format_for_sheets()
                         model_version = report.get_model_version()
                 except Exception as e:
-                    self.on_status(f"⚠️ Errore LangSmith: {e}")
+                    self.on_status(f"! Errore LangSmith: {e}")
             
             # Combina notes: evaluation reason + LangSmith report
             eval_notes = evaluation.get('reason', '')
@@ -840,7 +840,7 @@ class ChatbotTester:
             Lista risultati
         """
         if not self.ollama:
-            self.on_status("⚠️ Modalità Assisted senza LLM, fallback a Train")
+            self.on_status("! Modalità Assisted senza LLM, fallback a Train")
             return await self.run_train_session(tests, skip_completed)
         
         self.current_mode = TestMode.ASSISTED
@@ -882,20 +882,20 @@ class ChatbotTester:
         
         # Google Sheets
         if self.sheets:
-            screenshot_url = ""
+            screenshot_urls = None
             if result.screenshot_path:
-                screenshot_url = self.sheets.upload_screenshot(
+                screenshot_urls = self.sheets.upload_screenshot(
                     Path(result.screenshot_path),
                     result.test_case.id
-                ) or ""
-            
+                )
+
             self.sheets.append_result(TestResult(
                 test_id=result.test_case.id,
                 date=date_str,
                 mode=self.current_mode.value.upper(),
                 question=result.test_case.question,
                 conversation=conv_str[:5000],  # Limite Sheets
-                screenshot_url=screenshot_url,
+                screenshot_urls=screenshot_urls,
                 esito=result.esito,
                 notes=result.notes,
                 langsmith_url=result.langsmith_url,

@@ -36,7 +36,7 @@ class SummaryStep(BaseStep):
             
             if isinstance(value, bool):
                 text.append(
-                    "✅ Sì" if value else "❌ No",
+                    "✓ Sì" if value else "✗ No",
                     style="green" if value else "red"
                 )
             elif value is None or value == "":
@@ -73,7 +73,7 @@ class SummaryStep(BaseStep):
             ('thread_container', 'Container')
         ]:
             value = selectors.get(key, '')
-            status = "✅" if value else "❌"
+            status = "✓" if value else "✗"
             display_value = value[:40] + "..." if len(value) > 40 else value
             console.print(f"    {name:12} {status} {display_value or '[dim]Non configurato[/dim]'}")
         
@@ -81,33 +81,33 @@ class SummaryStep(BaseStep):
         console.print(f"\n  {t('step9.section_google')}")
         console.print("  " + "─" * 48)
         if self.state.google_sheets_enabled:
-            console.print(f"    Status:      [green]✅ Abilitato[/green]")
+            console.print(f"    Status:      [green]✓ Abilitato[/green]")
             console.print(f"    Spreadsheet: {self.state.spreadsheet_id[:20]}...")
             if self.state.drive_folder_id:
                 console.print(f"    Drive:       {self.state.drive_folder_id[:20]}...")
         else:
-            console.print(f"    Status:      [dim]❌ Disabilitato (solo report locali)[/dim]")
+            console.print(f"    Status:      [dim]✗ Disabilitato (solo report locali)[/dim]")
         
         # LangSmith section
         console.print(f"\n  {t('step9.section_langsmith')}")
         console.print("  " + "─" * 48)
         if self.state.langsmith_enabled:
-            console.print(f"    Status:      [green]✅ Abilitato[/green]")
+            console.print(f"    Status:      [green]✓ Abilitato[/green]")
             console.print(f"    Project:     {self.state.langsmith_project_id}")
             if self.state.langsmith_tool_names:
                 console.print(f"    Tools:       {', '.join(self.state.langsmith_tool_names)}")
         else:
-            console.print(f"    Status:      [dim]❌ Disabilitato[/dim]")
+            console.print(f"    Status:      [dim]✗ Disabilitato[/dim]")
         
         # Ollama section
         console.print(f"\n  {t('step9.section_ollama')}")
         console.print("  " + "─" * 48)
         if self.state.ollama_enabled:
-            console.print(f"    Status:      [green]✅ Abilitato[/green]")
+            console.print(f"    Status:      [green]✓ Abilitato[/green]")
             console.print(f"    Modello:     {self.state.ollama_model}")
             console.print(f"    Modalità:    Train, Assisted, Auto")
         else:
-            console.print(f"    Status:      [dim]❌ Disabilitato[/dim]")
+            console.print(f"    Status:      [dim]✗ Disabilitato[/dim]")
             console.print(f"    Modalità:    Solo Train")
         
         # Test Cases section
@@ -128,16 +128,16 @@ class SummaryStep(BaseStep):
             
             # Ensure directories
             ensure_project_dirs(self.state.project_name)
-            console.print("    ✅ Cartelle create")
+            console.print("    ✓ Cartelle create")
             
             # Save project config
             save_project_config(self.state)
-            console.print("    ✅ project.yaml salvato")
+            console.print("    ✓ project.yaml salvato")
             
             # Save tests if any
             if self.state.tests:
                 save_tests(self.state.project_name, self.state.tests)
-                console.print("    ✅ tests.json salvato")
+                console.print("    ✓ tests.json salvato")
             
             # Create empty training_data.json
             project_dir = get_project_dir(self.state.project_name)
@@ -146,19 +146,19 @@ class SummaryStep(BaseStep):
                 import json
                 with open(training_file, 'w') as f:
                     json.dump([], f)
-                console.print("    ✅ training_data.json creato")
+                console.print("    ✓ training_data.json creato")
             
-            console.print(f"\n  [green]✅ {t('step9.saved')}[/green]")
+            console.print(f"\n  [green]✓ {t('step9.saved')}[/green]")
             return True
             
         except Exception as e:
-            console.print(f"\n  [red]❌ Errore salvataggio: {e}[/red]")
+            console.print(f"\n  [red]✗ Errore salvataggio: {e}[/red]")
             return False
     
     def _show_next_steps(self):
         """Display next steps and launch options."""
         next_steps = f"""
-    🎉 SETUP COMPLETATO!
+    * SETUP COMPLETATO!
     
     Il progetto è stato configurato in:
     [cyan]projects/{self.state.project_name}/[/cyan]
@@ -199,7 +199,7 @@ class SummaryStep(BaseStep):
                     return False, 'quit'
                 return True, 'retry'
         else:
-            console.print("\n  [yellow]⚠️ Configurazione non salvata[/yellow]")
+            console.print("\n  [yellow]! Configurazione non salvata[/yellow]")
             if Confirm.ask("  Vuoi tornare indietro per modificare?", default=True):
                 return True, 'back'
         

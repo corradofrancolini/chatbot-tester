@@ -73,7 +73,7 @@ class TestImportStep(BaseStep):
             )
             
             if not is_valid:
-                console.print(f"  [red]❌ {error}[/red]")
+                console.print(f"  [red]✗ {error}[/red]")
                 if not Confirm.ask("  Vuoi riprovare?", default=True):
                     return []
                 continue
@@ -87,12 +87,12 @@ class TestImportStep(BaseStep):
                 tests = load_tests_from_file(path)
                 
                 if not tests:
-                    console.print("  [yellow]⚠️ Nessun test trovato nel file[/yellow]")
+                    console.print("  [yellow]! Nessun test trovato nel file[/yellow]")
                     if not Confirm.ask("  Vuoi provare un altro file?", default=True):
                         return []
                     continue
                 
-                console.print(f"  [green]✅ {t('step8.import_count', count=len(tests))}[/green]\n")
+                console.print(f"  [green]✓ {t('step8.import_count', count=len(tests))}[/green]\n")
                 
                 # Show preview
                 console.print(f"  {t('step8.import_preview')}:\n")
@@ -105,7 +105,7 @@ class TestImportStep(BaseStep):
                         return []
                         
             except Exception as e:
-                console.print(f"  [red]❌ {t('step8.import_fail', error=str(e))}[/red]")
+                console.print(f"  [red]✗ {t('step8.import_fail', error=str(e))}[/red]")
                 if not Confirm.ask("  Vuoi riprovare?", default=True):
                     return []
     
@@ -127,7 +127,7 @@ class TestImportStep(BaseStep):
             
             if not question:
                 if test_count == 1:
-                    console.print("  [yellow]⚠️ Devi inserire almeno una domanda[/yellow]")
+                    console.print("  [yellow]! Devi inserire almeno una domanda[/yellow]")
                     test_count -= 1
                     continue
                 break
@@ -154,7 +154,7 @@ class TestImportStep(BaseStep):
                     test['followups'].append(followup)
             
             tests.append(test)
-            console.print(f"  [green]✅ Test {test_id} aggiunto[/green]\n")
+            console.print(f"  [green]✓ Test {test_id} aggiunto[/green]\n")
             
             # Ask if continue
             if not Confirm.ask(f"  {t('step8.create_another')}", default=True):
@@ -198,7 +198,7 @@ class TestImportStep(BaseStep):
         template_map = {"1": "basic", "2": "support", "3": "ecommerce"}
         selected = templates[template_map[choice]]
         
-        console.print(f"\n  [green]✅ Template caricato ({len(selected)} test)[/green]\n")
+        console.print(f"\n  [green]✓ Template caricato ({len(selected)} test)[/green]\n")
         self._show_tests_preview(selected)
         
         return selected
@@ -247,10 +247,10 @@ class TestImportStep(BaseStep):
         # Summary
         console.print()
         console.print("  [cyan]─" * 50 + "[/cyan]")
-        console.print(f"  📝 Test cases: {len(self.tests)}")
+        console.print(f"  · Test cases: {len(self.tests)}")
         if self.tests:
             total_followups = sum(len(t.get('followups', [])) for t in self.tests)
-            console.print(f"  🔄 Followups totali: {total_followups}")
+            console.print(f"  · Followups totali: {total_followups}")
         console.print("  [cyan]─" * 50 + "[/cyan]")
         console.print()
         

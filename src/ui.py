@@ -38,9 +38,9 @@ class UIStyle(Enum):
     SUCCESS = "green"
     ERROR = "red"
     WARNING = "yellow"
-    INFO = "blue"
+    INFO = "dim"
     MUTED = "dim"
-    HIGHLIGHT = "cyan bold"
+    HIGHLIGHT = "bold"
 
 
 @dataclass
@@ -95,19 +95,19 @@ class ConsoleUI:
     
     def success(self, message: str) -> None:
         """Messaggio di successo"""
-        self.print(f"✅ {message}", UIStyle.SUCCESS.value)
-    
+        self.print(f"✓ {message}", UIStyle.SUCCESS.value)
+
     def error(self, message: str) -> None:
         """Messaggio di errore"""
-        self.print(f"❌ {message}", UIStyle.ERROR.value)
-    
+        self.print(f"✗ {message}", UIStyle.ERROR.value)
+
     def warning(self, message: str) -> None:
         """Messaggio di warning"""
-        self.print(f"⚠️ {message}", UIStyle.WARNING.value)
-    
+        self.print(f"! {message}", UIStyle.WARNING.value)
+
     def info(self, message: str) -> None:
         """Messaggio informativo"""
-        self.print(f"ℹ️ {message}", UIStyle.INFO.value)
+        self.print(f"> {message}", UIStyle.INFO.value)
     
     def muted(self, message: str) -> None:
         """Testo secondario"""
@@ -116,30 +116,29 @@ class ConsoleUI:
     # ==================== STRUTTURE ====================
     
     def header(self, title: str, subtitle: str = "") -> None:
-        """Header principale"""
+        """Header principale app (con box leggero)"""
         if self.console:
             content = f"[bold]{title}[/bold]"
             if subtitle:
                 content += f"\n[dim]{subtitle}[/dim]"
-            
+
             self.console.print(Panel(
                 content,
-                border_style="blue",
-                padding=(1, 2)
+                border_style="dim",
+                padding=(0, 2)
             ))
         else:
-            print(f"\n{'='*50}")
-            print(f"  {title}")
+            print(f"\n{title}")
             if subtitle:
-                print(f"  {subtitle}")
-            print(f"{'='*50}\n")
-    
+                print(f"{subtitle}")
+            print()
+
     def section(self, title: str) -> None:
-        """Intestazione sezione"""
+        """Intestazione sezione (minimal)"""
         if self.console:
-            self.console.print(f"\n[bold cyan]▶ {title}[/bold cyan]")
+            self.console.print(f"\n[bold]{title}[/bold]")
         else:
-            print(f"\n--- {title} ---")
+            print(f"\n{title}")
     
     def divider(self) -> None:
         """Linea divisoria"""
@@ -242,82 +241,85 @@ class ConsoleUI:
                 return default
             return response in ['y', 'yes', 's', 'sì', 'si']
     
-    def menu(self, 
+    def menu(self,
              items: List[MenuItem],
-             prompt: str = "Scegli un'opzione",
+             prompt: str = ">",
              allow_back: bool = False) -> Optional[str]:
         """
         Menu di selezione.
-        
+
         Args:
             items: Lista opzioni
             prompt: Messaggio prompt
             allow_back: Mostra opzione "indietro"
-            
+
         Returns:
             Key dell'opzione selezionata o None se back
         """
-        # Mostra opzioni
         self.print("")
         for item in items:
             if item.disabled:
                 style = "dim"
-                suffix = " (non disponibile)"
             elif item.recommended:
                 style = "green"
-                suffix = " [raccomandato]"
             else:
                 style = None
-                suffix = ""
-            
-            # Escape delle parentesi quadre per Rich
-            key_display = item.key.replace("[", "\\[").replace("]", "\\]")
-            line = f"  \\[{key_display}] {item.label}{suffix}"
+
+            # Formato: "  key  Label — Description"
+            key_display = item.key
+            line = f"  {key_display:4} {item.label}"
+
+            if item.recommended:
+                line += " [recommended]"
+            elif item.disabled:
+                line += " [disabled]"
+
             if item.description:
-                line += f"\n      {item.description}"
-            
+                line += f" — {item.description}"
+
             self.print(line, style)
-        
+
         if allow_back:
-            self.print("  \\[back] Indietro", UIStyle.MUTED.value)
-        
+            self.print("  b    Indietro", UIStyle.MUTED.value)
+
         self.print("")
-        
+
         # Ottieni input
         valid_keys = [i.key for i in items if not i.disabled]
         if allow_back:
-            valid_keys.append('back')
-        
+            valid_keys.extend(['b', 'back'])
+
         while True:
             choice = self.input(prompt).strip()
-            
+
             if choice in valid_keys:
-                if choice == 'back':
+                if choice in ['b', 'back']:
                     return None
                 return choice
-            
+
             self.warning(f"Opzione non valida: {choice}")
     
     def select_multiple(self,
                         items: List[MenuItem],
-                        prompt: str = "Seleziona (separati da virgola)") -> List[str]:
+                        prompt: str = "Seleziona (separati da virgola) >") -> List[str]:
         """
         Selezione multipla.
-        
+
         Returns:
             Lista di keys selezionate
         """
-        # Mostra opzioni
         self.print("")
         for item in items:
-            line = f"  [{item.key}] {item.label}"
+            line = f"  {item.key:4} {item.label}"
+            if item.description:
+                line += f" — {item.description}"
             self.print(line)
-        
+
         self.print("")
-        
+
         choice = self.input(prompt)
         selected = [c.strip() for c in choice.split(',')]
-        
+
         valid_keys = [i.key for i in items]
         return [s for s in selected if s in valid_keys]
     
@@ -330,50 +332,40 @@ class ConsoleUI:
                     description: str = "",
                     time_estimate: str = "") -> None:
         """Header per step wizard"""
-        progress_pct = int((step_number / total_steps) * 100)
-        bar_filled = int(progress_pct / 5)
-        bar = "█" * bar_filled + "░" * (20 - bar_filled)
-        
         if self.console:
-            self.console.print(Panel(
-                f"[bold]Step {step_number}/{total_steps}[/bold] {bar} {time_estimate}\n\n"
-                f"[bold cyan]{title}[/bold cyan]\n"
-                f"[dim]{description}[/dim]",
-                border_style="blue"
-            ))
-        else:
-            print(f"\n{'='*50}")
-            print(f"Step {step_number}/{total_steps} [{bar}] {time_estimate}")
-            print(f"\n{title}")
+            header = f"[dim][{step_number}/{total_steps}][/dim] [bold]{title}[/bold]"
+            if time_estimate:
+                header += f" [dim]{time_estimate}[/dim]"
+            self.console.print(f"\n{header}")
             if description:
-                print(f"{description}")
-            print(f"{'='*50}\n")
+                self.console.print(f"      [dim]{description}[/dim]")
+        else:
+            header = f"[{step_number}/{total_steps}] {title}"
+            if time_estimate:
+                header += f" {time_estimate}"
+            print(f"\n{header}")
+            if description:
+                print(f"      {description}")
     
     def wizard_summary(self, settings: dict) -> None:
         """Riepilogo configurazione wizard"""
-        if self.console:
-            table = Table(title="Riepilogo Configurazione", show_header=True)
-            table.add_column("Impostazione", style="cyan")
-            table.add_column("Valore")
-            
-            for key, value in settings.items():
-                # Formatta valore
-                if isinstance(value, bool):
-                    val_str = "✅ Sì" if value else "❌ No"
-                elif isinstance(value, list):
-                    val_str = ", ".join(str(v) for v in value) or "(vuoto)"
-                elif value is None or value == "":
-                    val_str = "(non configurato)"
-                else:
-                    val_str = str(value)
-                
-                table.add_row(key, val_str)
-            
-            self.console.print(table)
-        else:
-            print("\n--- Riepilogo Configurazione ---")
-            for key, value in settings.items():
-                print(f"  {key}: {value}")
+        self.print("\n[bold]Riepilogo[/bold]\n" if self.console else "\nRiepilogo\n")
+
+        # Calcola larghezza massima chiave per allineamento
+        max_key_len = max(len(k) for k in settings.keys()) if settings else 0
+
+        for key, value in settings.items():
+            # Formatta valore
+            if isinstance(value, bool):
+                val_str = "yes" if value else "no"
+            elif isinstance(value, list):
+                val_str = ", ".join(str(v) for v in value) if value else "-"
+            elif value is None or value == "":
+                val_str = "-"
+            else:
+                val_str = str(value)
+
+            self.print(f"  {key:<{max_key_len}}  {val_str}")
     
     # ==================== MESSAGGI SPECIALI ====================
     
@@ -383,28 +375,28 @@ class ConsoleUI:
                     solutions: List[str]) -> None:
         """Pannello errore con soluzioni"""
         if self.console:
-            solution_text = "\n".join(f"  {i+1}. {s}" for i, s in enumerate(solutions))
-            
-            self.console.print(Panel(
-                f"[bold red]❌ ERRORE: {error_type}[/bold red]\n\n"
-                f"Dettaglio: {detail}\n\n"
-                f"[bold]💡 Possibili soluzioni:[/bold]\n{solution_text}",
-                border_style="red",
-                title="Errore"
-            ))
+            self.console.print(f"\n[red]✗ Errore: {error_type}[/red]")
+            self.console.print(f"  [dim]{detail}[/dim]")
+
+            if solutions:
+                self.console.print(f"\n  [bold]Soluzioni:[/bold]")
+                for s in solutions:
+                    self.console.print(f"  · {s}")
         else:
-            print(f"\n❌ ERRORE: {error_type}")
-            print(f"   Dettaglio: {detail}")
-            print("\n💡 Possibili soluzioni:")
-            for i, s in enumerate(solutions):
-                print(f"   {i+1}. {s}")
+            print(f"\n✗ Errore: {error_type}")
+            print(f"  {detail}")
+
+            if solutions:
+                print(f"\n  Soluzioni:")
+                for s in solutions:
+                    print(f"  · {s}")
     
     def help_text(self, text: str) -> None:
         """Testo di aiuto"""
         if self.console:
-            self.console.print(Markdown(text))
+            self.console.print(f"[dim]{text}[/dim]")
         else:
-            print(text)
+            print(f"  {text}")
     
     def clear(self) -> None:
         """Pulisce lo schermo"""
@@ -478,7 +470,7 @@ class SpinnerContext:
             self._progress.start()
             self._task = self._progress.add_task(self.message, total=None)
         else:
-            print(f"⏳ {self.message}...", end="", flush=True)
+            print(f"{self.message}...", end="", flush=True)
         return self
     
     def __exit__(self, *args):
@@ -509,61 +501,56 @@ class WizardUI:
     def show_header(self, step_number: int, title: str, description: str = "", time_remaining: str = "") -> None:
         """Mostra header dello step"""
         self.current_step = step_number
-        progress_pct = int((step_number / self.total_steps) * 100)
-        bar_filled = int(progress_pct / 5)
-        bar = "█" * bar_filled + "░" * (20 - bar_filled)
-        
+
         if self.console:
-            self.console.print(Panel(
-                f"[bold]Step {step_number}/{self.total_steps}[/bold] {bar} {time_remaining}\n\n"
-                f"[bold cyan]{title}[/bold cyan]\n"
-                f"[dim]{description}[/dim]",
-                border_style="blue",
-                title="CHATBOT TESTER - SETUP"
-            ))
-        else:
-            print(f"\n{'='*60}")
-            print(f"CHATBOT TESTER - SETUP")
-            print(f"Step {step_number}/{self.total_steps} [{bar}] {time_remaining}")
-            print(f"\n{title}")
+            header = f"[dim][{step_number}/{self.total_steps}][/dim] [bold]{title}[/bold]"
+            if time_remaining:
+                header += f" [dim]{time_remaining}[/dim]"
+            self.console.print(f"\n{header}")
             if description:
-                print(f"{description}")
-            print(f"{'='*60}\n")
+                self.console.print(f"      [dim]{description}[/dim]")
+        else:
+            header = f"[{step_number}/{self.total_steps}] {title}"
+            if time_remaining:
+                header += f" {time_remaining}"
+            print(f"\n{header}")
+            if description:
+                print(f"      {description}")
     
     def show_success(self, message: str) -> None:
         """Messaggio successo"""
         if self.console:
-            self.console.print(f"[green]✅ {message}[/green]")
+            self.console.print(f"[green]✓ {message}[/green]")
         else:
-            print(f"✅ {message}")
-    
+            print(f"✓ {message}")
+
     def show_error(self, message: str) -> None:
         """Messaggio errore"""
         if self.console:
-            self.console.print(f"[red]❌ {message}[/red]")
+            self.console.print(f"[red]✗ {message}[/red]")
         else:
-            print(f"❌ {message}")
-    
+            print(f"✗ {message}")
+
     def show_warning(self, message: str) -> None:
         """Messaggio warning"""
         if self.console:
-            self.console.print(f"[yellow]⚠️ {message}[/yellow]")
+            self.console.print(f"[yellow]! {message}[/yellow]")
         else:
-            print(f"⚠️ {message}")
-    
+            print(f"! {message}")
+
     def show_info(self, message: str) -> None:
         """Messaggio informativo"""
         if self.console:
-            self.console.print(f"[blue]ℹ️ {message}[/blue]")
+            self.console.print(f"[blue]> {message}[/blue]")
         else:
-            print(f"ℹ️ {message}")
-    
+            print(f"> {message}")
+
     def show_tip(self, message: str) -> None:
         """Suggerimento"""
         if self.console:
-            self.console.print(f"[dim]💡 {message}[/dim]")
+            self.console.print(f"[dim]~ {message}[/dim]")
         else:
-            print(f"💡 {message}")
+            print(f"~ {message}")
     
     def ask_input(self, prompt: str, default: str = "") -> str:
         """Chiedi input"""
@@ -586,21 +573,19 @@ class WizardUI:
                 return default
             return response in ['y', 'yes', 's', 'sì', 'si']
     
-    def show_options(self, options: List[tuple], prompt: str = "Scelta") -> str:
+    def show_options(self, options: List[tuple], prompt: str = ">") -> str:
         """Mostra opzioni e ritorna scelta"""
         print("")
         for key, label, desc in options:
+            line = f"  {key:4} {label}"
+            if desc:
+                line += f" — {desc}"
             if self.console:
-                if desc:
-                    self.console.print(f"  \\[{key}] {label}\n      [dim]{desc}[/dim]")
-                else:
-                    self.console.print(f"  \\[{key}] {label}")
+                self.console.print(line)
             else:
-                print(f"  [{key}] {label}")
-                if desc:
-                    print(f"      {desc}")
+                print(line)
         print("")
-        
+
         valid_keys = [opt[0] for opt in options]
         while True:
             choice = self.ask_input(prompt)
@@ -611,36 +596,38 @@ class WizardUI:
     def show_summary(self, settings: dict) -> None:
         """Mostra riepilogo configurazione"""
         if self.console:
-            table = Table(title="Riepilogo Configurazione", show_header=True)
-            table.add_column("Impostazione", style="cyan")
-            table.add_column("Valore")
-            
-            for key, value in settings.items():
-                if isinstance(value, bool):
-                    val_str = "✅ Sì" if value else "❌ No"
-                elif isinstance(value, list):
-                    val_str = ", ".join(str(v) for v in value) or "(vuoto)"
-                elif value is None or value == "":
-                    val_str = "(non configurato)"
-                else:
-                    val_str = str(value)
-                table.add_row(key, val_str)
-            
-            self.console.print(table)
+            self.console.print("\n[bold]Riepilogo[/bold]\n")
         else:
-            print("\n--- Riepilogo ---")
-            for key, value in settings.items():
-                print(f"  {key}: {value}")
+            print("\nRiepilogo\n")
+
+        # Calcola larghezza massima chiave per allineamento
+        max_key_len = max(len(k) for k in settings.keys()) if settings else 0
+
+        for key, value in settings.items():
+            if isinstance(value, bool):
+                val_str = "yes" if value else "no"
+            elif isinstance(value, list):
+                val_str = ", ".join(str(v) for v in value) if value else "-"
+            elif value is None or value == "":
+                val_str = "-"
+            else:
+                val_str = str(value)
+
+            line = f"  {key:<{max_key_len}}  {val_str}"
+            if self.console:
+                self.console.print(line)
+            else:
+                print(line)
     
     def show_spinner(self, message: str):
         """Ritorna context manager per spinner"""
         return SpinnerContext(ConsoleUI(), message)
     
-    def show_step(self, step_num: int, title: str, description: str = "", 
+    def show_step(self, step_num: int, title: str, description: str = "",
                   content: str = "", show_skip: bool = False) -> None:
         """
         Mostra step del wizard.
-        
+
         Args:
             step_num: Numero step corrente
             title: Titolo step
@@ -649,59 +636,40 @@ class WizardUI:
             show_skip: Mostra opzione skip
         """
         self.current_step = step_num
-        progress_pct = int((step_num / self.total_steps) * 100)
-        bar_filled = int(progress_pct / 5)
-        bar = "█" * bar_filled + "░" * (20 - bar_filled)
-        
+
         if self.console:
-            header_text = (
-                f"[bold]Step {step_num}/{self.total_steps}[/bold] {bar}\n\n"
-                f"[bold cyan]{title}[/bold cyan]"
-            )
+            header = f"[dim][{step_num}/{self.total_steps}][/dim] [bold]{title}[/bold]"
+            self.console.print(f"\n{header}")
             if description:
-                header_text += f"\n[dim]{description}[/dim]"
-            
-            self.console.print(Panel(
-                header_text,
-                border_style="blue",
-                title="CHATBOT TESTER - SETUP"
-            ))
-            
+                self.console.print(f"      [dim]{description}[/dim]")
+
             if content:
                 self.console.print(content)
-            
+
             if show_skip:
-                self.console.print("\n[dim]Premi [s] per saltare questo step[/dim]")
+                self.console.print("[dim]      s per saltare[/dim]")
         else:
-            print(f"\n{'='*60}")
-            print(f"CHATBOT TESTER - SETUP")
-            print(f"Step {step_num}/{self.total_steps} [{bar}]")
-            print(f"\n{title}")
+            print(f"\n[{step_num}/{self.total_steps}] {title}")
             if description:
-                print(f"{description}")
-            print(f"{'='*60}")
+                print(f"      {description}")
             if content:
                 print(content)
             if show_skip:
-                print("\nPremi [s] per saltare questo step")
+                print("      s per saltare")
     
     def show_help(self, help_text: str) -> None:
         """
         Mostra testo di aiuto.
-        
+
         Args:
-            help_text: Testo markdown di aiuto
+            help_text: Testo di aiuto
         """
         if self.console:
-            self.console.print(Panel(
-                Markdown(help_text),
-                border_style="green",
-                title="💡 Aiuto"
-            ))
+            self.console.print(f"\n[bold]Aiuto[/bold]")
+            self.console.print(f"[dim]{help_text}[/dim]")
         else:
-            print("\n--- Aiuto ---")
-            print(help_text)
-            print("-" * 40)
+            print(f"\nAiuto")
+            print(f"  {help_text}")
     
     def clear(self) -> None:
         """Pulisce schermo"""
@@ -725,47 +693,43 @@ def clear_screen() -> None:
 def ask_session_recovery(session_info: dict) -> bool:
     """
     Chiede se riprendere sessione precedente.
-    
+
     Args:
         session_info: Info sulla sessione (step, data, etc.)
-    
+
     Returns:
         True se l'utente vuole continuare
     """
+    step = session_info.get('current_step', '?')
+    total = session_info.get('total_steps', '?')
+
     if console:
-        console.print(Panel(
-            f"[bold]Trovata sessione precedente[/bold]\n\n"
-            f"Step: {session_info.get('current_step', '?')}/{session_info.get('total_steps', '?')}\n"
-            f"Ultimo aggiornamento: {session_info.get('last_updated', 'N/A')[:19]}",
-            border_style="yellow",
-            title="Sessione Precedente"
-        ))
-        return Confirm.ask("Vuoi continuare da dove eri rimasto?", default=True)
+        console.print(f"\n> Sessione precedente trovata (step {step}/{total})")
+        return Confirm.ask("  Continuare?", default=True)
     else:
-        print("\n--- Sessione Precedente ---")
-        print(f"Step: {session_info.get('current_step', '?')}/{session_info.get('total_steps', '?')}")
-        response = input("Vuoi continuare da dove eri rimasto? [Y/n]: ").strip().lower()
+        print(f"\n> Sessione precedente trovata (step {step}/{total})")
+        response = input("  Continuare? [Y/n]: ").strip().lower()
         return response != 'n'
 
 
 def confirm_exit() -> bool:
     """
     Conferma uscita dal wizard.
-    
+
     Returns:
         True se l'utente vuole uscire
     """
     if console:
-        return Confirm.ask("[yellow]Vuoi davvero uscire?[/yellow] Il progresso sarà salvato", default=False)
+        return Confirm.ask("Uscire? Il progresso sarà salvato", default=False)
     else:
-        response = input("Vuoi davvero uscire? Il progresso sarà salvato [y/N]: ").strip().lower()
+        response = input("Uscire? Il progresso sarà salvato [y/N]: ").strip().lower()
         return response in ['y', 'yes', 's', 'sì']
 
 
 def with_spinner(message: str):
     """
     Decorator per eseguire funzione con spinner.
-    
+
     Usage:
         @with_spinner("Caricamento...")
         def do_something():
@@ -783,9 +747,9 @@ def with_spinner(message: str):
                     progress.add_task(message, total=None)
                     return func(*args, **kwargs)
             else:
-                print(f"⏳ {message}...", end="", flush=True)
+                print(f"{message}...", end="", flush=True)
                 result = func(*args, **kwargs)
-                print(" fatto")
+                print(" done")
                 return result
         return wrapper
     return decorator

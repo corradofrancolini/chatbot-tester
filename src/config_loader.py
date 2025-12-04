@@ -169,7 +169,7 @@ class RunConfig:
                 use_ollama=data.get('use_ollama', True)
             )
         except (json.JSONDecodeError, IOError) as e:
-            print(f"⚠️ Errore caricamento run_config: {e}")
+            print(f"! Errore caricamento run_config: {e}")
             return cls()
     
     def save(self, file_path: Path) -> bool:
@@ -193,7 +193,7 @@ class RunConfig:
                 json.dump(data, f, indent=2)
             return True
         except IOError as e:
-            print(f"❌ Errore salvataggio run_config: {e}")
+            print(f"✗ Errore salvataggio run_config: {e}")
             return False
     
     def reset(self) -> None:

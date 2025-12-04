@@ -250,7 +250,7 @@ class TrainingData:
                     ))
             
         except (json.JSONDecodeError, IOError) as e:
-            print(f"⚠️ Errore caricamento training_data: {e}")
+            print(f"! Errore caricamento training_data: {e}")
         
         return training
     
@@ -305,7 +305,7 @@ class TrainingData:
             return True
             
         except IOError as e:
-            print(f"❌ Errore salvataggio training_data: {e}")
+            print(f"✗ Errore salvataggio training_data: {e}")
             return False
     
     def match_pattern(self, bot_message: str) -> Optional[Pattern]:
@@ -492,7 +492,7 @@ class TrainModeUI:
                 count_str = f"×{sug['count']}" if sug['count'] > 1 else ""
                 parts.append(f"[{i}] {sug['text']} {count_str}".strip())
             
-            lines.append(f"  💡 {pattern_name}?  " + "  ".join(parts))
+            lines.append(f"  ~ {pattern_name}?  " + "  ".join(parts))
         
         if followup:
             lines.append(f"  [f] followup: \"{followup[:50]}{'...' if len(followup) > 50 else ''}\"")

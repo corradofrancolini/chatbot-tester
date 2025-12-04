@@ -29,10 +29,10 @@ def main():
     project_id = "YOUR_LANGSMITH_PROJECT_ID"  # my-chatbot
 
     if not api_key:
-        print("❌ LANGSMITH_API_KEY non trovata in config/.env")
+        print("✗ LANGSMITH_API_KEY non trovata in config/.env")
         return
 
-    print(f"🔗 Connessione a LangSmith...")
+    print(f"Connessione a LangSmith...")
     print(f"   Project ID: {project_id}")
 
     client = LangSmithClient(
@@ -42,10 +42,10 @@ def main():
 
     # Verifica connessione
     if not client.is_available():
-        print("❌ LangSmith non raggiungibile")
+        print("✗ LangSmith non raggiungibile")
         return
 
-    print("✅ Connesso a LangSmith\n")
+    print("✓ Connesso a LangSmith\n")
 
     # Query di test
     if len(sys.argv) > 1:
@@ -69,15 +69,15 @@ def main():
                 search_window_minutes=120
             )
         else:
-            print("❌ Nessun trace trovato")
+            print("✗ Nessun trace trovato")
             return
 
     if report.error and not report.trace_url:
-        print(f"❌ {report.error}")
+        print(f"✗ {report.error}")
         return
 
     # Mostra dati raw
-    print("\n📊 DATI RAW:")
+    print("\nDATI RAW:")
     print(f"   trace_url: {report.trace_url}")
     print(f"   query: {report.query[:100]}..." if report.query else "   query: (vuota)")
     print(f"   response: {report.response[:100]}..." if report.response else "   response: (vuota)")
@@ -95,7 +95,7 @@ def main():
     print(f"   error: {report.error}")
 
     # Waterfall
-    print(f"\n🌊 WATERFALL ({len(report.waterfall)} step):")
+    print(f"\nWATERFALL ({len(report.waterfall)} step):")
     for step in report.waterfall:
         indent = "  " * step.depth
         print(f"   {indent}{step.name} [{step.run_type}] {step.duration_ms}ms (offset: {step.start_offset_ms}ms)")

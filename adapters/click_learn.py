@@ -70,39 +70,39 @@ class ClickLearnAdapter(ChatbotAdapter):
         selector_set = SelectorSet()
         warnings = []
         
-        self.on_instruction("\n🖱️ APPRENDIMENTO DA CLICK")
+        self.on_instruction("\nAPPRENDIMENTO DA CLICK")
         self.on_instruction("Segui le istruzioni per identificare gli elementi del chatbot.\n")
-        
+
         # 1. Textarea
-        self.on_instruction("📝 Step 1/3: Clicca sul CAMPO DI INPUT dove scrivi i messaggi")
+        self.on_instruction("Step 1/3: Clicca sul CAMPO DI INPUT dove scrivi i messaggi")
         textarea_result = await self._capture_click('textarea')
         if textarea_result:
             selector_set.textarea = await self._create_selector_info(textarea_result)
-            self.on_instruction(f"✅ Campo input catturato: {selector_set.textarea.selector}\n")
+            self.on_instruction(f"  ✓ Campo input catturato: {selector_set.textarea.selector}\n")
         else:
             warnings.append("Textarea non catturato")
-            self.on_instruction("⚠️ Campo input non catturato\n")
-        
+            self.on_instruction("  ! Campo input non catturato\n")
+
         # 2. Submit button
-        self.on_instruction("📤 Step 2/3: Clicca sul BOTTONE INVIO")
+        self.on_instruction("Step 2/3: Clicca sul BOTTONE INVIO")
         submit_result = await self._capture_click('submit_button')
         if submit_result:
             selector_set.submit_button = await self._create_selector_info(submit_result)
-            self.on_instruction(f"✅ Bottone invio catturato: {selector_set.submit_button.selector}\n")
+            self.on_instruction(f"  ✓ Bottone invio catturato: {selector_set.submit_button.selector}\n")
         else:
             warnings.append("Submit button non catturato")
-            self.on_instruction("⚠️ Bottone invio non catturato\n")
-        
+            self.on_instruction("  ! Bottone invio non catturato\n")
+
         # 3. Bot message
-        self.on_instruction("🤖 Step 3/3: Clicca su un MESSAGGIO DEL BOT (se presente)")
+        self.on_instruction("Step 3/3: Clicca su un MESSAGGIO DEL BOT (se presente)")
         self.on_instruction("   (Premi ESC o attendi il timeout se non ci sono messaggi)")
         bot_result = await self._capture_click('bot_messages', allow_skip=True)
         if bot_result:
             selector_set.bot_messages = await self._create_selector_info(bot_result)
-            self.on_instruction(f"✅ Messaggi bot catturati: {selector_set.bot_messages.selector}\n")
+            self.on_instruction(f"  ✓ Messaggi bot catturati: {selector_set.bot_messages.selector}\n")
         else:
             warnings.append("Bot messages non catturato - potrebbe essere necessario configurarlo manualmente")
-            self.on_instruction("⚠️ Messaggi bot non catturati\n")
+            self.on_instruction("  ! Messaggi bot non catturati\n")
         
         success = selector_set.is_complete
         message = "Apprendimento completato!" if success else f"Elementi mancanti: {', '.join(selector_set.missing)}"

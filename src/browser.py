@@ -187,7 +187,7 @@ class BrowserManager:
         Returns:
             True se login riuscito
         """
-        print(f"\n⏳ {message}")
+        print(f"\n{message}")
         print(f"   Hai {timeout_minutes} minuti per completare il login.")
         
         try:
@@ -196,10 +196,10 @@ class BrowserManager:
                 timeout=timeout_minutes * 60 * 1000,
                 state='visible'
             )
-            print("✅ Login completato!")
+            print("✓ Login completato")
             return True
         except Exception:
-            print("❌ Timeout login scaduto")
+            print("✗ Timeout login scaduto")
             return False
     
     async def send_message(self, message: str) -> bool:
@@ -314,7 +314,7 @@ class BrowserManager:
 
                 await asyncio.sleep(check_interval)
 
-            print(f"⚠️ Timeout attesa risposta bot (loop_count={loop_count})")
+            print(f"! Timeout attesa risposta bot (loop_count={loop_count})")
             return None
 
         except Exception as e:
@@ -617,12 +617,12 @@ class SelectorDetector:
                 if await element.count() > 0:
                     is_visible = await element.first.is_visible()
                     if is_visible:
-                        print(f"✅ Trovato {name}: {pattern}")
+                        print(f"✓ Trovato {name}: {pattern}")
                         return pattern
             except:
                 continue
         
-        print(f"⚠️ Non trovato {name}")
+        print(f"! Non trovato {name}")
         return None
     
     async def learn_from_click(self, element_name: str, timeout_seconds: int = 30) -> Optional[str]:
@@ -636,7 +636,7 @@ class SelectorDetector:
         Returns:
             Selettore CSS dell'elemento cliccato
         """
-        print(f"\n👆 Clicca su: {element_name}")
+        print(f"\n> Clicca su: {element_name}")
         print(f"   Hai {timeout_seconds} secondi...")
         
         # Inietta listener per click
@@ -681,8 +681,8 @@ class SelectorDetector:
         """)
         
         if selector_result:
-            print(f"✅ Selettore catturato: {selector_result}")
+            print(f"✓ Selettore catturato: {selector_result}")
         else:
-            print("❌ Timeout - nessun click rilevato")
+            print("✗ Timeout - nessun click rilevato")
         
         return selector_result

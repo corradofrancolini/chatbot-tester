@@ -248,7 +248,7 @@ class InteractiveDetector:
         Fase 1: Prova pattern comuni per trovare selettori.
         Usa sia pattern default che pattern appresi.
         """
-        print("\n🔍 Auto-detect selettori in corso...")
+        print("\n> Auto-detect selettori in corso...")
 
         for category in ['textarea', 'submit_button', 'bot_messages',
                          'loading_indicator', 'thread_container', 'content_inner']:
@@ -261,9 +261,9 @@ class InteractiveDetector:
             selector = await self._try_patterns(patterns, category)
             if selector:
                 setattr(self.result, category, selector)
-                print(f"  ✅ {category}: {selector}")
+                print(f"  ✓ {category}: {selector}")
             else:
-                print(f"  ⚠️  {category}: non trovato")
+                print(f"  !  {category}: non trovato")
 
         return self.result
 
@@ -309,7 +309,7 @@ class InteractiveDetector:
 
         # Verifica che abbiamo textarea e submit
         if not self.result.textarea or not self.result.submit_button:
-            print("  ❌ Mancano textarea o submit button")
+            print("  ✗ Mancano textarea o submit button")
             return result
 
         try:
@@ -327,7 +327,7 @@ class InteractiveDetector:
             submit = self._page.locator(self.result.submit_button)
             await submit.click()
 
-            print(f"  📤 Messaggio inviato: {question[:50]}...")
+            print(f"  > Messaggio inviato: {question[:50]}...")
 
             # Monitora DOM
             monitoring = await self._monitor_dom_changes(
@@ -345,21 +345,21 @@ class InteractiveDetector:
             # Aggiorna selettori se ne abbiamo trovati di nuovi
             if monitoring.get('loading_selector') and not self.result.loading_indicator:
                 self.result.loading_indicator = monitoring['loading_selector']
-                print(f"  🔄 Loading rilevato: {monitoring['loading_selector']}")
+                print(f"  ~ Loading rilevato: {monitoring['loading_selector']}")
 
             if monitoring.get('message_selector') and not self.result.bot_messages:
                 self.result.bot_messages = monitoring['message_selector']
-                print(f"  💬 Messaggi rilevati: {monitoring['message_selector']}")
+                print(f"  · Messaggi rilevati: {monitoring['message_selector']}")
 
             if monitoring.get('content_selector') and not self.result.content_inner:
                 self.result.content_inner = monitoring['content_selector']
-                print(f"  📝 Content inner rilevato: {monitoring['content_selector']}")
+                print(f"  · Content inner rilevato: {monitoring['content_selector']}")
 
             # Aggiungi domanda alla lista
             self.result.test_questions.append(question)
 
         except Exception as e:
-            print(f"  ❌ Errore: {e}")
+            print(f"  ✗ Errore: {e}")
 
         return result
 
@@ -413,7 +413,7 @@ class InteractiveDetector:
                         if await loc.count() > 0 and await loc.first.is_visible():
                             loading_candidates.append(selector)
                             if check_count <= 20:  # Solo nei primi secondi
-                                print(f"    🔄 Loading candidate: {selector}")
+                                print(f"    ~ Loading candidate: {selector}")
                     except:
                         pass
 
@@ -507,7 +507,7 @@ class InteractiveDetector:
         Returns:
             Selettore CSS dell'elemento cliccato
         """
-        print(f"\n👆 Clicca su: {element_name}")
+        print(f"\n> Clicca su: {element_name}")
         print(f"   Hai {timeout_s} secondi...")
 
         selector_result = await self._page.evaluate("""
@@ -559,7 +559,7 @@ class InteractiveDetector:
         """, timeout_s * 1000)
 
         if selector_result:
-            print(f"  ✅ Selettore catturato: {selector_result}")
+            print(f"  ✓ Selettore catturato: {selector_result}")
 
             # Verifica che funzioni
             try:
@@ -567,12 +567,12 @@ class InteractiveDetector:
                 if count > 0:
                     return selector_result
                 else:
-                    print(f"  ⚠️ Selettore non trova elementi, riprova")
+                    print(f"  ! Selettore non trova elementi, riprova")
                     return None
             except:
                 return selector_result
         else:
-            print("  ❌ Timeout - nessun click rilevato")
+            print("  ✗ Timeout - nessun click rilevato")
             return None
 
     async def validate_selectors(self, test_message: str = "ciao") -> Dict[str, bool]:
@@ -590,7 +590,7 @@ class InteractiveDetector:
             'overall': False,
         }
 
-        print("\n🧪 Validazione selettori...")
+        print("\n> Validazione selettori...")
 
         # Ricarica pagina per stato pulito
         await self._page.reload(wait_until='networkidle')
@@ -603,11 +603,11 @@ class InteractiveDetector:
                 if await textarea.count() > 0 and await textarea.first.is_visible():
                     await textarea.fill(test_message)
                     results['textarea'] = True
-                    print(f"  ✅ Textarea: OK")
+                    print(f"  ✓ Textarea: OK")
                 else:
-                    print(f"  ❌ Textarea: non visibile")
+                    print(f"  ✗ Textarea: non visibile")
             except Exception as e:
-                print(f"  ❌ Textarea: {e}")
+                print(f"  ✗ Textarea: {e}")
 
         # Test submit
         if self.result.submit_button and results['textarea']:
@@ -616,11 +616,11 @@ class InteractiveDetector:
                 if await submit.count() > 0 and await submit.first.is_visible():
                     await submit.click()
                     results['submit_button'] = True
-                    print(f"  ✅ Submit: OK")
+                    print(f"  ✓ Submit: OK")
                 else:
-                    print(f"  ❌ Submit: non visibile")
+                    print(f"  ✗ Submit: non visibile")
             except Exception as e:
-                print(f"  ❌ Submit: {e}")
+                print(f"  ✗ Submit: {e}")
 
         # Test bot_messages (attendi risposta)
         if self.result.bot_messages and results['submit_button']:
@@ -630,14 +630,14 @@ class InteractiveDetector:
                     count = await self._page.locator(self.result.bot_messages).count()
                     if count > 0:
                         results['bot_messages'] = True
-                        print(f"  ✅ Bot messages: OK ({count} messaggi)")
+                        print(f"  ✓ Bot messages: OK ({count} messaggi)")
                         break
                     await asyncio.sleep(0.5)
 
                 if not results['bot_messages']:
-                    print(f"  ❌ Bot messages: nessun messaggio dopo 30s")
+                    print(f"  ✗ Bot messages: nessun messaggio dopo 30s")
             except Exception as e:
-                print(f"  ❌ Bot messages: {e}")
+                print(f"  ✗ Bot messages: {e}")
 
         # Overall
         results['overall'] = all([
@@ -647,9 +647,9 @@ class InteractiveDetector:
         ])
 
         if results['overall']:
-            print(f"\n✅ Validazione completata con successo!")
+            print(f"\n✓ Validazione completata con successo!")
         else:
-            print(f"\n❌ Validazione fallita - alcuni selettori non funzionano")
+            print(f"\n✗ Validazione fallita - alcuni selettori non funzionano")
 
         return results
 
@@ -668,7 +668,7 @@ class InteractiveDetector:
         if self.result.content_inner:
             self.pattern_store.add_pattern('content_inner', self.result.content_inner)
 
-        print("💾 Pattern salvati per usi futuri")
+        print("✓ Pattern salvati per usi futuri")
 
 
 class SelectorDetectorStep:
@@ -694,7 +694,7 @@ class SelectorDetectorStep:
         print(f"\n{'='*60}")
         print("CONFIGURAZIONE SELETTORI CHATBOT")
         print(f"{'='*60}")
-        print(f"\n🌐 Apertura browser su: {self.url}")
+        print(f"\n> Apertura browser su: {self.url}")
 
         async with InteractiveDetector(self.url) as detector:
             self.detector = detector
@@ -727,21 +727,21 @@ class SelectorDetectorStep:
                     await self._manual_mode()
                 elif choice.lower() == 'r':
                     await detector._page.reload(wait_until='networkidle')
-                    print("  🔄 Pagina ricaricata")
+                    print("  ~ Pagina ricaricata")
                 elif choice:
                     question_count += 1
-                    print(f"\n📝 Domanda [{question_count}]: {choice}")
+                    print(f"\n· Domanda [{question_count}]: {choice}")
 
                     test_result = await detector.test_question(choice)
 
                     if test_result['success']:
                         preview = test_result['response_text'][:100]
-                        print(f"  ✅ Risposta ricevuta: {preview}...")
+                        print(f"  ✓ Risposta ricevuta: {preview}...")
                     else:
-                        print("  ⚠️ Nessuna risposta rilevata")
+                        print("  ! Nessuna risposta rilevata")
 
                     if test_result['new_classes']:
-                        print(f"  📊 Nuove classi: {len(test_result['new_classes'])}")
+                        print(f"  · Nuove classi: {len(test_result['new_classes'])}")
                 else:
                     print("  [Inserisci una domanda o un comando]")
 
@@ -786,7 +786,7 @@ class SelectorDetectorStep:
 
     async def _manual_mode(self) -> None:
         """Modalità manuale: click-to-learn per ogni elemento"""
-        print("\n🖱️ MODALITÀ MANUALE")
+        print("\n> MODALITÀ MANUALE")
         print("Clicca sugli elementi nel browser per catturare i selettori.\n")
 
         elements = [
@@ -808,7 +808,7 @@ class SelectorDetectorStep:
 
     async def _manual_edit(self) -> None:
         """Edit manuale dei selettori"""
-        print("\n✏️ EDIT MANUALE")
+        print("\n> EDIT MANUALE")
         print("Premi INVIO per mantenere il valore attuale.\n")
 
         for attr in ['textarea', 'submit_button', 'bot_messages',
@@ -830,7 +830,7 @@ class SelectorDetectorStep:
         if self.result.test_questions:
             print(f"\n  Test eseguiti: {len(self.result.test_questions)}")
 
-        status = "✅ Completo" if self.result.is_complete() else "⚠️ Incompleto"
+        status = "✓ Completo" if self.result.is_complete() else "! Incompleto"
         print(f"\n  Status: {status}")
 
 

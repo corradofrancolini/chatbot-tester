@@ -143,7 +143,7 @@ class LangSmithStep(BaseStep):
             self.state.langsmith_enabled = False
             
             if choice == "3":
-                console.print("\n  [cyan]ℹ️  Potrai configurare LangSmith in seguito modificando project.yaml e .env[/cyan]")
+                console.print("\n  [cyan]>  Potrai configurare LangSmith in seguito modificando project.yaml e .env[/cyan]")
             else:
                 console.print("\n  [dim]LangSmith non configurato[/dim]")
                 
@@ -158,14 +158,14 @@ class LangSmithStep(BaseStep):
                 api_key = Prompt.ask("\n  API Key")
                 
                 if not api_key:
-                    console.print("  [red]❌ API Key obbligatoria[/red]")
+                    console.print("  [red]✗ API Key obbligatoria[/red]")
                     continue
                 
                 if not validate_langsmith_key(api_key):
-                    console.print(f"  [red]❌ {t('step6.api_key_invalid')}[/red]")
+                    console.print(f"  [red]✗ {t('step6.api_key_invalid')}[/red]")
                     continue
                 
-                console.print(f"  [green]✅ Formato API Key valido[/green]")
+                console.print(f"  [green]✓ Formato API Key valido[/green]")
                 break
             
             # Project ID (optional)
@@ -179,20 +179,20 @@ class LangSmithStep(BaseStep):
             org_id = Prompt.ask("\n  Organization ID", default="")
             
             # Test connection
-            console.print(f"\n  ⏳ {t('step6.testing')}")
+            console.print(f"\n   {t('step6.testing')}")
             
             success, error = self._test_langsmith_connection(api_key, project_id, org_id)
             
             if success:
-                console.print(f"  [green]✅ {t('step6.test_ok')}[/green]")
+                console.print(f"  [green]✓ {t('step6.test_ok')}[/green]")
                 
                 # Auto-detect tool names
-                console.print(f"\n  ⏳ {t('step6.detect_tools')}")
+                console.print(f"\n   {t('step6.detect_tools')}")
                 
                 tools = self._detect_tool_names(api_key, project_id, org_id)
                 
                 if tools:
-                    console.print(f"  [green]✅ {t('step6.tools_found', tools=', '.join(tools))}[/green]")
+                    console.print(f"  [green]✓ {t('step6.tools_found', tools=', '.join(tools))}[/green]")
                     
                     if Confirm.ask(f"\n  {t('step6.tools_confirm')}", default=True):
                         self.state.langsmith_tool_names = tools
@@ -202,7 +202,7 @@ class LangSmithStep(BaseStep):
                         manual_tools = Prompt.ask("  Tool names")
                         self.state.langsmith_tool_names = [t.strip() for t in manual_tools.split(',') if t.strip()]
                 else:
-                    console.print(f"  [yellow]⚠️  {t('step6.tools_not_found')}[/yellow]")
+                    console.print(f"  [yellow]!  {t('step6.tools_not_found')}[/yellow]")
                     
                     # Manual input
                     console.print(f"\n  {t('step6.tools_manual')}")
@@ -222,23 +222,23 @@ class LangSmithStep(BaseStep):
                 self._save_api_key(api_key)
                 
             else:
-                console.print(f"  [red]❌ {t('step6.test_fail')}: {error}[/red]")
+                console.print(f"  [red]✗ {t('step6.test_fail')}: {error}[/red]")
                 
                 if Confirm.ask("\n  Vuoi riprovare?", default=True):
                     return self.run()
                 else:
                     self.state.langsmith_enabled = False
-                    console.print("\n  [yellow]⚠️  LangSmith non configurato[/yellow]")
+                    console.print("\n  [yellow]!  LangSmith non configurato[/yellow]")
         
         # Summary
         console.print()
         console.print("  [cyan]─" * 50 + "[/cyan]")
-        console.print(f"  🔍 LangSmith: {'Abilitato' if self.state.langsmith_enabled else 'Disabilitato'}")
+        console.print(f"  · LangSmith: {'Abilitato' if self.state.langsmith_enabled else 'Disabilitato'}")
         if self.state.langsmith_enabled:
-            console.print(f"  🔑 API Key: {'*' * 20}...{self.state.langsmith_api_key[-8:]}")
-            console.print(f"  📁 Project ID: {self.state.langsmith_project_id or 'Non specificato'}")
-            console.print(f"  🏢 Org ID: {self.state.langsmith_org_id or 'Non specificato'}")
-            console.print(f"  🛠️  Tool Names: {', '.join(self.state.langsmith_tool_names) or 'Nessuno'}")
+            console.print(f"  · API Key: {'*' * 20}...{self.state.langsmith_api_key[-8:]}")
+            console.print(f"  · Project ID: {self.state.langsmith_project_id or 'Non specificato'}")
+            console.print(f"  · Org ID: {self.state.langsmith_org_id or 'Non specificato'}")
+            console.print(f"  · Tool Names: {', '.join(self.state.langsmith_tool_names) or 'Nessuno'}")
         console.print("  [cyan]─" * 50 + "[/cyan]")
         console.print()
         

@@ -24,7 +24,7 @@ class ChatbotUrlStep(BaseStep):
     
     def _test_connection(self, url: str) -> Tuple[bool, int]:
         """Test URL reachability."""
-        console.print(f"\n  ⏳ {t('step3.testing_connection')}")
+        console.print(f"\n   {t('step3.testing_connection')}")
         
         try:
             import requests
@@ -65,7 +65,7 @@ class ChatbotUrlStep(BaseStep):
                 page = browser.pages[0] if browser.pages else browser.new_page()
                 page.goto(url, wait_until='domcontentloaded')
                 
-                console.print("  [yellow]⏳ In attesa del login...[/yellow]")
+                console.print("  [yellow] In attesa del login...[/yellow]")
                 console.print("  [dim]Premi INVIO qui quando hai completato il login e sei sulla pagina del chatbot[/dim]")
                 input()
                 
@@ -74,11 +74,11 @@ class ChatbotUrlStep(BaseStep):
                 
                 browser.close()
                 
-                console.print(f"  [green]✅ {t('step3.login_saved')}[/green]")
+                console.print(f"  [green]✓ {t('step3.login_saved')}[/green]")
                 return True, final_url
                 
         except Exception as e:
-            console.print(f"  [red]❌ Errore browser: {e}[/red]")
+            console.print(f"  [red]✗ Errore browser: {e}[/red]")
             return False, url
     
     def run(self) -> Tuple[bool, str]:
@@ -93,7 +93,7 @@ class ChatbotUrlStep(BaseStep):
             url = Prompt.ask("  URL")
             
             if not url:
-                console.print(f"  [red]❌ L'URL è obbligatorio[/red]")
+                console.print(f"  [red]✗ L'URL è obbligatorio[/red]")
                 continue
             
             # Add https:// if missing
@@ -103,18 +103,18 @@ class ChatbotUrlStep(BaseStep):
             is_valid, error = validate_url(url)
             
             if not is_valid:
-                console.print(f"  [red]❌ {error}[/red]")
+                console.print(f"  [red]✗ {error}[/red]")
                 continue
             
             # Test connection
             reachable, status_code = self._test_connection(url)
             
             if reachable:
-                console.print(f"  [green]✅ {t('step3.connection_ok')} (HTTP {status_code})[/green]")
+                console.print(f"  [green]✓ {t('step3.connection_ok')} (HTTP {status_code})[/green]")
                 self.state.chatbot_url = url
                 break
             else:
-                console.print(f"  [red]❌ {t('step3.connection_fail')}[/red]")
+                console.print(f"  [red]✗ {t('step3.connection_fail')}[/red]")
                 
                 # Options
                 console.print("\n  [bold]Opzioni:[/bold]")
@@ -127,7 +127,7 @@ class ChatbotUrlStep(BaseStep):
                 if choice == 'r':
                     reachable, status_code = self._test_connection(url)
                     if reachable:
-                        console.print(f"  [green]✅ {t('step3.connection_ok')}[/green]")
+                        console.print(f"  [green]✓ {t('step3.connection_ok')}[/green]")
                         self.state.chatbot_url = url
                         break
                 elif choice == 'c':
@@ -144,16 +144,16 @@ class ChatbotUrlStep(BaseStep):
         if needs_login:
             success, final_url = self._open_browser_for_login(self.state.chatbot_url)
             if success and final_url != self.state.chatbot_url:
-                console.print(f"  [cyan]ℹ️  URL aggiornato: {final_url}[/cyan]")
+                console.print(f"  [cyan]>  URL aggiornato: {final_url}[/cyan]")
                 self.state.chatbot_url = final_url
         
         # Summary
         console.print()
         console.print("  [cyan]─" * 50 + "[/cyan]")
-        console.print(f"  🔗 URL: [bold]{self.state.chatbot_url}[/bold]")
-        console.print(f"  🔐 Login richiesto: {'Sì' if self.state.needs_login else 'No'}")
+        console.print(f"  · URL: [bold]{self.state.chatbot_url}[/bold]")
+        console.print(f"  · Login richiesto: {'Sì' if self.state.needs_login else 'No'}")
         if self.state.needs_login:
-            console.print(f"  💾 Sessione: Salvata")
+            console.print(f"  · Sessione: Salvata")
         console.print("  [cyan]─" * 50 + "[/cyan]")
         console.print()
         

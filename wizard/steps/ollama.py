@@ -25,7 +25,7 @@ class OllamaStep(BaseStep):
     def _install_ollama(self) -> bool:
         """Install Ollama via Homebrew."""
         try:
-            console.print("\n  ⏳ Installazione Ollama...")
+            console.print("\n   Installazione Ollama...")
             
             result = subprocess.run(
                 ["brew", "install", "ollama"],
@@ -35,23 +35,23 @@ class OllamaStep(BaseStep):
             )
             
             if result.returncode == 0:
-                console.print("  [green]✅ Ollama installato[/green]")
+                console.print("  [green]✓ Ollama installato[/green]")
                 return True
             else:
-                console.print(f"  [red]❌ Errore installazione: {result.stderr}[/red]")
+                console.print(f"  [red]✗ Errore installazione: {result.stderr}[/red]")
                 return False
                 
         except subprocess.TimeoutExpired:
-            console.print("  [red]❌ Timeout installazione[/red]")
+            console.print("  [red]✗ Timeout installazione[/red]")
             return False
         except Exception as e:
-            console.print(f"  [red]❌ Errore: {e}[/red]")
+            console.print(f"  [red]✗ Errore: {e}[/red]")
             return False
     
     def _start_ollama(self) -> bool:
         """Start Ollama server."""
         try:
-            console.print("\n  ⏳ Avvio Ollama...")
+            console.print("\n   Avvio Ollama...")
             
             # Start ollama serve in background
             subprocess.Popen(
@@ -65,20 +65,20 @@ class OllamaStep(BaseStep):
             for _ in range(30):
                 time.sleep(1)
                 if check_ollama_running():
-                    console.print("  [green]✅ Ollama avviato[/green]")
+                    console.print("  [green]✓ Ollama avviato[/green]")
                     return True
             
-            console.print("  [yellow]⚠️  Ollama avviato ma non risponde ancora[/yellow]")
+            console.print("  [yellow]!  Ollama avviato ma non risponde ancora[/yellow]")
             return True
             
         except Exception as e:
-            console.print(f"  [red]❌ Errore avvio: {e}[/red]")
+            console.print(f"  [red]✗ Errore avvio: {e}[/red]")
             return False
     
     def _pull_model(self, model: str = "mistral") -> bool:
         """Download a model."""
         try:
-            console.print(f"\n  ⏳ Download modello {model}... (può richiedere alcuni minuti)")
+            console.print(f"\n   Download modello {model}... (può richiedere alcuni minuti)")
             
             result = subprocess.run(
                 ["ollama", "pull", model],
@@ -88,17 +88,17 @@ class OllamaStep(BaseStep):
             )
             
             if result.returncode == 0 or check_ollama_model(model):
-                console.print(f"  [green]✅ Modello {model} disponibile[/green]")
+                console.print(f"  [green]✓ Modello {model} disponibile[/green]")
                 return True
             else:
-                console.print(f"  [red]❌ Errore download: {result.stderr}[/red]")
+                console.print(f"  [red]✗ Errore download: {result.stderr}[/red]")
                 return False
                 
         except subprocess.TimeoutExpired:
-            console.print("  [yellow]⚠️  Download in corso in background, verificherò più tardi[/yellow]")
+            console.print("  [yellow]!  Download in corso in background, verificherò più tardi[/yellow]")
             return False
         except Exception as e:
-            console.print(f"  [red]❌ Errore: {e}[/red]")
+            console.print(f"  [red]✗ Errore: {e}[/red]")
             return False
     
     def _test_generation(self, model: str = "mistral") -> bool:
@@ -106,7 +106,7 @@ class OllamaStep(BaseStep):
         try:
             import requests
             
-            console.print(f"\n  ⏳ {t('step7.test_prompt')}")
+            console.print(f"\n   {t('step7.test_prompt')}")
             
             response = requests.post(
                 "http://localhost:11434/api/generate",
@@ -121,15 +121,15 @@ class OllamaStep(BaseStep):
             if response.status_code == 200:
                 result = response.json().get("response", "")
                 if result:
-                    console.print(f"  [green]✅ {t('step7.test_ok')}[/green]")
+                    console.print(f"  [green]✓ {t('step7.test_ok')}[/green]")
                     console.print(f"  [dim]Risposta: {result[:50]}...[/dim]")
                     return True
             
-            console.print(f"  [red]❌ {t('step7.test_fail')}[/red]")
+            console.print(f"  [red]✗ {t('step7.test_fail')}[/red]")
             return False
             
         except Exception as e:
-            console.print(f"  [red]❌ Errore test: {e}[/red]")
+            console.print(f"  [red]✗ Errore test: {e}[/red]")
             return False
     
     def run(self) -> Tuple[bool, str]:
@@ -140,7 +140,7 @@ class OllamaStep(BaseStep):
         console.print(f"\n  [dim]{t('step7.info')}[/dim]")
         
         # Check current status
-        console.print(f"\n  ⏳ {t('step7.checking')}")
+        console.print(f"\n   {t('step7.checking')}")
         
         ollama_installed = check_ollama_installed()
         ollama_running = check_ollama_running() if ollama_installed else False
@@ -148,13 +148,13 @@ class OllamaStep(BaseStep):
         
         # Status report
         console.print()
-        console.print(f"  Ollama installato: {'[green]✅ Sì[/green]' if ollama_installed else '[yellow]❌ No[/yellow]'}")
+        console.print(f"  Ollama installato: {'[green]✓ Sì[/green]' if ollama_installed else '[yellow]✗ No[/yellow]'}")
         
         if ollama_installed:
-            console.print(f"  Ollama in esecuzione: {'[green]✅ Sì[/green]' if ollama_running else '[yellow]❌ No[/yellow]'}")
+            console.print(f"  Ollama in esecuzione: {'[green]✓ Sì[/green]' if ollama_running else '[yellow]✗ No[/yellow]'}")
         
         if ollama_running:
-            console.print(f"  Modello Mistral: {'[green]✅ Disponibile[/green]' if mistral_installed else '[yellow]❌ Non installato[/yellow]'}")
+            console.print(f"  Modello Mistral: {'[green]✓ Disponibile[/green]' if mistral_installed else '[yellow]✗ Non installato[/yellow]'}")
         
         console.print()
         
@@ -180,7 +180,7 @@ class OllamaStep(BaseStep):
                             if self._pull_model("mistral"):
                                 mistral_installed = True
                 else:
-                    console.print("\n  [yellow]⚠️  Installazione fallita, continuo senza Ollama[/yellow]")
+                    console.print("\n  [yellow]!  Installazione fallita, continuo senza Ollama[/yellow]")
             
         elif not ollama_running:
             if Confirm.ask(f"  {t('step7.start_prompt')}", default=True):
@@ -204,7 +204,7 @@ class OllamaStep(BaseStep):
             if self._test_generation("mistral"):
                 self.state.ollama_enabled = True
                 self.state.ollama_model = "mistral"
-                console.print("\n  [green]✅ Ollama configurato correttamente![/green]")
+                console.print("\n  [green]✓ Ollama configurato correttamente![/green]")
             else:
                 if Confirm.ask("\n  Test fallito. Abilitare comunque Ollama?", default=False):
                     self.state.ollama_enabled = True
@@ -213,15 +213,15 @@ class OllamaStep(BaseStep):
                     self.state.ollama_enabled = False
         else:
             self.state.ollama_enabled = False
-            console.print("\n  [yellow]⚠️  Ollama non configurato. Potrai usare solo la modalità Train.[/yellow]")
+            console.print("\n  [yellow]!  Ollama non configurato. Potrai usare solo la modalità Train.[/yellow]")
         
         # Summary
         console.print()
         console.print("  [cyan]─" * 50 + "[/cyan]")
-        console.print(f"  🧠 Ollama: {'Abilitato' if self.state.ollama_enabled else 'Disabilitato'}")
+        console.print(f"  · Ollama: {'Abilitato' if self.state.ollama_enabled else 'Disabilitato'}")
         if self.state.ollama_enabled:
-            console.print(f"  🤖 Modello: {self.state.ollama_model}")
-            console.print(f"  📍 URL: http://localhost:11434")
+            console.print(f"  · Modello: {self.state.ollama_model}")
+            console.print(f"  · URL: http://localhost:11434")
         console.print("  [cyan]─" * 50 + "[/cyan]")
         
         if not self.state.ollama_enabled:

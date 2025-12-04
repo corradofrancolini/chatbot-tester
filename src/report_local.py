@@ -255,12 +255,12 @@ class ReportGenerator:
             # Screenshot link
             screenshot_html = ""
             if r.screenshot_path:
-                screenshot_html = f'<a href="{r.screenshot_path}" target="_blank">📷</a>'
+                screenshot_html = f'<a href="{r.screenshot_path}" target="_blank">[img]</a>'
             
             # LangSmith link
             langsmith_html = ""
             if r.langsmith_url:
-                langsmith_html = f'<a href="{r.langsmith_url}" target="_blank">🔍</a>'
+                langsmith_html = f'<a href="{r.langsmith_url}" target="_blank">[trace]</a>'
             
             rows_html += f"""
             <tr class="{esito_class}" data-category="{r.category}" data-esito="{r.esito.upper()}">
@@ -449,7 +449,7 @@ class ReportGenerator:
 <body>
     <div class="container">
         <header>
-            <h1>📊 Report Test - {self.project_name}</h1>
+            <h1>Report Test - {self.project_name}</h1>
             <div class="meta">
                 Run #{self.run_number} | {self.start_time.strftime('%Y-%m-%d %H:%M')} | 
                 Modalità: {self.mode} | Durata: {duration}
@@ -478,10 +478,10 @@ class ReportGenerator:
             <label>Filtra:</label>
             <select id="filterEsito">
                 <option value="">Tutti gli esiti</option>
-                <option value="PASS">✅ PASS</option>
-                <option value="FAIL">❌ FAIL</option>
-                <option value="SKIP">⏭️ SKIP</option>
-                <option value="ERROR">⚠️ ERROR</option>
+                <option value="PASS">PASS</option>
+                <option value="FAIL">FAIL</option>
+                <option value="SKIP">SKIP</option>
+                <option value="ERROR">ERROR</option>
             </select>
             <select id="filterCategory">
                 <option value="">Tutte le categorie</option>

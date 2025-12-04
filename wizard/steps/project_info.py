@@ -32,7 +32,7 @@ class ProjectInfoStep(BaseStep):
             name = Prompt.ask("  Nome progetto")
             
             if not name:
-                console.print(f"  [red]❌ Il nome è obbligatorio[/red]")
+                console.print(f"  [red]✗ Il nome è obbligatorio[/red]")
                 continue
             
             # Normalize: lowercase and replace spaces with hyphens
@@ -41,11 +41,11 @@ class ProjectInfoStep(BaseStep):
             is_valid, error = validate_project_name(name)
             
             if is_valid:
-                console.print(f"  [green]✅ {t('step2.name_ok')}[/green]")
+                console.print(f"  [green]✓ {t('step2.name_ok')}[/green]")
                 self.state.project_name = name
                 break
             else:
-                console.print(f"  [red]❌ {error}[/red]")
+                console.print(f"  [red]✗ {error}[/red]")
         
         console.print()
         
@@ -59,9 +59,9 @@ class ProjectInfoStep(BaseStep):
         # Confirm
         console.print()
         console.print("  [cyan]─" * 50 + "[/cyan]")
-        console.print(f"  📁 Progetto: [bold]{self.state.project_name}[/bold]")
+        console.print(f"  · Progetto: [bold]{self.state.project_name}[/bold]")
         if description:
-            console.print(f"  📝 Descrizione: {description}")
+            console.print(f"  · Descrizione: {description}")
         console.print("  [cyan]─" * 50 + "[/cyan]")
         console.print()
         

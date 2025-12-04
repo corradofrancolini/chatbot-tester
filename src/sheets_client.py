@@ -41,6 +41,13 @@ SCOPES = [
 
 
 @dataclass
+class ScreenshotUrls:
+    """URL screenshot per embedding e visualizzazione"""
+    image_url: str = ""  # URL diretto per =IMAGE()
+    view_url: str = ""   # URL per visualizzazione alta risoluzione
+
+
+@dataclass
 class TestResult:
     """Risultato di un singolo test per il report"""
     test_id: str
@@ -48,7 +55,8 @@ class TestResult:
     mode: str  # Train, Assisted, Auto
     question: str
     conversation: str
-    screenshot_url: str = ""
+    screenshot_url: str = ""  # Legacy: URL singolo
+    screenshot_urls: Optional[ScreenshotUrls] = None  # Nuovo: entrambi gli URL
     prompt_version: str = ""
     model_version: str = ""
     environment: str = ""
@@ -88,7 +96,8 @@ class GoogleSheetsClient:
         "MODE",
         "QUESTION",
         "CONVERSATION",
-        "SCREENSHOT",
+        "SCREENSHOT",      # Immagine inline (thumbnail)
+        "SCREENSHOT URL",  # Link alta risoluzione
         "PROMPT VER",
         "MODEL VER",
         "ENV",
@@ -96,9 +105,9 @@ class GoogleSheetsClient:
         "NOTES",
         "LANGSMITH"
     ]
-    
+
     # Larghezze colonne in pixel
-    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 300, 100, 100, 60, 80, 200, 350]
+    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 200, 200, 100, 100, 60, 80, 200, 350]
     
     def __init__(self,
                  credentials_path: str,
@@ -174,7 +183,7 @@ class GoogleSheetsClient:
             # Nuovo login se necessario
             if not creds or not creds.valid:
                 if not self.credentials_path.exists():
-                    print(f"❌ File credentials non trovato: {self.credentials_path}")
+                    print(f"✗ File credentials non trovato: {self.credentials_path}")
                     return False
                 
                 flow = InstalledAppFlow.from_client_secrets_file(
@@ -200,7 +209,7 @@ class GoogleSheetsClient:
             return True
             
         except Exception as e:
-            print(f"❌ Errore autenticazione Google: {e}")
+            print(f"✗ Errore autenticazione Google: {e}")
             return False
     
     # ==================== GESTIONE RUN ====================
@@ -290,11 +299,11 @@ class GoogleSheetsClient:
             # Imposta larghezze colonne
             self._set_column_widths(worksheet)
             
-            print(f"✅ Creato foglio: {sheet_name}")
+            print(f"✓ Creato foglio: {sheet_name}")
             return worksheet
             
         except Exception as e:
-            print(f"❌ Errore creazione foglio RUN: {e}")
+            print(f"✗ Errore creazione foglio RUN: {e}")
             return None
     
     def _set_column_widths(self, worksheet) -> None:
@@ -317,7 +326,7 @@ class GoogleSheetsClient:
             
             self._spreadsheet.batch_update({"requests": requests})
         except Exception as e:
-            print(f"⚠️ Errore impostazione larghezze colonne: {e}")
+            print(f"! Errore impostazione larghezze colonne: {e}")
     
     def setup_run_sheet(self, 
                         run_config: 'RunConfig',
@@ -340,7 +349,7 @@ class GoogleSheetsClient:
                 self._worksheet = worksheet
                 self._current_run = run_config.active_run
                 self._load_existing_tests()
-                print(f"✅ Continuo su: {worksheet.title}")
+                print(f"✓ Continuo su: {worksheet.title}")
                 return True
         
         # Crea nuova RUN
@@ -426,7 +435,7 @@ class GoogleSheetsClient:
             return info
             
         except Exception as e:
-            print(f"⚠️ Errore lettura info RUN: {e}")
+            print(f"! Errore lettura info RUN: {e}")
             return None
     
     # ==================== GESTIONE TEST ====================
@@ -471,28 +480,49 @@ class GoogleSheetsClient:
         except:
             self._worksheet.update('A1', [self.COLUMNS])
     
-    def append_result(self, result: TestResult) -> bool:
+    # Altezza default per righe con screenshot (in pixel)
+    DEFAULT_ROW_HEIGHT = 120
+
+    def append_result(self, result: TestResult, row_height: Optional[int] = None) -> bool:
         """
         Aggiunge un risultato al report.
-        
+
         Args:
             result: TestResult da aggiungere
-            
+            row_height: Altezza riga in pixel (default: DEFAULT_ROW_HEIGHT se c'è screenshot)
+
         Returns:
             True se aggiunta riuscita
         """
         if not self._worksheet:
-            print("❌ Nessun foglio RUN attivo")
+            print("✗ Nessun foglio RUN attivo")
             return False
-        
+
         try:
+            # Prepara valori screenshot
+            screenshot_formula = ""
+            screenshot_view_url = ""
+            has_screenshot = False
+
+            if result.screenshot_urls:
+                # Nuovo formato: usa IMAGE() per thumbnail
+                if result.screenshot_urls.image_url:
+                    # =IMAGE(url, 2) -> mode 2 = fit to cell
+                    screenshot_formula = f'=IMAGE("{result.screenshot_urls.image_url}", 2)'
+                    has_screenshot = True
+                screenshot_view_url = result.screenshot_urls.view_url
+            elif result.screenshot_url:
+                # Legacy: URL singolo (mantieni retrocompatibilità)
+                screenshot_view_url = result.screenshot_url
+
             row = [
                 result.test_id,
                 result.date,
                 result.mode,
                 result.question,
                 result.conversation,
-                result.screenshot_url,
+                screenshot_formula,     # SCREENSHOT: immagine inline
+                screenshot_view_url,    # SCREENSHOT URL: link alta risoluzione
                 result.prompt_version,
                 result.model_version,
                 result.environment,
@@ -500,126 +530,234 @@ class GoogleSheetsClient:
                 result.notes,
                 result.langsmith_url
             ]
-            
+
             self._worksheet.append_row(row, value_input_option='USER_ENTERED')
             self._existing_tests.add(result.test_id)
-            
+
+            # Auto-resize riga se c'è screenshot
+            if has_screenshot:
+                # Trova il numero della riga appena aggiunta
+                row_count = len(self._worksheet.col_values(1))
+                height = row_height or self.DEFAULT_ROW_HEIGHT
+                self.set_row_height(row_count, height)
+
             return True
         except Exception as e:
-            print(f"❌ Errore append riga: {e}")
+            print(f"✗ Errore append riga: {e}")
             return False
     
-    def append_results(self, results: List[TestResult]) -> int:
+    def append_results(self, results: List[TestResult], row_height: Optional[int] = None) -> int:
         """
         Aggiunge più risultati in batch.
-        
+
         Args:
             results: Lista TestResult
-            
+            row_height: Altezza righe in pixel (default: DEFAULT_ROW_HEIGHT)
+
         Returns:
             Numero risultati aggiunti con successo
         """
         if not results:
             return 0
-        
+
         if not self._worksheet:
-            print("❌ Nessun foglio RUN attivo")
+            print("✗ Nessun foglio RUN attivo")
             return 0
-        
+
         try:
+            # Trova prima riga disponibile
+            start_row = len(self._worksheet.col_values(1)) + 1
+
             rows = []
+            has_any_screenshot = False
+
             for r in results:
+                # Prepara valori screenshot
+                screenshot_formula = ""
+                screenshot_view_url = ""
+
+                if r.screenshot_urls:
+                    if r.screenshot_urls.image_url:
+                        screenshot_formula = f'=IMAGE("{r.screenshot_urls.image_url}", 2)'
+                        has_any_screenshot = True
+                    screenshot_view_url = r.screenshot_urls.view_url
+                elif r.screenshot_url:
+                    screenshot_view_url = r.screenshot_url
+
                 rows.append([
                     r.test_id, r.date, r.mode, r.question, r.conversation,
-                    r.screenshot_url, r.prompt_version, r.model_version,
+                    screenshot_formula, screenshot_view_url,
+                    r.prompt_version, r.model_version,
                     r.environment, r.esito, r.notes, r.langsmith_url
                 ])
-            
+
             self._worksheet.append_rows(rows, value_input_option='USER_ENTERED')
-            
+
             for r in results:
                 self._existing_tests.add(r.test_id)
-            
+
+            # Auto-resize righe se ci sono screenshot
+            if has_any_screenshot:
+                end_row = start_row + len(results) - 1
+                height = row_height or self.DEFAULT_ROW_HEIGHT
+                self.set_rows_height(start_row, end_row, height)
+
             return len(results)
         except Exception as e:
-            print(f"❌ Errore batch append: {e}")
+            print(f"✗ Errore batch append: {e}")
             return 0
     
     # ==================== UPLOAD & UTILITY ====================
     
-    def upload_screenshot(self, 
+    def upload_screenshot(self,
                           file_path: Path,
-                          test_id: str) -> Optional[str]:
+                          test_id: str) -> Optional[ScreenshotUrls]:
         """
         Carica screenshot su Google Drive.
-        
+
         Args:
             file_path: Path al file screenshot
             test_id: ID del test (per nome file)
-            
+
         Returns:
-            URL pubblico del file o None
+            ScreenshotUrls con URL immagine e URL visualizzazione, o None
         """
         if not self._drive_service or not self.drive_folder_id:
             return None
-        
+
         if not file_path.exists():
             return None
-        
+
         try:
             # Aggiungi RUN al nome file
             run_prefix = f"Run{self._current_run:03d}_" if self._current_run else ""
-            
+
             # Metadata file
             file_metadata = {
                 'name': f"{run_prefix}{test_id}_{file_path.name}",
                 'parents': [self.drive_folder_id]
             }
-            
+
             # Upload
             media = MediaFileUpload(
                 str(file_path),
                 mimetype='image/png',
                 resumable=True
             )
-            
+
             file = self._drive_service.files().create(
                 body=file_metadata,
                 media_body=media,
                 fields='id, webViewLink'
             ).execute()
-            
+
             # Rendi pubblico
             self._drive_service.permissions().create(
                 fileId=file['id'],
                 body={'type': 'anyone', 'role': 'reader'}
             ).execute()
-            
-            return file.get('webViewLink', '')
-            
+
+            file_id = file.get('id', '')
+            web_view_link = file.get('webViewLink', '')
+
+            # URL diretto per embedding con =IMAGE()
+            # Formato: https://drive.google.com/uc?export=view&id=FILE_ID
+            image_url = f"https://drive.google.com/uc?export=view&id={file_id}" if file_id else ""
+
+            return ScreenshotUrls(
+                image_url=image_url,
+                view_url=web_view_link
+            )
+
         except Exception as e:
-            print(f"⚠️ Errore upload screenshot: {e}")
+            print(f"! Errore upload screenshot: {e}")
             return None
     
     def update_cell(self, row: int, col: int, value: str) -> bool:
         """
         Aggiorna una cella specifica.
-        
+
         Args:
             row: Numero riga (1-indexed)
             col: Numero colonna (1-indexed)
             value: Valore da inserire
-            
+
         Returns:
             True se aggiornamento riuscito
         """
         if not self._worksheet:
             return False
-        
+
         try:
             self._worksheet.update_cell(row, col, value)
             return True
         except:
+            return False
+
+    def set_row_height(self, row: int, height_pixels: int = 120) -> bool:
+        """
+        Imposta l'altezza di una riga specifica.
+
+        Args:
+            row: Numero riga (1-indexed)
+            height_pixels: Altezza in pixel (default 120 per screenshot)
+
+        Returns:
+            True se operazione riuscita
+        """
+        if not self._worksheet or not self._spreadsheet:
+            return False
+
+        try:
+            request = {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": self._worksheet.id,
+                        "dimension": "ROWS",
+                        "startIndex": row - 1,  # 0-indexed
+                        "endIndex": row
+                    },
+                    "properties": {"pixelSize": height_pixels},
+                    "fields": "pixelSize"
+                }
+            }
+            self._spreadsheet.batch_update({"requests": [request]})
+            return True
+        except Exception as e:
+            # Non critico, log silenzioso
+            return False
+
+    def set_rows_height(self, start_row: int, end_row: int, height_pixels: int = 120) -> bool:
+        """
+        Imposta l'altezza di un range di righe.
+
+        Args:
+            start_row: Prima riga (1-indexed)
+            end_row: Ultima riga (1-indexed, inclusa)
+            height_pixels: Altezza in pixel
+
+        Returns:
+            True se operazione riuscita
+        """
+        if not self._worksheet or not self._spreadsheet:
+            return False
+
+        try:
+            request = {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": self._worksheet.id,
+                        "dimension": "ROWS",
+                        "startIndex": start_row - 1,
+                        "endIndex": end_row
+                    },
+                    "properties": {"pixelSize": height_pixels},
+                    "fields": "pixelSize"
+                }
+            }
+            self._spreadsheet.batch_update({"requests": [request]})
+            return True
+        except Exception as e:
             return False
     
     def find_test_row(self, test_id: str) -> Optional[int]:
@@ -679,7 +817,7 @@ class GoogleSheetsClient:
             
             return spreadsheet.id
         except Exception as e:
-            print(f"❌ Errore creazione spreadsheet: {e}")
+            print(f"✗ Errore creazione spreadsheet: {e}")
             return None
 
 
@@ -695,7 +833,7 @@ class GoogleSheetsSetup:
     def get_setup_instructions() -> str:
         """Istruzioni per setup OAuth"""
         return """
-📋 SETUP GOOGLE SHEETS
+# SETUP GOOGLE SHEETS
 
 1. Vai su Google Cloud Console:
    https://console.cloud.google.com/apis/credentials

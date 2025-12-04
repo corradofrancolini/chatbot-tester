@@ -90,61 +90,88 @@ class LangSmithReport:
         """Formatta il report per inserimento in Google Sheets (colonna NOTES)"""
         lines = []
 
-        # Query eseguita
+        # === QUERY ===
         if self.query:
-            query_preview = self.query[:150] + "..." if len(self.query) > 150 else self.query
-            lines.append(f"Query: {query_preview}")
+            lines.append("=== QUERY ===")
+            query_preview = self.query[:200] + "..." if len(self.query) > 200 else self.query
+            lines.append(query_preview)
 
-        # Info modello e performance su una riga
-        info_parts = []
+        # === RESPONSE ===
+        if self.response:
+            lines.append("")
+            lines.append("=== RESPONSE ===")
+            response_preview = self.response[:300] + "..." if len(self.response) > 300 else self.response
+            lines.append(response_preview)
+
+        # === PERFORMANCE ===
+        perf_lines = []
         if self.model:
-            info_parts.append(f"Model: {self.model}")
+            model_str = self.model
+            if self.model_provider:
+                model_str += f" ({self.model_provider})"
+            perf_lines.append(f"Model: {model_str}")
         if self.duration_ms:
-            info_parts.append(f"Duration: {self.duration_ms}ms")
+            perf_lines.append(f"Duration: {self.duration_ms}ms")
         if self.first_token_ms:
-            info_parts.append(f"TTFT: {self.first_token_ms}ms")
-        if self.tokens_total:
-            info_parts.append(f"Tokens: {self.tokens_input}in/{self.tokens_output}out")
-        if info_parts:
-            lines.append(" | ".join(info_parts))
+            perf_lines.append(f"First Token: {self.first_token_ms}ms")
+        if self.tokens_total or self.tokens_input or self.tokens_output:
+            perf_lines.append(f"Tokens: {self.tokens_input} in / {self.tokens_output} out")
 
-        # Fonti consultate
+        if perf_lines:
+            lines.append("")
+            lines.append("=== PERFORMANCE ===")
+            lines.extend(perf_lines)
+
+        # === TOOLS ===
+        if self.tools_used:
+            lines.append("")
+            lines.append(f"=== TOOLS ({self.tool_count}) ===")
+            lines.append(", ".join(self.tools_used))
+            if self.failed_tools:
+                lines.append(f"Failed: {self.failed_tools}")
+
+        # === SOURCES ===
         if self.sources:
             lines.append("")
-            lines.append(f"Sources ({len(self.sources)}):")
+            lines.append(f"=== SOURCES ({len(self.sources)}) ===")
             for src in self.sources:
-                src_line = f"  • {src.title or src.source}"
-                if src.score:
-                    src_line += f" (score: {src.score:.2f})"
-                lines.append(src_line)
+                title = src.title or src.source or "Unknown"
+                score_str = f" [{src.score:.2f}]" if src.score else ""
+                lines.append(f"• {title}{score_str}")
+                if src.source and src.source != title:
+                    lines.append(f"  {src.source}")
                 if src.content_preview:
-                    preview = src.content_preview[:100] + "..." if len(src.content_preview) > 100 else src.content_preview
-                    lines.append(f"    {preview}")
+                    preview = src.content_preview[:120] + "..." if len(src.content_preview) > 120 else src.content_preview
+                    lines.append(f"  \"{preview}\"")
 
-        # Waterfall tree (sempre completo)
+        # === WATERFALL ===
         if self.waterfall:
             lines.append("")
-            lines.append(f"Waterfall ({len(self.waterfall)} steps):")
+            lines.append(f"=== WATERFALL ({len(self.waterfall)} steps) ===")
             for step in self.waterfall:
                 indent = "  " * step.depth
                 status_icon = "✓" if step.status == "success" else "✗" if step.error else "→"
-                step_info = f"{indent}{status_icon} {step.name} [{step.run_type}] {step.duration_ms}ms"
-                if step.error:
-                    step_info += f" ERROR: {step.error[:50]}"
-                lines.append(step_info)
+                lines.append(f"{indent}{status_icon} {step.name} ({step.run_type}) {step.duration_ms}ms")
 
-        # Tools usati (se non già nel waterfall)
-        if self.tools_used and not self.waterfall:
-            lines.append(f"Tools: {', '.join(self.tools_used)}")
+        # === ERRORS ===
+        has_errors = self.error or self.failed_tools or (self.status and self.status != "success")
+        waterfall_errors = [s for s in self.waterfall if s.error]
 
-        if self.failed_tools:
-            lines.append(f"Failed tools: {self.failed_tools}")
+        if has_errors or waterfall_errors:
+            lines.append("")
+            lines.append("=== ERRORS ===")
+            if self.status and self.status != "success":
+                lines.append(f"Status: {self.status}")
+            if self.error:
+                lines.append(f"Error: {self.error[:150]}")
+            for step in waterfall_errors:
+                lines.append(f"• {step.name}: {step.error[:100]}")
 
-        if self.status and self.status != "success":
-            lines.append(f"Status: {self.status}")
-
-        if self.error:
-            lines.append(f"Error: {self.error[:100]}")
+        # === TRACE URL ===
+        if self.trace_url:
+            lines.append("")
+            lines.append("=== TRACE ===")
+            lines.append(self.trace_url)
 
         return "\n".join(lines) if lines else ""
 
@@ -251,21 +278,21 @@ class LangSmithClient:
             )
             
             if response.status_code != 200:
-                print(f"⚠️ LangSmith API error: {response.status_code}")
+                print(f"! LangSmith API error: {response.status_code}")
                 return []
-            
+
             runs = response.json().get('runs', [])
             traces = []
-            
+
             for run in runs:
                 trace = self._parse_run(run)
                 if trace:
                     traces.append(trace)
-            
+
             return traces
-            
+
         except Exception as e:
-            print(f"⚠️ Errore recupero traces: {e}")
+            print(f"! Errore recupero traces: {e}")
             return []
     
     def get_latest_trace(self, 
@@ -836,7 +863,7 @@ class LangSmithClient:
                 metadata=run.get('extra', {}).get('metadata', {})
             )
         except Exception as e:
-            print(f"⚠️ Errore parsing run: {e}")
+            print(f"! Errore parsing run: {e}")
             return None
     
     def _calculate_duration(self, run: Dict) -> int:
@@ -1005,7 +1032,7 @@ class LangSmithSetup:
     def get_setup_instructions() -> str:
         """Istruzioni per setup LangSmith"""
         return """
-📋 SETUP LANGSMITH
+SETUP LANGSMITH
 
 1. Vai su smith.langchain.com e accedi
 

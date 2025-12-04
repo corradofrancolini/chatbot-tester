@@ -134,126 +134,128 @@ def show_main_menu(ui: ConsoleUI, loader: ConfigLoader) -> str:
     projects = loader.list_projects()
 
     ui.header(
-        t('app_name'),
-        t('welcome')
+        t('main_menu.app_name'),
+        t('main_menu.welcome')
     )
 
+    project_desc = t('main_menu.open_project_desc').format(count=len(projects)) if projects else t('main_menu.open_project_empty')
+
     items = [
-        MenuItem('1', t('menu_new_project'), ''),
-        MenuItem('2', t('menu_open_project'), f'{len(projects)} progetti disponibili' if projects else 'Nessun progetto'),
-        MenuItem('3', 'Fine-tuning', 'Addestra modello valutatore'),
-        MenuItem('4', t('menu_settings'), ''),
-        MenuItem('5', t('menu_help'), ''),
-        MenuItem('quit', t('menu_exit'), '')
+        MenuItem('1', t('main_menu.new_project'), t('main_menu.new_project_desc')),
+        MenuItem('2', t('main_menu.open_project'), project_desc),
+        MenuItem('3', t('main_menu.finetuning'), t('main_menu.finetuning_desc')),
+        MenuItem('4', t('main_menu.settings'), t('main_menu.settings_desc')),
+        MenuItem('5', t('main_menu.help'), t('main_menu.help_desc')),
+        MenuItem('quit', t('main_menu.exit'), '')
     ]
 
-    return ui.menu(items, t('confirm'))
+    return ui.menu(items, t('common.next'))
 
 
 def show_project_menu(ui: ConsoleUI, loader: ConfigLoader) -> str:
     """Mostra lista progetti e ritorna scelta"""
     projects = loader.list_projects()
-    
+
     if not projects:
-        ui.warning("Nessun progetto disponibile. Crea un nuovo progetto.")
+        ui.warning(t('main_menu.no_projects'))
         return None
-    
-    ui.section("Seleziona Progetto")
-    
+
+    ui.section(t('main_menu.select_project'))
+
     items = [
         MenuItem(str(i+1), proj, '')
         for i, proj in enumerate(projects)
     ]
-    
-    choice = ui.menu(items, "Progetto", allow_back=True)
-    
+
+    choice = ui.menu(items, t('common.next'), allow_back=True)
+
     if choice is None:
         return None
-    
+
     idx = int(choice) - 1
     return projects[idx] if 0 <= idx < len(projects) else None
 
 
 def show_mode_menu(ui: ConsoleUI, project: ProjectConfig, run_config: RunConfig) -> str:
     """Mostra menu modalità test"""
-    ui.section("Seleziona Modalità")
+    ui.section(t('mode_menu.title'))
 
     # Verifica disponibilità Ollama per modalità avanzate
     # Ollama disponibile se: configurato nel progetto E abilitato nel run_config
     ollama_available = project.ollama.enabled and run_config.use_ollama
 
     items = [
-        MenuItem('1', t('mode_train'), t('mode_train_desc')),
-        MenuItem('2', t('mode_assisted'), t('mode_assisted_desc'), disabled=not ollama_available),
-        MenuItem('3', t('mode_auto'), t('mode_auto_desc'), disabled=not ollama_available),
+        MenuItem('1', t('mode_menu.train'), t('mode_menu.train_desc')),
+        MenuItem('2', t('mode_menu.assisted'), t('mode_menu.assisted_desc'), disabled=not ollama_available),
+        MenuItem('3', t('mode_menu.auto'), t('mode_menu.auto_desc'), disabled=not ollama_available),
     ]
 
     if not project.ollama.enabled:
-        ui.warning("Ollama non configurato nel progetto - modalità Assisted/Auto non disponibili")
+        ui.warning(t('mode_menu.ollama_not_configured'))
     elif not run_config.use_ollama:
-        ui.warning("Ollama disabilitato (Toggle opzioni) - modalità Assisted/Auto non disponibili")
+        ui.warning(t('mode_menu.ollama_disabled'))
 
-    return ui.menu(items, t('confirm'), allow_back=True)
+    return ui.menu(items, t('common.next'), allow_back=True)
 
 
 def show_test_selection(ui: ConsoleUI, tests: list) -> list:
     """
     Menu interattivo per selezionare quali test eseguire.
-    
+
     Args:
         ui: Console UI
         tests: Lista completa test cases
-        
+
     Returns:
         Lista filtrata di test da eseguire
     """
-    ui.section(f"Selezione Test ({len(tests)} disponibili)")
-    
+    ui.section(t('test_selection.title') + f" ({t('test_selection.available').format(count=len(tests))})")
+
     items = [
-        MenuItem('1', 'Tutti', f'Esegui tutti i {len(tests)} test'),
-        MenuItem('2', 'Pending', 'Solo test non completati in questa RUN'),
-        MenuItem('3', 'Primi N', 'Esegui i primi N test'),
-        MenuItem('4', 'Range', 'Esegui test da X a Y'),
-        MenuItem('5', 'Specifici', 'Scegli test per ID'),
-        MenuItem('6', 'Cerca', 'Filtra per keyword nella domanda'),
-        MenuItem('7', 'Lista', 'Mostra tutti i test'),
+        MenuItem('1', t('test_selection.all'), t('test_selection.all_desc').format(count=len(tests))),
+        MenuItem('2', t('test_selection.pending'), t('test_selection.pending_desc')),
+        MenuItem('3', t('test_selection.first_n'), t('test_selection.first_n_desc')),
+        MenuItem('4', t('test_selection.range'), t('test_selection.range_desc')),
+        MenuItem('5', t('test_selection.specific'), t('test_selection.specific_desc')),
+        MenuItem('6', t('test_selection.search'), t('test_selection.search_desc')),
+        MenuItem('7', t('test_selection.list'), t('test_selection.list_desc')),
     ]
-    
+
     while True:
-        choice = ui.menu(items, "Scelta", allow_back=True)
-        
+        choice = ui.menu(items, t('common.next'), allow_back=True)
+
         if choice is None or choice == 'back':
             return []
-        
+
         elif choice == '1':
             # Tutti
             return tests
-        
+
         elif choice == '2':
             # Pending - viene gestito dopo nel flusso
             return tests  # Il filtro pending viene applicato dopo
-        
+
         elif choice == '3':
             # Primi N
             try:
-                n = input("  Quanti test? ").strip()
+                n = input(f"  {t('test_selection.how_many')} ").strip()
                 n = int(n)
                 if 1 <= n <= len(tests):
-                    ui.success(f"Selezionati primi {n} test")
+                    ui.success(t('test_selection.selected').format(count=n))
                     return tests[:n]
                 else:
-                    ui.warning(f"Inserisci un numero tra 1 e {len(tests)}")
+                    ui.warning(t('test_selection.how_many_hint').format(max=len(tests)))
             except ValueError:
-                ui.warning("Numero non valido")
-        
+                ui.warning(t('test_selection.invalid_number'))
+
         elif choice == '4':
             # Range
             try:
-                range_input = input("  Range (es. 10-20 o TEST-010-TEST-020): ").strip()
-                
+                range_input = input(f"  {t('test_selection.range_input')} ({t('test_selection.range_hint')}): ").strip()
+
                 if '-' in range_input:
                     parts = range_input.split('-')
-                    
+
                     # Gestisce sia "10-20" che "TEST-010-TEST-020"
                     if len(parts) == 2:
                         start, end = int(parts[0]), int(parts[1])
@@ -262,149 +264,149 @@ def show_test_selection(ui: ConsoleUI, tests: list) -> list:
                         end = int(parts[3])
                     else:
                         raise ValueError("Formato non valido")
-                    
-                    selected = [t for t in tests 
-                               if start <= int(t.id.split('-')[1]) <= end]
-                    
+
+                    selected = [tc for tc in tests
+                               if start <= int(tc.id.split('-')[1]) <= end]
+
                     if selected:
-                        ui.success(f"Selezionati {len(selected)} test (da {selected[0].id} a {selected[-1].id})")
+                        ui.success(t('test_selection.selected').format(count=len(selected)) + f" ({selected[0].id} - {selected[-1].id})")
                         return selected
                     else:
-                        ui.warning("Nessun test nel range specificato")
+                        ui.warning(t('test_selection.none_found'))
                 else:
-                    ui.warning("Formato: 10-20 oppure TEST-010-TEST-020")
+                    ui.warning(t('test_selection.range_hint'))
             except (ValueError, IndexError):
-                ui.warning("Range non valido")
-        
+                ui.warning(t('test_selection.invalid_range'))
+
         elif choice == '5':
             # Specifici
-            ids_input = input("  IDs (es. TEST-001,TEST-005,TEST-010): ").strip()
+            ids_input = input(f"  {t('test_selection.ids_input')} ({t('test_selection.ids_hint')}): ").strip()
             ids = [x.strip().upper() for x in ids_input.split(',')]
-            
+
             # Normalizza IDs (aggiungi TEST- se manca)
             normalized_ids = []
             for id_ in ids:
                 if not id_.startswith('TEST-'):
                     id_ = f"TEST-{id_.zfill(3)}"
                 normalized_ids.append(id_)
-            
-            selected = [t for t in tests if t.id in normalized_ids]
-            
+
+            selected = [tc for tc in tests if tc.id in normalized_ids]
+
             if selected:
-                ui.success(f"Selezionati {len(selected)} test: {', '.join(t.id for t in selected)}")
+                ui.success(t('test_selection.selected').format(count=len(selected)) + f": {', '.join(tc.id for tc in selected)}")
                 return selected
             else:
-                ui.warning(f"Nessun test trovato per: {', '.join(normalized_ids)}")
-        
+                ui.warning(t('test_selection.none_found') + f": {', '.join(normalized_ids)}")
+
         elif choice == '6':
             # Cerca per keyword
-            keyword = input("  Keyword: ").strip().lower()
+            keyword = input(f"  {t('test_selection.keyword_input')}: ").strip().lower()
             if keyword:
-                selected = [t for t in tests 
-                           if keyword in t.question.lower() 
-                           or keyword in (t.category or '').lower()]
-                
+                selected = [tc for tc in tests
+                           if keyword in tc.question.lower()
+                           or keyword in (tc.category or '').lower()]
+
                 if selected:
-                    ui.success(f"Trovati {len(selected)} test con '{keyword}'")
-                    for t in selected[:10]:
-                        ui.print(f"  [cyan]{t.id}[/cyan]: {t.question[:50]}...")
+                    ui.success(t('test_selection.selected').format(count=len(selected)) + f" ('{keyword}')")
+                    for tc in selected[:10]:
+                        ui.print(f"  [cyan]{tc.id}[/cyan]: {tc.question[:50]}...")
                     if len(selected) > 10:
-                        ui.print(f"  [dim]...e altri {len(selected)-10}[/dim]")
-                    
-                    confirm = input("  Eseguire questi test? (s/n): ").strip().lower()
+                        ui.print(f"  [dim]...+{len(selected)-10}[/dim]")
+
+                    confirm = input(f"  {t('test_selection.confirm_selection').format(count=len(selected))} (s/n): ").strip().lower()
                     if confirm == 's':
                         return selected
                 else:
-                    ui.warning(f"Nessun test trovato con '{keyword}'")
+                    ui.warning(t('test_selection.none_found') + f" ('{keyword}')")
             else:
-                ui.warning("Inserisci una keyword")
-        
+                ui.warning(t('test_selection.keyword_input'))
+
         elif choice == '7':
             # Lista tutti
-            ui.section("Lista Test")
-            for i, t in enumerate(tests):
-                followups = len(t.followups) if t.followups else 0
+            ui.section(t('test_selection.list'))
+            for i, tc in enumerate(tests):
+                followups = len(tc.followups) if tc.followups else 0
                 fu_info = f" [dim][{followups}fu][/dim]" if followups > 0 else ""
-                cat_info = f" [magenta]{t.category}[/magenta]" if t.category else ""
-                ui.print(f"  [cyan]{t.id}[/cyan]: {t.question[:45]}...{cat_info}{fu_info}")
-                
+                cat_info = f" [magenta]{tc.category}[/magenta]" if tc.category else ""
+                ui.print(f"  [cyan]{tc.id}[/cyan]: {tc.question[:45]}...{cat_info}{fu_info}")
+
                 # Pausa ogni 20 test
                 if (i + 1) % 20 == 0 and i + 1 < len(tests):
-                    more = input(f"  [Mostra altri? INVIO=sì, q=menu] ").strip().lower()
+                    more = input(f"  {t('test_selection.show_more')} ").strip().lower()
                     if more == 'q':
                         break
-            
+
             ui.print("")  # Spazio prima del menu
 
 
 def show_run_menu(ui: ConsoleUI, project: ProjectConfig, run_config: RunConfig) -> str:
     """Mostra menu gestione RUN"""
-    ui.section("Gestione RUN")
-    
+    ui.section(t('run_menu.title'))
+
     # Status toggle
     dry_status = "[yellow]ON[/yellow]" if run_config.dry_run else "[dim]OFF[/dim]"
     ls_status = "[green]ON[/green]" if run_config.use_langsmith else "[dim]OFF[/dim]"
     rag_status = "[green]ON[/green]" if run_config.use_rag else "[dim]OFF[/dim]"
     ollama_status = "[green]ON[/green]" if run_config.use_ollama else "[dim]OFF[/dim]"
-    ui.print(f"\n  Toggle: Dry run: {dry_status} | LangSmith: {ls_status} | RAG: {rag_status} | Ollama: {ollama_status}")
-    
+    ui.print(f"\n  {t('run_menu.toggle_status')}: Dry run: {dry_status} | LangSmith: {ls_status} | RAG: {rag_status} | Ollama: {ollama_status}")
+
     # Mostra stato RUN attuale
     if run_config.active_run:
-        ui.print(f"\n  RUN attiva: [cyan]Run {run_config.active_run:03d}[/cyan]")
-        ui.print(f"  Ambiente: [cyan]{run_config.env}[/cyan]")
-        ui.print(f"  Modalità: [cyan]{run_config.mode}[/cyan]")
-        ui.print(f"  Test completati: [cyan]{run_config.tests_completed}[/cyan]")
+        ui.print(f"\n  {t('run_menu.active_run').format(number=run_config.active_run)}")
+        ui.print(f"  {t('run_menu.env')}: [cyan]{run_config.env}[/cyan]")
+        ui.print(f"  {t('run_menu.mode')}: [cyan]{run_config.mode}[/cyan]")
+        ui.print(f"  {t('run_menu.tests_completed')}: [cyan]{run_config.tests_completed}[/cyan]")
         if run_config.run_start:
-            ui.print(f"  Iniziata: [dim]{run_config.run_start[:19]}[/dim]")
+            ui.print(f"  {t('run_menu.started_at')}: [dim]{run_config.run_start[:19]}[/dim]")
         ui.print("")
     else:
-        ui.print("\n  [yellow]Nessuna RUN attiva[/yellow]\n")
-    
+        ui.print(f"\n  [yellow]{t('run_menu.no_active_run')}[/yellow]\n")
+
     items = [
-        MenuItem('1', 'Continua RUN attiva' if run_config.active_run else 'Inizia nuova RUN', ''),
-        MenuItem('2', 'Inizia nuova RUN', 'Crea nuovo foglio per regression test'),
-        MenuItem('3', 'Configura RUN', 'Modifica ambiente/versioni'),
-        MenuItem('4', 'Toggle opzioni', 'Dry run / LangSmith / RAG'),
+        MenuItem('1', t('run_menu.continue_run') if run_config.active_run else t('run_menu.start_run'), ''),
+        MenuItem('2', t('run_menu.new_run'), t('run_menu.new_run_desc')),
+        MenuItem('3', t('run_menu.configure'), t('run_menu.configure_desc')),
+        MenuItem('4', t('run_menu.toggle'), t('run_menu.toggle_desc')),
     ]
-    
-    return ui.menu(items, "Scelta", allow_back=True)
+
+    return ui.menu(items, t('common.next'), allow_back=True)
 
 
 def configure_run_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
     """
     Configura i parametri della RUN interattivamente.
-    
+
     Returns:
         True se configurazione completata, False se annullata
     """
-    ui.section("Configurazione RUN")
-    
+    ui.section(t('run_menu.config_title'))
+
     # Mostra valori attuali
-    ui.print(f"\n  Valori attuali:")
-    ui.print(f"  Ambiente: [cyan]{run_config.env}[/cyan]")
-    ui.print(f"  Versione prompt: [cyan]{run_config.prompt_version or '(non impostata)'}[/cyan]")
-    ui.print(f"  Versione modello: [cyan]{run_config.model_version or '(non impostata)'}[/cyan]")
-    ui.print(f"\n  [dim]Premi INVIO per mantenere il valore attuale[/dim]\n")
-    
+    ui.print(f"\n  {t('run_menu.config_current')}")
+    ui.print(f"  {t('run_menu.config_env')}: [cyan]{run_config.env}[/cyan]")
+    ui.print(f"  {t('run_menu.config_prompt_version')}: [cyan]{run_config.prompt_version or '(-)'}[/cyan]")
+    ui.print(f"  {t('run_menu.config_model_version')}: [cyan]{run_config.model_version or '(-)'}[/cyan]")
+    ui.print(f"\n  [dim]{t('run_menu.config_keep_hint')}[/dim]\n")
+
     # Ambiente
-    env_input = input(f"  Ambiente [{run_config.env}]: ").strip().upper()
+    env_input = input(f"  {t('run_menu.config_env')} [{run_config.env}]: ").strip().upper()
     if env_input:
         if env_input in ['DEV', 'STAGING', 'PROD']:
             run_config.env = env_input
         else:
-            ui.warning(f"Ambiente '{env_input}' non valido. Mantengo '{run_config.env}'")
-    
+            ui.warning(t('run_menu.config_env_invalid'))
+
     # Versione prompt
-    pv_input = input(f"  Versione prompt [{run_config.prompt_version}]: ").strip()
+    pv_input = input(f"  {t('run_menu.config_prompt_version')} [{run_config.prompt_version or '-'}]: ").strip()
     if pv_input:
         run_config.prompt_version = pv_input
-    
+
     # Versione modello
-    mv_input = input(f"  Versione modello [{run_config.model_version}]: ").strip()
+    mv_input = input(f"  {t('run_menu.config_model_version')} [{run_config.model_version or '-'}]: ").strip()
     if mv_input:
         run_config.model_version = mv_input
-    
-    ui.success("Configurazione aggiornata")
+
+    ui.success(t('run_menu.config_updated'))
     return True
 
 
@@ -416,7 +418,7 @@ def toggle_options_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
         True se modificato qualcosa
     """
     while True:
-        ui.section("Toggle Opzioni")
+        ui.section(t('run_menu.toggle_title'))
 
         # Status attuale
         dry_status = "[yellow]ON[/yellow]" if run_config.dry_run else "[dim]OFF[/dim]"
@@ -424,44 +426,46 @@ def toggle_options_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
         rag_status = "[green]ON[/green]" if run_config.use_rag else "[dim]OFF[/dim]"
         ollama_status = "[green]ON[/green]" if run_config.use_ollama else "[dim]OFF[/dim]"
 
-        ui.print(f"\n  Stato attuale:")
-        ui.print(f"  [1] Dry run:    {dry_status}  {'(non salva su Sheets)' if run_config.dry_run else ''}")
-        ui.print(f"  [2] LangSmith:  {ls_status}")
-        ui.print(f"  [3] RAG locale: {rag_status}")
-        ui.print(f"  [4] Ollama:     {ollama_status}  {'(Assisted/Auto disponibili)' if run_config.use_ollama else '(solo Train mode)'}")
+        ui.print(f"\n  {t('run_menu.toggle_status')}:")
+        dry_note = f"  ({t('run_menu.toggle_dry_run_on')})" if run_config.dry_run else ""
+        ui.print(f"  [1] {t('run_menu.toggle_dry_run')}:    {dry_status}{dry_note}")
+        ui.print(f"  [2] {t('run_menu.toggle_langsmith')}:  {ls_status}")
+        ui.print(f"  [3] {t('run_menu.toggle_rag')}:        {rag_status}")
+        ollama_note = f"  ({t('run_menu.toggle_ollama_on')})" if run_config.use_ollama else f"  ({t('run_menu.toggle_ollama_off')})"
+        ui.print(f"  [4] {t('run_menu.toggle_ollama')}:     {ollama_status}{ollama_note}")
         ui.print("")
 
         items = [
-            MenuItem('1', f"Dry run: {'OFF→ON' if not run_config.dry_run else 'ON→OFF'}",
-                     'Disabilita salvataggio su Sheets' if not run_config.dry_run else 'Riabilita salvataggio'),
-            MenuItem('2', f"LangSmith: {'OFF→ON' if not run_config.use_langsmith else 'ON→OFF'}",
-                     'Abilita tracking' if not run_config.use_langsmith else 'Disabilita tracking'),
-            MenuItem('3', f"RAG: {'OFF→ON' if not run_config.use_rag else 'ON→OFF'}",
-                     'Abilita RAG locale' if not run_config.use_rag else 'Disabilita RAG'),
-            MenuItem('4', f"Ollama: {'OFF→ON' if not run_config.use_ollama else 'ON→OFF'}",
-                     'Abilita modalità Assisted/Auto' if not run_config.use_ollama else 'Disabilita (solo Train)'),
+            MenuItem('1', f"{t('run_menu.toggle_dry_run')}: {'OFF->ON' if not run_config.dry_run else 'ON->OFF'}",
+                     t('run_menu.toggle_dry_run_on') if not run_config.dry_run else t('run_menu.toggle_dry_run_off')),
+            MenuItem('2', f"{t('run_menu.toggle_langsmith')}: {'OFF->ON' if not run_config.use_langsmith else 'ON->OFF'}",
+                     t('run_menu.toggle_langsmith_on') if not run_config.use_langsmith else t('run_menu.toggle_langsmith_off')),
+            MenuItem('3', f"{t('run_menu.toggle_rag')}: {'OFF->ON' if not run_config.use_rag else 'ON->OFF'}",
+                     t('run_menu.toggle_rag_on') if not run_config.use_rag else t('run_menu.toggle_rag_off')),
+            MenuItem('4', f"{t('run_menu.toggle_ollama')}: {'OFF->ON' if not run_config.use_ollama else 'ON->OFF'}",
+                     t('run_menu.toggle_ollama_on') if not run_config.use_ollama else t('run_menu.toggle_ollama_off')),
         ]
 
-        choice = ui.menu(items, "Toggle", allow_back=True)
+        choice = ui.menu(items, t('common.next'), allow_back=True)
 
         if choice == 'b' or choice == '':
             return True
         elif choice == '1':
             run_config.dry_run = not run_config.dry_run
-            status = "ON - non salverà su Sheets" if run_config.dry_run else "OFF"
-            ui.success(f"Dry run: {status}")
+            status = t('run_menu.dry_run_on') if run_config.dry_run else t('run_menu.dry_run_off')
+            ui.success(f"{t('run_menu.toggle_dry_run')}: {status}")
         elif choice == '2':
             run_config.use_langsmith = not run_config.use_langsmith
-            status = "ON" if run_config.use_langsmith else "OFF"
-            ui.success(f"LangSmith: {status}")
+            status = t('run_menu.langsmith_on') if run_config.use_langsmith else t('run_menu.langsmith_off')
+            ui.success(f"{t('run_menu.toggle_langsmith')}: {status}")
         elif choice == '3':
             run_config.use_rag = not run_config.use_rag
-            status = "ON" if run_config.use_rag else "OFF"
-            ui.success(f"RAG locale: {status}")
+            status = t('run_menu.rag_on') if run_config.use_rag else t('run_menu.rag_off')
+            ui.success(f"{t('run_menu.toggle_rag')}: {status}")
         elif choice == '4':
             run_config.use_ollama = not run_config.use_ollama
-            status = "ON - Assisted/Auto disponibili" if run_config.use_ollama else "OFF - solo Train mode"
-            ui.success(f"Ollama: {status}")
+            status = t('run_menu.ollama_on') if run_config.use_ollama else t('run_menu.ollama_off')
+            ui.success(f"{t('run_menu.toggle_ollama')}: {status}")
 
 
 def show_finetuning_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
@@ -482,30 +486,30 @@ def show_finetuning_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
     pipeline = FineTuningPipeline(project.project_dir)
 
     while True:
-        ui.section(f"Fine-tuning - {project_name}")
+        ui.section(t('finetuning_menu.title').format(project=project_name))
 
         # Mostra statistiche dataset corrente
         stats = pipeline.validate_dataset()
-        ui.print(f"\n  Dataset attuale: [cyan]{stats.total_examples}[/cyan] esempi")
-        ui.print(f"  PASS: [green]{stats.pass_count}[/green] | FAIL: [red]{stats.fail_count}[/red] | SKIP: [dim]{stats.skip_count}[/dim]")
+        ui.print(f"\n  {t('finetuning_menu.dataset_current')}: [cyan]{t('finetuning_menu.examples').format(count=stats.total_examples)}[/cyan]")
+        ui.print(f"  {t('finetuning_menu.pass_count')}: [green]{stats.pass_count}[/green] | {t('finetuning_menu.fail_count')}: [red]{stats.fail_count}[/red] | {t('finetuning_menu.skip_count')}: [dim]{stats.skip_count}[/dim]")
 
         if stats.is_valid:
-            ui.print("  Status: [green]Pronto per fine-tuning[/green]")
+            ui.print(f"  Status: [green]{t('finetuning_menu.ready')}[/green]")
         else:
-            ui.print("  Status: [yellow]Dataset insufficiente[/yellow]")
+            ui.print(f"  Status: [yellow]{t('finetuning_menu.insufficient')}[/yellow]")
 
         ui.print("")
 
         items = [
-            MenuItem('1', 'Statistiche dettagliate', 'Analizza qualità dataset'),
-            MenuItem('2', 'Esporta dataset', 'Genera file JSONL/Modelfile'),
-            MenuItem('3', 'Fine-tune Ollama', 'Crea modello locale', disabled=not stats.is_valid),
-            MenuItem('4', 'Fine-tune OpenAI', 'Usa API OpenAI (a pagamento)', disabled=not stats.is_valid),
-            MenuItem('5', 'Testa modello', 'Valuta accuracy su test set'),
-            MenuItem('6', 'Modelli disponibili', 'Lista modelli Ollama/OpenAI'),
+            MenuItem('1', t('finetuning_menu.stats'), t('finetuning_menu.stats_desc')),
+            MenuItem('2', t('finetuning_menu.export'), t('finetuning_menu.export_desc')),
+            MenuItem('3', t('finetuning_menu.finetune_ollama'), t('finetuning_menu.finetune_ollama_desc'), disabled=not stats.is_valid),
+            MenuItem('4', t('finetuning_menu.finetune_openai'), t('finetuning_menu.finetune_openai_desc'), disabled=not stats.is_valid),
+            MenuItem('5', t('finetuning_menu.test_model'), t('finetuning_menu.test_model_desc')),
+            MenuItem('6', t('finetuning_menu.available_models'), t('finetuning_menu.available_models_desc')),
         ]
 
-        choice = ui.menu(items, "Scelta", allow_back=True)
+        choice = ui.menu(items, t('common.next'), allow_back=True)
 
         if choice is None:
             return
@@ -747,24 +751,24 @@ def _show_available_models(ui: ConsoleUI, pipeline) -> None:
 def start_new_run_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
     """
     Inizia una nuova RUN interattivamente.
-    
+
     Returns:
         True se nuova RUN confermata, False se annullata
     """
     if run_config.active_run:
-        ui.print(f"\n  [yellow]RUN {run_config.active_run:03d} attiva[/yellow] ({run_config.tests_completed} test completati)")
-        confirm = input("  Chiudere e iniziare nuova RUN? (s/n): ").strip().lower()
+        ui.print(f"\n  [yellow]{t('run_menu.active_run').format(number=run_config.active_run)}[/yellow] ({run_config.tests_completed} {t('run_menu.tests_completed').lower()})")
+        confirm = input(f"  {t('run_menu.confirm_new_run').format(count=run_config.tests_completed)} (s/n): ").strip().lower()
         if confirm != 's':
-            ui.info("Operazione annullata")
+            ui.info(t('run_menu.cancelled'))
             return False
-    
+
     # Reset RUN
     run_config.reset()
-    
+
     # Configura nuova RUN
     configure_run_interactive(ui, run_config)
-    
-    ui.success("Pronto per nuova RUN. Seleziona una modalità per iniziare.")
+
+    ui.success(t('run_menu.new_run_ready'))
     return True
 
 
@@ -805,68 +809,68 @@ async def run_test_session(
     
     try:
         # Inizializza
-        ui.section("Inizializzazione")
+        ui.section(t('test_execution.initializing'))
         if not await tester.initialize():
-            ui.error("Inizializzazione fallita")
+            ui.error(t('test_execution.init_failed'))
             return
-        
+
         # Mostra stato toggle
         if run_config.dry_run:
-            ui.warning("DRY RUN attivo - non salverà su Google Sheets")
+            ui.warning(t('test_execution.dry_run_warning'))
         if not run_config.use_langsmith:
-            ui.info("LangSmith disabilitato")
-        
+            ui.info(t('test_execution.langsmith_disabled'))
+
         # Setup foglio RUN su Google Sheets (solo se non dry_run)
         if tester.sheets and not run_config.dry_run:
             if not tester.sheets.setup_run_sheet(run_config, force_new=force_new_run):
-                ui.warning("Impossibile configurare foglio RUN su Google Sheets")
+                ui.warning(t('test_execution.sheets_error'))
             else:
                 # Aggiorna run_config con il numero RUN assegnato
                 run_config.active_run = tester.sheets.current_run
                 run_config.save(project.run_config_file)
-                ui.print(f"✅ Google Sheets connesso - Run {run_config.active_run:03d}")
+                ui.success(t('test_execution.sheets_connected').format(number=run_config.active_run))
                 completed_count = len(tester.sheets.get_completed_tests())
-                ui.print(f"   {completed_count} test già completati in questa RUN")
-        
+                ui.print(f"   {t('test_execution.sheets_completed').format(count=completed_count)}")
+
         # Naviga al chatbot
         if not await tester.navigate_to_chatbot():
-            ui.error("Impossibile raggiungere il chatbot")
+            ui.error(t('test_execution.chatbot_unreachable'))
             return
-        
+
         # Carica test cases
         all_tests = tester.load_test_cases()
-        
+
         if single_test:
             # Test singolo da CLI
-            tests = [t for t in all_tests if t.id == single_test]
+            tests = [tc for tc in all_tests if tc.id == single_test]
             if not tests:
-                ui.error(f"Test {single_test} non trovato")
+                ui.error(t('test_execution.test_not_found').format(id=single_test))
                 return
         elif test_filter == 'select':
             # Selezione interattiva
             tests = show_test_selection(ui, all_tests)
             if not tests:
-                ui.info("Nessun test selezionato")
+                ui.info(t('test_execution.no_tests'))
                 return
         else:
             tests = all_tests
-        
+
         # Filtra pending se richiesto
         if test_filter == 'pending' and tester.sheets:
             # Filtra solo test non completati in questa RUN
             completed = tester.sheets.get_completed_tests()
-            tests = [t for t in tests if t.id not in completed]
+            tests = [tc for tc in tests if tc.id not in completed]
         elif test_filter == 'failed':
             # TODO: implementare filtro failed
             pass
         # Se test_filter == 'all', non filtriamo
-        
+
         if not tests:
-            ui.info("Nessun test da eseguire")
+            ui.info(t('test_execution.no_tests'))
             return
-        
-        ui.section(f"Esecuzione {len(tests)} test in modalità {mode.value}")
-        
+
+        ui.section(t('test_execution.running').format(count=len(tests), mode=mode.value))
+
         # Esegui
         if mode == TestMode.TRAIN:
             results = await tester.run_train_session(tests, skip_completed=False)
@@ -874,22 +878,22 @@ async def run_test_session(
             results = await tester.run_assisted_session(tests, skip_completed=False)
         else:
             results = await tester.run_auto_session(tests, skip_completed=False)
-        
+
         # Aggiorna run_config
         run_config.tests_completed += len(results)
         if results:
             run_config.last_test_id = results[-1].test_case.id
         run_config.save(project.run_config_file)
-        
+
         # Riepilogo
-        ui.section("Riepilogo")
+        ui.section(t('test_execution.summary'))
         passed = sum(1 for r in results if r.esito == 'PASS')
         failed = sum(1 for r in results if r.esito == 'FAIL')
         ui.stats_row({
-            'Totale': len(results),
-            'Passati': passed,
-            'Falliti': failed,
-            'Pass Rate': f"{(passed/len(results)*100):.1f}%" if results else "N/A"
+            t('test_execution.total'): len(results),
+            t('test_execution.passed'): passed,
+            t('test_execution.failed'): failed,
+            t('test_execution.pass_rate'): f"{(passed/len(results)*100):.1f}%" if results else "N/A"
         })
         
     finally:
@@ -906,7 +910,7 @@ async def main_interactive(args):
         choice = show_main_menu(ui, loader)
         
         if choice == 'quit':
-            ui.print(t('goodbye'))
+            ui.print(t('main_menu.goodbye'))
             break
         
         elif choice == '1':
@@ -970,12 +974,12 @@ async def main_interactive(args):
                         
                         # Chiedi se vuole selezionare test specifici
                         select_items = [
-                            MenuItem('1', 'Pending', 'Solo test non completati'),
-                            MenuItem('2', 'Tutti', 'Tutti i test'),
-                            MenuItem('3', 'Seleziona...', 'Filtra/scegli test specifici'),
+                            MenuItem('1', t('test_selection.pending'), t('test_selection.pending_desc')),
+                            MenuItem('2', t('test_selection.all'), t('test_selection.all_desc').format(count='')),
+                            MenuItem('3', t('test_selection.specific'), t('test_selection.specific_desc')),
                         ]
-                        ui.section("Test da eseguire")
-                        select_choice = ui.menu(select_items, "Scelta", allow_back=True)
+                        ui.section(t('test_selection.title'))
+                        select_choice = ui.menu(select_items, t('common.next'), allow_back=True)
                         
                         if select_choice is None:
                             continue
@@ -1004,37 +1008,7 @@ async def main_interactive(args):
 
         elif choice == '5':
             # Aiuto
-            ui.help_text("""
-# Chatbot Tester - Guida Rapida
-
-## Gestione RUN
-
-Una **RUN** è una sessione di test che raggruppa i risultati in un foglio dedicato
-su Google Sheets. Puoi:
-
-- **Continuare** una RUN esistente (aggiunge test allo stesso foglio)
-- **Iniziare nuova RUN** (crea nuovo foglio per regression test)
-- **Configurare** ambiente, versione prompt/modello
-
-## Modalità di Test
-
-- **Train**: Interagisci manualmente col chatbot, il sistema impara
-- **Assisted**: LLM suggerisce azioni, tu confermi o correggi
-- **Auto**: Test completamente automatici (richiede Ollama)
-
-## Comandi Utili
-
-- `python run.py --new-project` - Crea nuovo progetto
-- `python run.py -p NOME -m auto` - Test automatici
-- `python run.py -p NOME -t TC001` - Singolo test
-- `python run.py -p NOME --new-run` - Forza nuova RUN
-
-## File Importanti
-
-- `projects/<nome>/run_config.json` - Stato RUN attiva
-- `projects/<nome>/tests.json` - Test cases
-- `reports/<nome>/` - Report locali
-            """)
+            ui.help_text(t('help_guide'))
 
 
 async def main_direct(args):
