@@ -119,7 +119,61 @@ reports/{project}/run_{N}/
 | `src/i18n.py` | Traduzioni IT/EN |
 | `src/ui.py` | Console UI (Rich) |
 | `src/finetuning.py` | Pipeline fine-tuning |
+| `src/parallel.py` | Esecuzione parallela, browser pool |
+| `src/cache.py` | Caching in-memory e disk |
+| `src/github_actions.py` | Integrazione GitHub Actions |
 | `wizard/main.py` | Wizard nuovo progetto |
+
+---
+
+## Esecuzione Parallela (v1.2.0)
+
+### CLI
+```bash
+# 3 browser in parallelo
+python run.py -p my-chatbot -m auto --parallel --no-interactive
+
+# 5 browser
+python run.py -p my-chatbot -m auto --parallel --workers 5 --no-interactive
+```
+
+### Come funziona
+1. `BrowserPool` crea N browser Chromium isolati
+2. I test vengono distribuiti ai worker
+3. Ogni worker accumula risultati in `ThreadSafeSheetsClient`
+4. Alla fine, `flush()` scrive tutto in batch su Google Sheets
+
+### API per sviluppatori
+```python
+from src.sheets_client import ThreadSafeSheetsClient, ParallelResultsCollector
+
+# Wrapper thread-safe per Sheets
+safe_client = ThreadSafeSheetsClient(sheets_client)
+safe_client.queue_result(result)    # Thread-safe
+safe_client.queue_screenshot(path, test_id)
+safe_client.flush()                 # Scrivi batch
+
+# Oppure: collector in memoria
+collector = ParallelResultsCollector()
+collector.add(result)
+all_results = collector.get_all()
+```
+
+### Configurazione (settings.yaml)
+```yaml
+parallel:
+  enabled: false
+  max_workers: 3
+  retry_strategy: exponential  # none | linear | exponential
+  max_retries: 2
+  rate_limit_per_minute: 60
+
+cache:
+  enabled: true
+  memory:
+    max_entries: 1000
+    default_ttl_seconds: 300
+```
 
 ---
 
