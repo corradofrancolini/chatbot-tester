@@ -145,6 +145,7 @@ class RunConfig:
     use_langsmith: bool = True     # Se False, disabilita LangSmith
     use_rag: bool = False          # Se True, usa RAG locale
     use_ollama: bool = True        # Se False, disabilita Ollama (solo Train mode)
+    single_turn: bool = False      # Se True, modalità AUTO esegue solo domanda iniziale (no followup)
     
     @classmethod
     def load(cls, file_path: Path) -> 'RunConfig':
@@ -166,7 +167,8 @@ class RunConfig:
                 dry_run=data.get('dry_run', False),
                 use_langsmith=data.get('use_langsmith', True),
                 use_rag=data.get('use_rag', False),
-                use_ollama=data.get('use_ollama', True)
+                use_ollama=data.get('use_ollama', True),
+                single_turn=data.get('single_turn', False)
             )
         except (json.JSONDecodeError, IOError) as e:
             print(f"! Errore caricamento run_config: {e}")
@@ -187,7 +189,8 @@ class RunConfig:
                 'dry_run': self.dry_run,
                 'use_langsmith': self.use_langsmith,
                 'use_rag': self.use_rag,
-                'use_ollama': self.use_ollama
+                'use_ollama': self.use_ollama,
+                'single_turn': self.single_turn
             }
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)

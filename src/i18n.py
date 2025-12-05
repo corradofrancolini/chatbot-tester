@@ -470,24 +470,58 @@ class I18n:
     def t(self, key: str, **kwargs) -> str:
         """
         Ottiene una traduzione.
-        
+
         Args:
-            key: Chiave traduzione
+            key: Chiave traduzione (supporta dot notation, es. 'main_menu.new_project')
             **kwargs: Valori per interpolazione
-            
+
         Returns:
             Testo tradotto
         """
-        text = self._translations.get(key, key)
-        
+        # Supporta chiavi nidificate con dot notation
+        text = self._get_nested(key)
+
         # Interpolazione
         if kwargs:
             try:
                 text = text.format(**kwargs)
             except KeyError:
                 pass
-        
+
         return text
+
+    def _get_nested(self, key: str) -> str:
+        """
+        Recupera un valore da una struttura nidificata usando dot notation.
+
+        Args:
+            key: Chiave con dot notation (es. 'main_menu.new_project')
+
+        Returns:
+            Valore trovato o la chiave stessa come fallback
+        """
+        # Prima prova chiave diretta (per compatibilità con traduzioni flat)
+        if key in self._translations:
+            value = self._translations[key]
+            if isinstance(value, str):
+                return value
+
+        # Poi prova navigazione nidificata
+        parts = key.split('.')
+        current = self._translations
+
+        for part in parts:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                # Chiave non trovata, ritorna la chiave stessa
+                return key
+
+        if isinstance(current, str):
+            return current
+
+        # Se il risultato non è una stringa, ritorna la chiave
+        return key
     
     def __call__(self, key: str, **kwargs) -> str:
         """Shortcut per t()"""
@@ -511,7 +545,12 @@ def get_i18n(language: str = 'it') -> I18n:
     """Ottiene l'istanza i18n globale"""
     global _i18n
     if _i18n is None:
-        _i18n = I18n(language)
+        # Trova automaticamente la directory locales
+        locales_dir = Path(__file__).parent.parent / 'locales'
+        if locales_dir.exists():
+            _i18n = I18n(language, locales_dir)
+        else:
+            _i18n = I18n(language)
     return _i18n
 
 
@@ -519,7 +558,12 @@ def set_language(language: str) -> None:
     """Imposta la lingua globale"""
     global _i18n
     if _i18n is None:
-        _i18n = I18n(language)
+        # Trova automaticamente la directory locales
+        locales_dir = Path(__file__).parent.parent / 'locales'
+        if locales_dir.exists():
+            _i18n = I18n(language, locales_dir)
+        else:
+            _i18n = I18n(language)
     else:
         _i18n.set_language(language)
 

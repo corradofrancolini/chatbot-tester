@@ -799,12 +799,13 @@ async def run_test_session(
     
     # Passa toggle al tester
     tester = ChatbotTester(
-        project, 
-        settings, 
-        on_status, 
+        project,
+        settings,
+        on_status,
         on_progress,
         dry_run=run_config.dry_run,
-        use_langsmith=run_config.use_langsmith
+        use_langsmith=run_config.use_langsmith,
+        single_turn=run_config.single_turn
     )
     
     try:

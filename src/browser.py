@@ -10,7 +10,9 @@ Gestisce:
 
 import asyncio
 from pathlib import Path
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, List
+import tempfile
+import io
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -415,18 +417,18 @@ class BrowserManager:
             print(f"Errore screenshot: {e}")
             return False
     
-    async def take_element_screenshot(self, 
+    async def take_element_screenshot(self,
                                        selector: str,
                                        path: Path,
                                        inject_css: Optional[str] = None) -> bool:
         """
         Cattura screenshot di un elemento specifico.
-        
+
         Args:
             selector: Selettore CSS dell'elemento
             path: Path dove salvare
             inject_css: CSS da iniettare prima
-            
+
         Returns:
             True se riuscito
         """
@@ -434,12 +436,223 @@ class BrowserManager:
             if inject_css:
                 await self._page.add_style_tag(content=inject_css)
                 await asyncio.sleep(0.3)
-            
+
             element = self._page.locator(selector)
             await element.screenshot(path=str(path))
             return True
         except Exception as e:
             print(f"Errore screenshot elemento: {e}")
+            return False
+
+    async def take_conversation_screenshot(self,
+                                           path: Path,
+                                           hide_elements: Optional[List[str]] = None,
+                                           thread_selector: str = '.llm__thread') -> bool:
+        """
+        Cattura screenshot COMPLETO della conversazione chatbot.
+
+        Nasconde elementi non necessari, ESPANDE tutti i container per mostrare
+        l'intero contenuto, e cattura l'elemento .llm__thread che contiene
+        tutta la conversazione (messaggio utente + risposta bot con tutti i prodotti).
+
+        Args:
+            path: Path dove salvare lo screenshot
+            hide_elements: Lista di selettori da nascondere
+            thread_selector: Selettore del thread conversazione
+
+        Returns:
+            True se screenshot riuscito
+        """
+        try:
+            # Elementi da nascondere di default
+            if hide_elements is None:
+                hide_elements = [
+                    '.llm__prompt',
+                    '.llm__footer',
+                    '.llm__busyIndicator',
+                    '.llm__scrollDown'
+                ]
+
+            # 1. Inietta CSS per nascondere elementi e espandere container
+            # Costruisce CSS dinamicamente per nascondere gli elementi specificati
+            hide_css = ", ".join(hide_elements) + " { display: none !important; visibility: hidden !important; height: 0 !important; opacity: 0 !important; pointer-events: none !important; }"
+
+            css_to_inject = f"""
+                {hide_css}
+                .llm__intro {{ display: none !important; }}
+                /* Nascondi anche elementi con position fixed */
+                [class*="prompt"], [class*="footer"], [class*="Prompt"], [class*="Footer"] {{
+                    display: none !important;
+                    visibility: hidden !important;
+                }}
+                .llm__content, .llm__thread, .llm__container,
+                .llm__scroller, .llm__messages,
+                body, html, main, [class*="llm"] {{
+                    height: auto !important;
+                    max-height: none !important;
+                    overflow: visible !important;
+                    overflow-y: visible !important;
+                    position: relative !important;
+                }}
+                .llm__prompt-form {{ position: relative !important; display: none !important; }}
+                section.llm__thread {{
+                    position: relative !important;
+                    overflow: visible !important;
+                    background: #E6F2FF !important;
+                    padding-bottom: 20px !important;
+                }}
+                /* Nascondi scroll indicators */
+                [class*="scroll"], [class*="Scroll"], svg {{ }}
+                button[class*="scroll"], button[class*="down"] {{ display: none !important; }}
+            """
+            await self._page.add_style_tag(content=css_to_inject)
+            await asyncio.sleep(500 / 1000)  # 500ms come nel progetto originale
+
+            # 2. Cattura screenshot di section.llm__thread (contiene tutta la conversazione)
+            thread = self._page.locator("section.llm__thread")
+            try:
+                if await thread.count() > 0:
+                    await thread.screenshot(path=str(path), timeout=60000)
+                else:
+                    # Fallback a full page
+                    await self._page.screenshot(path=str(path), full_page=True)
+            except Exception as e:
+                print(f"  [DEBUG] Errore screenshot thread, fallback: {e}")
+                await self._page.screenshot(path=str(path), full_page=True)
+
+            # CSS iniettato rimane nella pagina, ma non influisce sul funzionamento
+            # perché i container tornano normali al prossimo reload
+
+            return True
+
+        except Exception as e:
+            print(f"Errore screenshot conversazione: {e}")
+            return False
+
+    async def take_scrollable_screenshot(self,
+                                          selector: str,
+                                          path: Path,
+                                          inject_css: Optional[str] = None,
+                                          overlap: int = 50) -> bool:
+        """
+        Cattura screenshot completo di un elemento scrollabile.
+
+        Scrolla l'elemento dall'inizio alla fine, cattura screenshot
+        a ogni step e li concatena in un'unica immagine.
+
+        Args:
+            selector: Selettore CSS dell'elemento scrollabile
+            path: Path dove salvare l'immagine finale
+            inject_css: CSS da iniettare prima
+            overlap: Pixel di sovrapposizione tra screenshot (per evitare tagli)
+
+        Returns:
+            True se riuscito
+        """
+        try:
+            from PIL import Image
+
+            if inject_css:
+                await self._page.add_style_tag(content=inject_css)
+                await asyncio.sleep(0.3)
+
+            element = self._page.locator(selector)
+
+            # Ottieni dimensioni elemento
+            dimensions = await self._page.evaluate(f"""
+                () => {{
+                    const el = document.querySelector('{selector}');
+                    if (!el) return null;
+                    return {{
+                        scrollHeight: el.scrollHeight,
+                        clientHeight: el.clientHeight,
+                        scrollWidth: el.scrollWidth,
+                        clientWidth: el.clientWidth
+                    }};
+                }}
+            """)
+
+            if not dimensions:
+                print(f"Elemento {selector} non trovato")
+                return False
+
+            scroll_height = dimensions['scrollHeight']
+            client_height = dimensions['clientHeight']
+
+            # Se non c'è scroll, cattura normale
+            if scroll_height <= client_height:
+                await element.screenshot(path=str(path))
+                return True
+
+            # Scroll to top
+            await self._page.evaluate(f"""
+                () => {{
+                    document.querySelector('{selector}').scrollTop = 0;
+                }}
+            """)
+            await asyncio.sleep(0.2)
+
+            # Cattura screenshot multipli
+            screenshots: List[bytes] = []
+            current_scroll = 0
+            step = client_height - overlap
+
+            while current_scroll < scroll_height:
+                # Scrolla alla posizione
+                await self._page.evaluate(f"""
+                    () => {{
+                        document.querySelector('{selector}').scrollTop = {current_scroll};
+                    }}
+                """)
+                await asyncio.sleep(0.15)
+
+                # Cattura screenshot in memoria
+                screenshot_bytes = await element.screenshot()
+                screenshots.append(screenshot_bytes)
+
+                current_scroll += step
+
+                # Evita loop infiniti
+                if len(screenshots) > 50:
+                    print("Troppi screenshot, interrompo")
+                    break
+
+            # Concatena immagini verticalmente
+            images = [Image.open(io.BytesIO(s)) for s in screenshots]
+
+            if len(images) == 1:
+                images[0].save(str(path))
+                return True
+
+            # Calcola altezza totale (rimuovendo overlap)
+            total_height = images[0].height  # Prima immagine completa
+            for img in images[1:]:
+                total_height += img.height - overlap
+
+            # Crea immagine finale
+            width = images[0].width
+            final_image = Image.new('RGB', (width, total_height))
+
+            # Incolla immagini
+            y_offset = 0
+            for i, img in enumerate(images):
+                if i == 0:
+                    final_image.paste(img, (0, 0))
+                    y_offset = img.height - overlap
+                else:
+                    # Taglia la parte superiore (overlap) delle immagini successive
+                    cropped = img.crop((0, overlap, img.width, img.height))
+                    final_image.paste(cropped, (0, y_offset))
+                    y_offset += cropped.height
+
+            final_image.save(str(path))
+            return True
+
+        except ImportError:
+            print("PIL/Pillow non installato, fallback a screenshot normale")
+            return await self.take_element_screenshot(selector, path, inject_css)
+        except Exception as e:
+            print(f"Errore screenshot scrollabile: {e}")
             return False
     
     async def execute_script(self, script: str) -> Any:

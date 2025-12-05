@@ -102,16 +102,17 @@ class ChatbotTester:
         await tester.run_auto_session(test_cases)
     """
     
-    def __init__(self, 
+    def __init__(self,
                  project: ProjectConfig,
                  settings: GlobalSettings,
                  on_status: Optional[Callable[[str], None]] = None,
                  on_progress: Optional[Callable[[int, int], None]] = None,
                  dry_run: bool = False,
-                 use_langsmith: bool = True):
+                 use_langsmith: bool = True,
+                 single_turn: bool = False):
         """
         Inizializza il tester.
-        
+
         Args:
             project: Configurazione progetto
             settings: Settings globali
@@ -119,15 +120,17 @@ class ChatbotTester:
             on_progress: Callback per progresso (current, total)
             dry_run: Se True, non salva su Google Sheets
             use_langsmith: Se False, disabilita LangSmith
+            single_turn: Se True, modalità AUTO esegue solo domanda iniziale (no followup)
         """
         self.project = project
         self.settings = settings
         self.on_status = on_status or print
         self.on_progress = on_progress or (lambda c, t: None)
-        
+
         # Toggle runtime
         self.dry_run = dry_run
         self.use_langsmith = use_langsmith
+        self.single_turn = single_turn
         
         # Browser
         self.browser: Optional[BrowserManager] = None
@@ -602,9 +605,13 @@ class ChatbotTester:
         Returns:
             Lista risultati
         """
-        if not self.ollama:
-            self.on_status("✗ Modalità Auto richiede Ollama")
+        # Permetti AUTO mode senza Ollama se single_turn (solo esecuzione, no valutazione)
+        if not self.ollama and not self.single_turn:
+            self.on_status("✗ Modalità Auto richiede Ollama (o attiva single_turn)")
             return []
+
+        if not self.ollama:
+            self.on_status("! AUTO mode senza Ollama - solo esecuzione e screenshot")
         
         self.current_mode = TestMode.AUTO
         max_turns = max_turns or self.settings.max_turns
@@ -677,64 +684,85 @@ class ChatbotTester:
             turn = 0
             while turn < max_turns:
                 turn += 1
-                
+
                 # Attendi risposta bot
                 response = await self.browser.wait_for_response()
-                
+
                 if not response:
                     self.on_status("! Nessuna risposta dal bot")
                     break
-                
+
                 conversation.append(ConversationTurn(
                     role='assistant',
                     content=response,
                     timestamp=datetime.utcnow().isoformat()
                 ))
-                
-                self.on_status(f"📥 Bot: {response[:60]}...")
-                
+
+                self.on_status(f"Bot: {response[:60]}...")
+
+                # Se single_turn, esci dopo la prima risposta (no followup)
+                if self.single_turn:
+                    self.on_status("Conversazione completata (single turn)")
+                    break
+
                 # Decidi prossimo messaggio
                 next_message = self._decide_next_message(
                     conversation,
                     remaining_followups,
                     test
                 )
-                
+
                 if not next_message:
-                    self.on_status("✓ Conversazione completata")
+                    self.on_status("Conversazione completata")
                     break
-                
+
                 # Rimuovi followup usato
                 if next_message in remaining_followups:
                     remaining_followups.remove(next_message)
-                
+
                 # Invia followup
                 self.on_status(f"{next_message[:60]}...")
                 await self.browser.send_message(next_message)
-                
+
                 conversation.append(ConversationTurn(
                     role='user',
                     content=next_message,
                     timestamp=datetime.utcnow().isoformat()
                 ))
             
-            # Screenshot finale
+            # Screenshot finale COMPLETO (espande container e cattura tutto)
             screenshot_path = ""
             if self.settings.screenshot_on_complete:
                 ss_path = self.report.get_screenshot_path(test.id)
-                if await self.browser.take_screenshot(
-                    ss_path,
-                    inject_css=self.project.chatbot.screenshot_css
-                ):
+                # Usa take_conversation_screenshot che:
+                # - Nasconde input bar, footer, scroll arrows
+                # - ESPANDE tutti i container (scroller, thread, products)
+                # - Cattura l'elemento .llm__thread che contiene TUTTA la conversazione
+                success = await self.browser.take_conversation_screenshot(
+                    path=ss_path,
+                    hide_elements=['.llm__prompt', '.llm__footer', '.llm__busyIndicator', '.llm__scrollDown'],
+                    thread_selector='.llm__thread'
+                )
+                # Fallback a screenshot normale se fallisce
+                if not success:
+                    success = await self.browser.take_screenshot(
+                        ss_path,
+                        inject_css=self.project.chatbot.screenshot_css
+                    )
+                if success:
                     screenshot_path = str(ss_path)
             
-            # Valutazione LLM
+            # Valutazione LLM (solo se Ollama disponibile)
             final_response = conversation[-1].content if conversation else ""
-            evaluation = self.ollama.evaluate_test_result(
-                test_case={'question': test.question, 'category': test.category, 'expected': test.expected},
-                conversation=[{'role': t.role, 'content': t.content} for t in conversation],
-                final_response=final_response
-            )
+            if self.ollama:
+                evaluation = self.ollama.evaluate_test_result(
+                    test_case={'question': test.question, 'category': test.category, 'expected': test.expected},
+                    conversation=[{'role': t.role, 'content': t.content} for t in conversation],
+                    final_response=final_response
+                )
+            else:
+                # Senza Ollama, segna come pending (valutazione manuale richiesta)
+                evaluation = {'passed': None, 'reason': 'Valutazione manuale richiesta (Ollama non disponibile)'}
             
             # LangSmith debug
             langsmith_url = ""
