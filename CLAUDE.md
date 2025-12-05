@@ -533,3 +533,54 @@ pyinstaller chatbot-tester.spec
 
 - `my-chatbot` → Silicon search chatbot (DEV)
 - `example-bot` → EFG chatbot
+
+---
+
+## TODO / Backlog
+
+### UX
+- [ ] **Progress bar migliorata**: ETA stimato, velocita test/minuto, indicatore dettagliato
+- [ ] **Dashboard web locale**: Server Flask, vista real-time, storico run con grafici
+
+### Automazione
+- [ ] **Notifiche remote**: Aggiungere notifiche (Email/Teams) al workflow GitHub Actions usando secrets
+- [ ] **Esecuzione parallela**: Implementare multi-browser (config in settings.yaml esiste)
+
+### Internazionalizzazione
+- [ ] **i18n completo**: Integrare src/i18n.py in tutti i moduli
+
+---
+
+## Menu Settings (v1.2.0)
+
+Dal menu principale: **[6] Impostazioni**
+
+### Sottomenu disponibili
+
+| Voce | Descrizione |
+|------|-------------|
+| **Lingua** | Cambia IT/EN |
+| **Notifiche** | Configura Desktop, Email, Teams + Trigger |
+| **Browser** | Headless, viewport, slow_mo |
+| **Logging** | Livello log (DEBUG/INFO/WARNING/ERROR) |
+| **Test Notifiche** | Invia notifica di test |
+
+### Notifiche - Sottomenu
+
+```
+[1] Desktop: ON/OFF     — Notifiche macOS native
+[2] Email: ON/OFF       — Notifiche via SMTP
+[3] Teams: ON/OFF       — Notifiche Microsoft Teams
+[4] Trigger             — Quando inviare notifiche
+```
+
+### Trigger Notifiche
+
+```
+[1] On Complete: ON/OFF  — Ogni run completato
+[2] On Failure: ON/OFF   — Solo se fallimenti
+[3] On Regression: ON/OFF — Se rilevate regressioni
+[4] On Flaky: ON/OFF     — Se test flaky rilevati
+```
+
+Le modifiche vengono salvate direttamente in `config/settings.yaml`.

@@ -845,6 +845,317 @@ def _cloud_download_results(ui: ConsoleUI, gh_client: GitHubActionsClient) -> No
     input("\n  Premi INVIO per continuare...")
 
 
+# =============================================================================
+# SETTINGS MENU
+# =============================================================================
+
+def show_settings_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
+    """Menu impostazioni globali"""
+    settings_path = Path("config/settings.yaml")
+
+    while True:
+        settings = loader.load_global_settings()
+
+        ui.section("Impostazioni")
+
+        # Mostra stato corrente
+        ui.print("")
+        ui.print(f"  Lingua:      {settings.app.language.upper()}")
+        ui.print(f"  Headless:    {'ON' if settings.browser.headless else 'OFF'}")
+        ui.print(f"  Notifiche:   Desktop={'ON' if settings.notifications.desktop.enabled else 'OFF'}, "
+                f"Email={'ON' if settings.notifications.email.enabled else 'OFF'}, "
+                f"Teams={'ON' if settings.notifications.teams.enabled else 'OFF'}")
+        ui.print(f"  Log Level:   {settings.logging.level}")
+        ui.print("")
+
+        items = [
+            MenuItem('1', 'Lingua', f"Attuale: {settings.app.language.upper()}"),
+            MenuItem('2', 'Notifiche', 'Configura Desktop, Email, Teams'),
+            MenuItem('3', 'Browser', 'Headless, viewport, screenshot'),
+            MenuItem('4', 'Logging', f"Livello: {settings.logging.level}"),
+            MenuItem('5', 'Test Notifiche', 'Invia notifica di test'),
+        ]
+
+        choice = ui.menu(items, ">", allow_back=True)
+
+        if choice is None:
+            return
+
+        elif choice == '1':
+            _settings_language(ui, loader, settings_path)
+
+        elif choice == '2':
+            _settings_notifications(ui, loader, settings_path)
+
+        elif choice == '3':
+            _settings_browser(ui, loader, settings_path)
+
+        elif choice == '4':
+            _settings_logging(ui, loader, settings_path)
+
+        elif choice == '5':
+            _settings_test_notify(ui, loader)
+
+
+def _settings_language(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) -> None:
+    """Cambia lingua"""
+    ui.section("Lingua Interfaccia")
+
+    items = [
+        MenuItem('1', 'Italiano', 'Interfaccia in italiano'),
+        MenuItem('2', 'English', 'English interface'),
+    ]
+
+    choice = ui.menu(items, ">", allow_back=True)
+
+    if choice is None:
+        return
+
+    new_lang = 'it' if choice == '1' else 'en'
+
+    _update_settings_yaml(settings_path, ['app', 'language'], new_lang)
+    set_language(new_lang)
+    ui.success(f"Lingua cambiata in {'Italiano' if new_lang == 'it' else 'English'}")
+
+
+def _settings_notifications(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) -> None:
+    """Menu configurazione notifiche"""
+    while True:
+        settings = loader.load_global_settings()
+
+        ui.section("Notifiche")
+
+        desktop_status = "ON" if settings.notifications.desktop.enabled else "OFF"
+        email_status = "ON" if settings.notifications.email.enabled else "OFF"
+        teams_status = "ON" if settings.notifications.teams.enabled else "OFF"
+
+        items = [
+            MenuItem('1', f'Desktop: {desktop_status}', 'Notifiche macOS native'),
+            MenuItem('2', f'Email: {email_status}', 'Notifiche via SMTP'),
+            MenuItem('3', f'Teams: {teams_status}', 'Notifiche Microsoft Teams'),
+            MenuItem('4', 'Trigger', 'Quando inviare notifiche'),
+        ]
+
+        choice = ui.menu(items, ">", allow_back=True)
+
+        if choice is None:
+            return
+
+        elif choice == '1':
+            # Toggle Desktop
+            new_val = not settings.notifications.desktop.enabled
+            _update_settings_yaml(settings_path, ['notifications', 'desktop', 'enabled'], new_val)
+            ui.success(f"Desktop notifications {'abilitate' if new_val else 'disabilitate'}")
+
+        elif choice == '2':
+            # Email config
+            _settings_email(ui, loader, settings_path)
+
+        elif choice == '3':
+            # Toggle Teams
+            new_val = not settings.notifications.teams.enabled
+            _update_settings_yaml(settings_path, ['notifications', 'teams', 'enabled'], new_val)
+            ui.success(f"Teams notifications {'abilitate' if new_val else 'disabilitate'}")
+            if new_val:
+                ui.info("Assicurati di impostare TEAMS_WEBHOOK_URL")
+
+        elif choice == '4':
+            # Trigger config
+            _settings_triggers(ui, loader, settings_path)
+
+
+def _settings_email(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) -> None:
+    """Configurazione email"""
+    settings = loader.load_global_settings()
+
+    ui.section("Configurazione Email")
+
+    # Toggle enabled
+    enabled = settings.notifications.email.enabled
+    items = [
+        MenuItem('1', f"Abilita: {'ON' if enabled else 'OFF'}", 'Toggle abilitazione'),
+        MenuItem('2', 'SMTP Host', f"Attuale: {settings.notifications.email.smtp_host}"),
+        MenuItem('3', 'SMTP Port', f"Attuale: {settings.notifications.email.smtp_port}"),
+        MenuItem('4', 'Username', f"Attuale: {settings.notifications.email.smtp_user or '-'}"),
+        MenuItem('5', 'Destinatari', f"Attuale: {', '.join(settings.notifications.email.recipients) or '-'}"),
+    ]
+
+    choice = ui.menu(items, ">", allow_back=True)
+
+    if choice is None:
+        return
+
+    elif choice == '1':
+        new_val = not enabled
+        _update_settings_yaml(settings_path, ['notifications', 'email', 'enabled'], new_val)
+        ui.success(f"Email notifications {'abilitate' if new_val else 'disabilitate'}")
+
+    elif choice == '2':
+        host = ui.input("SMTP Host", settings.notifications.email.smtp_host)
+        _update_settings_yaml(settings_path, ['notifications', 'email', 'smtp_host'], host)
+        ui.success(f"SMTP Host impostato: {host}")
+
+    elif choice == '3':
+        port = ui.input("SMTP Port", str(settings.notifications.email.smtp_port))
+        _update_settings_yaml(settings_path, ['notifications', 'email', 'smtp_port'], int(port))
+        ui.success(f"SMTP Port impostato: {port}")
+
+    elif choice == '4':
+        user = ui.input("SMTP Username (email)", settings.notifications.email.smtp_user)
+        _update_settings_yaml(settings_path, ['notifications', 'email', 'smtp_user'], user)
+        ui.success(f"SMTP User impostato: {user}")
+
+    elif choice == '5':
+        recipients = ui.input("Destinatari (separati da virgola)", ', '.join(settings.notifications.email.recipients))
+        recipients_list = [r.strip() for r in recipients.split(',') if r.strip()]
+        _update_settings_yaml(settings_path, ['notifications', 'email', 'recipients'], recipients_list)
+        ui.success(f"Destinatari impostati: {recipients_list}")
+
+
+def _settings_triggers(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) -> None:
+    """Configurazione trigger notifiche"""
+    settings = loader.load_global_settings()
+
+    ui.section("Trigger Notifiche")
+    ui.print("\n  Quando inviare notifiche:\n")
+
+    triggers = settings.notifications.triggers
+
+    items = [
+        MenuItem('1', f"On Complete: {'ON' if triggers.on_complete else 'OFF'}", 'Ogni run completato'),
+        MenuItem('2', f"On Failure: {'ON' if triggers.on_failure else 'OFF'}", 'Solo se fallimenti'),
+        MenuItem('3', f"On Regression: {'ON' if triggers.on_regression else 'OFF'}", 'Se rilevate regressioni'),
+        MenuItem('4', f"On Flaky: {'ON' if triggers.on_flaky else 'OFF'}", 'Se test flaky rilevati'),
+    ]
+
+    choice = ui.menu(items, ">", allow_back=True)
+
+    if choice is None:
+        return
+
+    trigger_map = {
+        '1': ('on_complete', triggers.on_complete),
+        '2': ('on_failure', triggers.on_failure),
+        '3': ('on_regression', triggers.on_regression),
+        '4': ('on_flaky', triggers.on_flaky),
+    }
+
+    if choice in trigger_map:
+        key, current = trigger_map[choice]
+        new_val = not current
+        _update_settings_yaml(settings_path, ['notifications', 'triggers', key], new_val)
+        ui.success(f"{key} {'abilitato' if new_val else 'disabilitato'}")
+
+
+def _settings_browser(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) -> None:
+    """Configurazione browser"""
+    settings = loader.load_global_settings()
+
+    ui.section("Configurazione Browser")
+
+    items = [
+        MenuItem('1', f"Headless: {'ON' if settings.browser.headless else 'OFF'}", 'Browser nascosto'),
+        MenuItem('2', f"Viewport: {settings.browser.viewport.width}x{settings.browser.viewport.height}", 'Dimensioni finestra'),
+        MenuItem('3', f"Slow Mo: {settings.browser.slow_mo}ms", 'Rallenta azioni (debug)'),
+    ]
+
+    choice = ui.menu(items, ">", allow_back=True)
+
+    if choice is None:
+        return
+
+    elif choice == '1':
+        new_val = not settings.browser.headless
+        _update_settings_yaml(settings_path, ['browser', 'headless'], new_val)
+        ui.success(f"Headless {'abilitato' if new_val else 'disabilitato'}")
+
+    elif choice == '2':
+        width = ui.input("Larghezza", str(settings.browser.viewport.width))
+        height = ui.input("Altezza", str(settings.browser.viewport.height))
+        _update_settings_yaml(settings_path, ['browser', 'viewport', 'width'], int(width))
+        _update_settings_yaml(settings_path, ['browser', 'viewport', 'height'], int(height))
+        ui.success(f"Viewport impostato: {width}x{height}")
+
+    elif choice == '3':
+        slow = ui.input("Slow Mo (ms)", str(settings.browser.slow_mo))
+        _update_settings_yaml(settings_path, ['browser', 'slow_mo'], int(slow))
+        ui.success(f"Slow Mo impostato: {slow}ms")
+
+
+def _settings_logging(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) -> None:
+    """Configurazione logging"""
+    ui.section("Configurazione Logging")
+
+    items = [
+        MenuItem('1', 'DEBUG', 'Tutto, molto verboso'),
+        MenuItem('2', 'INFO', 'Informazioni standard'),
+        MenuItem('3', 'WARNING', 'Solo avvertimenti e errori'),
+        MenuItem('4', 'ERROR', 'Solo errori'),
+    ]
+
+    choice = ui.menu(items, ">", allow_back=True)
+
+    if choice is None:
+        return
+
+    level_map = {'1': 'DEBUG', '2': 'INFO', '3': 'WARNING', '4': 'ERROR'}
+
+    if choice in level_map:
+        new_level = level_map[choice]
+        _update_settings_yaml(settings_path, ['logging', 'level'], new_level)
+        ui.success(f"Log level impostato: {new_level}")
+
+
+def _settings_test_notify(ui: ConsoleUI, loader: ConfigLoader) -> None:
+    """Testa le notifiche configurate"""
+    from src.notifications import NotificationManager, TestRunSummary
+
+    settings = loader.load_global_settings()
+
+    ui.section("Test Notifiche")
+
+    # Crea summary di test
+    summary = TestRunSummary(
+        project="test-project",
+        run_number=999,
+        total_tests=10,
+        passed=8,
+        failed=2,
+        pass_rate=80.0
+    )
+
+    manager = NotificationManager.from_settings(settings.notifications)
+
+    ui.info("Invio notifiche di test...")
+    results = manager.notify_run_complete(summary)
+
+    for channel, success in results.items():
+        if success:
+            ui.success(f"{channel}: inviata")
+        else:
+            ui.warning(f"{channel}: fallita o disabilitata")
+
+    input("\n  Premi INVIO per continuare...")
+
+
+def _update_settings_yaml(path: Path, keys: list, value) -> None:
+    """Aggiorna un valore nel file settings.yaml preservando la struttura"""
+    import yaml
+
+    with open(path, 'r') as f:
+        data = yaml.safe_load(f)
+
+    # Naviga fino alla chiave da modificare
+    current = data
+    for key in keys[:-1]:
+        current = current[key]
+
+    current[keys[-1]] = value
+
+    with open(path, 'w') as f:
+        yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+
 def show_analysis_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
     """Menu per analisi testing (comparison, regression, flaky)"""
     from src.comparison import (
@@ -1658,7 +1969,7 @@ async def main_interactive(args):
 
         elif choice == '6':
             # Impostazioni
-            ui.info("Impostazioni non ancora implementate")
+            show_settings_menu(ui, loader)
 
         elif choice == '7':
             # Aiuto
