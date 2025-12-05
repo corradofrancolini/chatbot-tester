@@ -27,6 +27,7 @@ from src.config_loader import ConfigLoader, ProjectConfig, RunConfig
 from src.tester import ChatbotTester, TestMode
 from src.ui import ConsoleUI, MenuItem, get_ui
 from src.i18n import get_i18n, set_language, t
+from src.health import HealthChecker, ServiceStatus
 
 
 def parse_args():
@@ -119,14 +120,94 @@ Esempi:
         action='store_true',
         help='Abilita output di debug'
     )
-    
+
+    parser.add_argument(
+        '--health-check',
+        action='store_true',
+        help='Esegui health check dei servizi e esci'
+    )
+
+    parser.add_argument(
+        '--skip-health-check',
+        action='store_true',
+        help='Salta health check pre-esecuzione'
+    )
+
     parser.add_argument(
         '-v', '--version',
         action='version',
-        version='Chatbot Tester v1.0.1'
+        version='Chatbot Tester v1.1.0'
     )
     
     return parser.parse_args()
+
+
+def run_health_check(project: ProjectConfig = None, settings = None) -> bool:
+    """
+    Esegue health check di tutti i servizi.
+
+    Args:
+        project: Configurazione progetto (opzionale)
+        settings: Settings globali (opzionale)
+
+    Returns:
+        True se tutti i servizi critici sono OK
+    """
+    ui = get_ui()
+    ui.section("Health Check")
+
+    # Configura checker
+    chatbot_url = project.chatbot.url if project else ""
+    langsmith_key = ""
+    google_creds = ""
+
+    if settings:
+        langsmith_key = getattr(settings, 'langsmith_api_key', '') or ''
+        google_creds = str(getattr(settings, 'google_credentials_file', '') or '')
+
+    checker = HealthChecker(
+        chatbot_url=chatbot_url,
+        langsmith_api_key=langsmith_key,
+        google_credentials_path=google_creds
+    )
+
+    # Esegui check
+    health = checker.check_all(force=True)
+
+    # Mostra risultati
+    status_icons = {
+        ServiceStatus.HEALTHY: "[green]OK[/green]",
+        ServiceStatus.DEGRADED: "[yellow]WARN[/yellow]",
+        ServiceStatus.UNHEALTHY: "[red]FAIL[/red]",
+        ServiceStatus.DISABLED: "[dim]OFF[/dim]",
+        ServiceStatus.UNKNOWN: "[dim]?[/dim]"
+    }
+
+    for name, result in health.checks.items():
+        icon = status_icons.get(result.status, "?")
+        # Evita duplicazione latency se già presente nel messaggio
+        latency = ""
+        if result.latency_ms > 0 and "ms)" not in result.message:
+            latency = f" ({result.latency_ms}ms)"
+        ui.print(f"  {icon} {name}: {result.message}{latency}")
+
+    # Riepilogo
+    ui.print("")
+    if health.all_healthy:
+        ui.success("Tutti i servizi sono operativi")
+    elif health.can_run:
+        if health.warnings:
+            ui.warning(f"Avvertimenti: {len(health.warnings)}")
+            for w in health.warnings:
+                ui.print(f"  ! {w}", "yellow")
+        ui.info("I servizi critici sono OK - puoi procedere")
+    else:
+        ui.error("Servizi critici non disponibili:")
+        for issue in health.blocking_issues:
+            ui.print(f"  x {issue}", "red")
+        return False
+
+    return True
 
 
 def show_main_menu(ui: ConsoleUI, loader: ConfigLoader) -> str:
@@ -425,6 +506,7 @@ def toggle_options_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
         ls_status = "[green]ON[/green]" if run_config.use_langsmith else "[dim]OFF[/dim]"
         rag_status = "[green]ON[/green]" if run_config.use_rag else "[dim]OFF[/dim]"
         ollama_status = "[green]ON[/green]" if run_config.use_ollama else "[dim]OFF[/dim]"
+        single_turn_status = "[cyan]ON[/cyan]" if run_config.single_turn else "[dim]OFF[/dim]"
 
         ui.print(f"\n  {t('run_menu.toggle_status')}:")
         dry_note = f"  ({t('run_menu.toggle_dry_run_on')})" if run_config.dry_run else ""
@@ -433,6 +515,8 @@ def toggle_options_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
         ui.print(f"  [3] {t('run_menu.toggle_rag')}:        {rag_status}")
         ollama_note = f"  ({t('run_menu.toggle_ollama_on')})" if run_config.use_ollama else f"  ({t('run_menu.toggle_ollama_off')})"
         ui.print(f"  [4] {t('run_menu.toggle_ollama')}:     {ollama_status}{ollama_note}")
+        single_turn_note = "  (solo domanda iniziale)" if run_config.single_turn else "  (conversazione completa)"
+        ui.print(f"  [5] Single Turn:    {single_turn_status}{single_turn_note}")
         ui.print("")
 
         items = [
@@ -444,6 +528,8 @@ def toggle_options_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
                      t('run_menu.toggle_rag_on') if not run_config.use_rag else t('run_menu.toggle_rag_off')),
             MenuItem('4', f"{t('run_menu.toggle_ollama')}: {'OFF->ON' if not run_config.use_ollama else 'ON->OFF'}",
                      t('run_menu.toggle_ollama_on') if not run_config.use_ollama else t('run_menu.toggle_ollama_off')),
+            MenuItem('5', f"Single Turn: {'OFF->ON' if not run_config.single_turn else 'ON->OFF'}",
+                     "Esegue solo domanda iniziale" if not run_config.single_turn else "Esegue conversazione completa"),
         ]
 
         choice = ui.menu(items, t('common.next'), allow_back=True)
@@ -466,6 +552,10 @@ def toggle_options_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
             run_config.use_ollama = not run_config.use_ollama
             status = t('run_menu.ollama_on') if run_config.use_ollama else t('run_menu.ollama_off')
             ui.success(f"{t('run_menu.toggle_ollama')}: {status}")
+        elif choice == '5':
+            run_config.single_turn = not run_config.single_turn
+            status = "ON (solo domanda iniziale)" if run_config.single_turn else "OFF (conversazione completa)"
+            ui.success(f"Single Turn: {status}")
 
 
 def show_finetuning_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
@@ -1032,15 +1122,21 @@ async def main_direct(args):
     try:
         project = loader.load_project(args.project)
         settings = loader.load_global_settings()
-        
+
+        # Health check pre-esecuzione (skip con --skip-health-check)
+        if not args.skip_health_check:
+            if not run_health_check(project, settings):
+                ui.error("Health check fallito. Usa --skip-health-check per forzare.")
+                return
+
         # Override headless se specificato
         if args.headless:
             settings.browser.headless = True
-        
+
         # Determina modalità
         mode_map = {'train': TestMode.TRAIN, 'assisted': TestMode.ASSISTED, 'auto': TestMode.AUTO}
         mode = mode_map.get(args.mode, TestMode.TRAIN)
-        
+
         await run_test_session(
             project,
             settings,
@@ -1063,7 +1159,26 @@ async def main_direct(args):
 def main():
     """Entry point"""
     args = parse_args()
-    
+
+    # Health check standalone
+    if args.health_check:
+        ui = get_ui()
+        loader = ConfigLoader()
+
+        # Se specificato progetto, carica config
+        project = None
+        settings = None
+        if args.project:
+            try:
+                project = loader.load_project(args.project)
+                settings = loader.load_global_settings()
+            except FileNotFoundError:
+                ui.error(f"Progetto '{args.project}' non trovato")
+                sys.exit(1)
+
+        success = run_health_check(project, settings)
+        sys.exit(0 if success else 1)
+
     # Determina modalità
     if args.no_interactive or args.project or args.new_project:
         # Modalità diretta

@@ -18,6 +18,9 @@ Tool automatizzato per testare chatbot web con supporto multi-progetto, AI local
 - **Single-Turn Mode**: Esegui solo la domanda iniziale senza followup
 - **LangSmith Integration**: Debug avanzato delle risposte chatbot
 - **Bilingue**: Italiano e Inglese
+- **Health Check**: Verifica servizi prima dell'esecuzione
+- **Cloud Execution**: Esegui test su GitHub Actions senza Chromium locale
+- **Docker Ready**: Container pronto all'uso
 
 ---
 
@@ -80,15 +83,23 @@ python run.py -p <progetto> -m auto --no-interactive --tests all
 
 ### Opzioni
 
-| Opzione | Descrizione |
-|---------|-------------|
-| `-p, --project` | Nome del progetto |
-| `-m, --mode` | Modalita: train, assisted, auto |
-| `-t, --test` | ID singolo test da eseguire |
-| `--tests` | Quali test: all, pending, failed |
-| `--new-run` | Crea nuovo run su Google Sheets |
-| `--no-interactive` | Esecuzione non interattiva |
-| `--dry-run` | Simula senza eseguire |
+| Opzione | Descrizione | Default |
+|---------|-------------|---------|
+| `-p, --project` | Nome del progetto | - |
+| `-m, --mode` | Modalita: train, assisted, auto | train |
+| `-t, --test` | ID singolo test da eseguire | - |
+| `--tests` | Quali test: all, pending, failed | pending |
+| `--new-run` | Crea nuovo run su Google Sheets | false |
+| `--no-interactive` | Esecuzione non interattiva | false |
+| `--dry-run` | Simula senza eseguire | false |
+| `--health-check` | Verifica servizi e esci | false |
+| `--skip-health-check` | Salta verifica servizi | false |
+| `--headless` | Browser in modalita headless | false |
+| `--lang` | Lingua interfaccia: it, en | it |
+| `--debug` | Output debug dettagliato | false |
+| `-v, --version` | Mostra versione | - |
+
+Per la guida completa a tutte le opzioni di configurazione, vedi [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ---
 
@@ -119,11 +130,27 @@ Ogni progetto ha un file `projects/<nome>/run_config.json`:
 }
 ```
 
-| Opzione | Descrizione |
-|---------|-------------|
-| `single_turn` | `true` = Solo domanda iniziale, no followup Ollama |
-| `use_ollama` | `false` = Disabilita valutazione automatica |
-| `active_run` | Numero del run attivo su Google Sheets |
+| Opzione | Descrizione | Accessibile da |
+|---------|-------------|----------------|
+| `env` | Ambiente: DEV, STAGING, PROD | Menu > Configura |
+| `active_run` | Numero del run attivo su Google Sheets | Automatico |
+| `dry_run` | Simula senza eseguire | Menu > Toggle |
+| `use_langsmith` | Abilita tracing LangSmith | Menu > Toggle |
+| `use_rag` | Abilita recupero RAG | Menu > Toggle |
+| `use_ollama` | Abilita valutazione Ollama | Menu > Toggle |
+| `single_turn` | Solo domanda iniziale, no followup | Menu > Toggle |
+
+### Toggle Runtime
+
+Dal menu interattivo: **Progetto > Toggle Opzioni**
+
+```
+[1] Dry Run:      OFF  (simula senza eseguire)
+[2] LangSmith:    ON   (tracing attivo)
+[3] RAG:          OFF  (disabilitato)
+[4] Ollama:       ON   (valutazione AI)
+[5] Single Turn:  ON   (solo domanda iniziale)
+```
 
 ---
 
@@ -196,6 +223,49 @@ ollama pull llama3.2:3b
 1. Crea account su [smith.langchain.com](https://smith.langchain.com)
 2. Genera API Key
 3. Configura in `config/.env`
+
+---
+
+## Deployment
+
+Esegui test senza avere Chromium locale. Vedi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) per la guida completa.
+
+### GitHub Actions (consigliato)
+
+```bash
+# Installa GitHub CLI
+brew install gh
+
+# Lancia test nel cloud
+gh workflow run chatbot-test.yml -f project=my-chatbot -f mode=auto
+```
+
+### Docker
+
+```bash
+# Build
+docker build -t chatbot-tester .
+
+# Esegui
+docker run -v ./projects:/app/projects chatbot-tester -p my-chatbot -m auto
+```
+
+### Health Check
+
+```bash
+# Verifica servizi prima di eseguire
+python run.py --health-check -p my-chatbot
+```
+
+---
+
+## Documentazione
+
+| Guida | Descrizione |
+|-------|-------------|
+| [CONFIGURATION.md](docs/CONFIGURATION.md) | Guida completa a tutte le opzioni |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploy su Docker, GitHub Actions, PyPI |
+| [CLAUDE.md](CLAUDE.md) | Note per sviluppo con Claude Code |
 
 ---
 
