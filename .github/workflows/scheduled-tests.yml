@@ -1,5 +1,6 @@
 # Chatbot Tester - Scheduled Test Runs
 # Esegue test automatici su base schedulata (cron)
+# Trigger: schedule (6:00 UTC daily, 2:00 UTC Monday) or workflow_dispatch
 
 name: Scheduled Chatbot Tests
 
