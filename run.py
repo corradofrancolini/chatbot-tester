@@ -820,7 +820,9 @@ def show_analysis_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
 
     if project.google_sheets.enabled:
         try:
+            credentials_path = str(Path("config/credentials.json"))
             sheets_client = GoogleSheetsClient(
+                credentials_path=credentials_path,
                 spreadsheet_id=project.google_sheets.spreadsheet_id,
                 drive_folder_id=project.google_sheets.drive_folder_id
             )
@@ -1694,7 +1696,9 @@ def run_cli_analysis(args):
 
     if project.google_sheets.enabled:
         try:
+            credentials_path = str(Path("config/credentials.json"))
             sheets_client = GoogleSheetsClient(
+                credentials_path=credentials_path,
                 spreadsheet_id=project.google_sheets.spreadsheet_id,
                 drive_folder_id=project.google_sheets.drive_folder_id
             )
