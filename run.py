@@ -28,6 +28,7 @@ from src.tester import ChatbotTester, TestMode
 from src.ui import ConsoleUI, MenuItem, get_ui
 from src.i18n import get_i18n, set_language, t
 from src.health import HealthChecker, ServiceStatus
+from src.github_actions import GitHubActionsClient
 
 
 def parse_args():
@@ -221,12 +222,18 @@ def show_main_menu(ui: ConsoleUI, loader: ConfigLoader) -> str:
 
     project_desc = t('main_menu.open_project_desc').format(count=len(projects)) if projects else t('main_menu.open_project_empty')
 
+    # Verifica disponibilita cloud execution
+    gh_client = GitHubActionsClient()
+    cloud_available = gh_client.is_available()
+    cloud_desc = "Lancia test senza browser locale" if cloud_available else "Richiede: brew install gh"
+
     items = [
         MenuItem('1', t('main_menu.new_project'), t('main_menu.new_project_desc')),
         MenuItem('2', t('main_menu.open_project'), project_desc),
         MenuItem('3', t('main_menu.finetuning'), t('main_menu.finetuning_desc')),
-        MenuItem('4', t('main_menu.settings'), t('main_menu.settings_desc')),
-        MenuItem('5', t('main_menu.help'), t('main_menu.help_desc')),
+        MenuItem('4', "Esegui nel cloud", cloud_desc, disabled=not cloud_available),
+        MenuItem('5', t('main_menu.settings'), t('main_menu.settings_desc')),
+        MenuItem('6', t('main_menu.help'), t('main_menu.help_desc')),
         MenuItem('quit', t('main_menu.exit'), '')
     ]
 
@@ -556,6 +563,195 @@ def toggle_options_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
             run_config.single_turn = not run_config.single_turn
             status = "ON (solo domanda iniziale)" if run_config.single_turn else "OFF (conversazione completa)"
             ui.success(f"Single Turn: {status}")
+
+
+def show_cloud_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
+    """Menu per esecuzione test nel cloud (GitHub Actions)"""
+    gh_client = GitHubActionsClient()
+
+    if not gh_client.is_available():
+        ui.error("GitHub CLI non disponibile")
+        ui.print(gh_client.get_install_instructions())
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    while True:
+        ui.section("Esegui nel Cloud")
+        ui.print("\n  [dim]Test eseguiti su server GitHub, senza browser locale[/dim]\n")
+
+        # Mostra run recenti
+        runs = gh_client.list_runs(limit=5)
+        if runs:
+            ui.print("  Run recenti:")
+            for run in runs[:3]:
+                status_icon = {
+                    "completed": "[green]OK[/green]" if run.conclusion == "success" else "[red]FAIL[/red]",
+                    "in_progress": "[yellow]...[/yellow]",
+                    "queued": "[dim]queue[/dim]"
+                }.get(run.status, "[dim]?[/dim]")
+                ui.print(f"    {status_icon} {run.name[:40]} ({run.created_at[:10]})")
+            ui.print("")
+
+        items = [
+            MenuItem('1', "Lancia test", "Avvia nuova esecuzione nel cloud"),
+            MenuItem('2', "Stato esecuzioni", "Vedi run in corso e recenti"),
+            MenuItem('3', "Scarica risultati", "Download report e screenshot"),
+        ]
+
+        choice = ui.menu(items, "Azione", allow_back=True)
+
+        if choice is None:
+            return
+
+        elif choice == '1':
+            _cloud_launch_test(ui, loader, gh_client)
+
+        elif choice == '2':
+            _cloud_show_status(ui, gh_client)
+
+        elif choice == '3':
+            _cloud_download_results(ui, gh_client)
+
+
+def _cloud_launch_test(ui: ConsoleUI, loader: ConfigLoader, gh_client: GitHubActionsClient) -> None:
+    """Lancia test nel cloud"""
+    # Seleziona progetto
+    project_name = show_project_menu(ui, loader)
+    if not project_name:
+        return
+
+    ui.section(f"Lancia test: {project_name}")
+
+    # Modalita
+    ui.print("\n  Modalita:")
+    mode_items = [
+        MenuItem('1', 'auto', 'Test completamente automatici'),
+        MenuItem('2', 'train', 'Solo esecuzione, no valutazione'),
+    ]
+    mode_choice = ui.menu(mode_items, "Modalita", allow_back=True)
+    if mode_choice is None:
+        return
+    mode = 'auto' if mode_choice == '1' else 'train'
+
+    # Test da eseguire
+    ui.print("\n  Quali test:")
+    test_items = [
+        MenuItem('1', 'pending', 'Solo test non completati'),
+        MenuItem('2', 'all', 'Tutti i test'),
+        MenuItem('3', 'failed', 'Solo test falliti'),
+    ]
+    test_choice = ui.menu(test_items, "Test", allow_back=True)
+    if test_choice is None:
+        return
+    tests = {'1': 'pending', '2': 'all', '3': 'failed'}.get(test_choice, 'pending')
+
+    # Nuovo run?
+    new_run = input("\n  Creare nuovo run su Google Sheets? (s/n): ").strip().lower() == 's'
+
+    # Conferma
+    ui.print(f"\n  [cyan]Riepilogo:[/cyan]")
+    ui.print(f"    Progetto: {project_name}")
+    ui.print(f"    Modalita: {mode}")
+    ui.print(f"    Test: {tests}")
+    ui.print(f"    Nuovo run: {'Si' if new_run else 'No'}")
+
+    confirm = input("\n  Avviare? (s/n): ").strip().lower()
+    if confirm != 's':
+        ui.info("Annullato")
+        return
+
+    # Lancia
+    ui.print("\n  Avvio workflow...")
+    success, message = gh_client.trigger_workflow(project_name, mode, tests, new_run)
+
+    if success:
+        ui.success(message)
+        ui.print("\n  [dim]Usa 'Stato esecuzioni' per monitorare il progresso[/dim]")
+    else:
+        ui.error(message)
+
+    input("\n  Premi INVIO per continuare...")
+
+
+def _cloud_show_status(ui: ConsoleUI, gh_client: GitHubActionsClient) -> None:
+    """Mostra stato esecuzioni cloud"""
+    ui.section("Stato Esecuzioni Cloud")
+
+    runs = gh_client.list_runs(limit=10)
+
+    if not runs:
+        ui.warning("Nessuna esecuzione trovata")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    ui.print("\n  Esecuzioni recenti:\n")
+
+    for i, run in enumerate(runs, 1):
+        # Icona stato
+        if run.status == "completed":
+            icon = "[green]PASS[/green]" if run.conclusion == "success" else "[red]FAIL[/red]"
+        elif run.status == "in_progress":
+            icon = "[yellow]RUNNING[/yellow]"
+        elif run.status == "queued":
+            icon = "[dim]QUEUED[/dim]"
+        else:
+            icon = "[dim]?[/dim]"
+
+        ui.print(f"  [{i}] {icon} {run.name[:50]}")
+        ui.print(f"      {run.created_at[:19]} | ID: {run.id}")
+        ui.print("")
+
+    # Opzioni
+    ui.print("  [dim]Inserisci numero per vedere dettagli, 'w' per watch live, INVIO per tornare[/dim]")
+    choice = input("\n  > ").strip().lower()
+
+    if choice == 'w':
+        ui.print("\n  Avvio watch (Ctrl+C per uscire)...")
+        gh_client.watch_run()
+    elif choice.isdigit():
+        idx = int(choice) - 1
+        if 0 <= idx < len(runs):
+            run = runs[idx]
+            ui.print(f"\n  URL: {run.url}")
+            input("\n  Premi INVIO per continuare...")
+
+
+def _cloud_download_results(ui: ConsoleUI, gh_client: GitHubActionsClient) -> None:
+    """Scarica risultati da esecuzione cloud"""
+    ui.section("Scarica Risultati")
+
+    runs = gh_client.list_runs(limit=10)
+    completed_runs = [r for r in runs if r.status == "completed"]
+
+    if not completed_runs:
+        ui.warning("Nessuna esecuzione completata trovata")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    ui.print("\n  Esecuzioni completate:\n")
+    for i, run in enumerate(completed_runs[:5], 1):
+        icon = "[green]PASS[/green]" if run.conclusion == "success" else "[red]FAIL[/red]"
+        ui.print(f"  [{i}] {icon} {run.name[:50]} ({run.created_at[:10]})")
+
+    choice = input("\n  Numero da scaricare (INVIO per annullare): ").strip()
+
+    if not choice.isdigit():
+        return
+
+    idx = int(choice) - 1
+    if 0 <= idx < len(completed_runs):
+        run = completed_runs[idx]
+        dest = f"downloads/run_{run.id}"
+
+        ui.print(f"\n  Download artifacts in {dest}...")
+        success, message = gh_client.download_artifacts(run.id, dest)
+
+        if success:
+            ui.success(message)
+        else:
+            ui.error(message)
+
+    input("\n  Premi INVIO per continuare...")
 
 
 def show_finetuning_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
@@ -1094,10 +1290,14 @@ async def main_interactive(args):
             show_finetuning_menu(ui, loader)
 
         elif choice == '4':
+            # Esegui nel cloud
+            show_cloud_menu(ui, loader)
+
+        elif choice == '5':
             # Impostazioni
             ui.info("Impostazioni non ancora implementate")
 
-        elif choice == '5':
+        elif choice == '6':
             # Aiuto
             ui.help_text(t('help_guide'))
 
