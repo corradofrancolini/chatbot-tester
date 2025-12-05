@@ -148,11 +148,38 @@ Esempi:
     )
 
     parser.add_argument(
+        '--compare',
+        type=str,
+        nargs='?',
+        const='latest',
+        metavar='RUN_A:RUN_B',
+        help='Confronta run (es: --compare 15:16 oppure --compare per ultimi 2)'
+    )
+
+    parser.add_argument(
+        '--regressions',
+        type=int,
+        nargs='?',
+        const=0,
+        metavar='RUN',
+        help='Mostra regressioni (es: --regressions 16 oppure --regressions per ultima)'
+    )
+
+    parser.add_argument(
+        '--flaky',
+        type=int,
+        nargs='?',
+        const=10,
+        metavar='N_RUNS',
+        help='Rileva test flaky sugli ultimi N run (default: 10)'
+    )
+
+    parser.add_argument(
         '-v', '--version',
         action='version',
-        version='Chatbot Tester v1.1.0'
+        version='Chatbot Tester v1.2.0'
     )
-    
+
     return parser.parse_args()
 
 
@@ -245,8 +272,9 @@ def show_main_menu(ui: ConsoleUI, loader: ConfigLoader) -> str:
         MenuItem('2', t('main_menu.open_project'), project_desc),
         MenuItem('3', t('main_menu.finetuning'), t('main_menu.finetuning_desc')),
         MenuItem('4', "Esegui nel cloud", cloud_desc, disabled=not cloud_available),
-        MenuItem('5', t('main_menu.settings'), t('main_menu.settings_desc')),
-        MenuItem('6', t('main_menu.help'), t('main_menu.help_desc')),
+        MenuItem('5', "Analisi Testing", "Confronta run, regressioni, test flaky"),
+        MenuItem('6', t('main_menu.settings'), t('main_menu.settings_desc')),
+        MenuItem('7', t('main_menu.help'), t('main_menu.help_desc')),
         MenuItem('quit', t('main_menu.exit'), '')
     ]
 
@@ -765,6 +793,255 @@ def _cloud_download_results(ui: ConsoleUI, gh_client: GitHubActionsClient) -> No
             ui.error(message)
 
     input("\n  Premi INVIO per continuare...")
+
+
+def show_analysis_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
+    """Menu per analisi testing (comparison, regression, flaky)"""
+    from src.comparison import (
+        RunComparator, RegressionDetector, CoverageAnalyzer,
+        FlakyTestDetector, format_comparison_report
+    )
+
+    # Seleziona progetto
+    project_name = show_project_menu(ui, loader)
+    if not project_name:
+        return
+
+    try:
+        project = loader.load_project(project_name)
+    except FileNotFoundError:
+        ui.error(f"Progetto '{project_name}' non trovato")
+        return
+
+    # Inizializza comparator
+    comparator = RunComparator(project)
+    regression_detector = RegressionDetector(project)
+    flaky_detector = FlakyTestDetector(project)
+
+    while True:
+        ui.section(f"Analisi Testing: {project_name}")
+
+        items = [
+            MenuItem('1', 'Confronta RUN', 'A/B comparison tra due run'),
+            MenuItem('2', 'Rileva Regressioni', 'Test che passavano e ora falliscono'),
+            MenuItem('3', 'Test Flaky', 'Test con risultati inconsistenti'),
+            MenuItem('4', 'Coverage', 'Analisi copertura test'),
+            MenuItem('5', 'Report Stabilita', 'Overview stabilita test suite'),
+        ]
+
+        choice = ui.menu(items, "Azione", allow_back=True)
+
+        if choice is None:
+            return
+
+        elif choice == '1':
+            _analysis_compare_runs(ui, comparator)
+
+        elif choice == '2':
+            _analysis_regressions(ui, regression_detector)
+
+        elif choice == '3':
+            _analysis_flaky(ui, flaky_detector)
+
+        elif choice == '4':
+            _analysis_coverage(ui, project)
+
+        elif choice == '5':
+            _analysis_stability(ui, flaky_detector)
+
+
+def _analysis_compare_runs(ui: ConsoleUI, comparator) -> None:
+    """Sottomenu confronto RUN"""
+    from src.comparison import format_comparison_report
+
+    ui.section("Confronta RUN")
+
+    # Chiedi quale confronto
+    ui.print("\n  Opzioni:")
+    ui.print("  [1] Ultimi 2 run")
+    ui.print("  [2] Specifica run")
+
+    choice = input("\n  > ").strip()
+
+    if choice == '1':
+        result = comparator.compare_latest()
+        if result:
+            ui.print(format_comparison_report(result))
+        else:
+            ui.warning("Servono almeno 2 run per confrontare")
+
+    elif choice == '2':
+        try:
+            run_a = int(input("  RUN A (baseline): ").strip())
+            run_b = int(input("  RUN B (nuova): ").strip())
+            result = comparator.compare(run_a, run_b)
+            ui.print(format_comparison_report(result))
+        except ValueError:
+            ui.warning("Inserisci numeri validi")
+        except Exception as e:
+            ui.error(f"Errore: {e}")
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
+
+
+def _analysis_regressions(ui: ConsoleUI, detector) -> None:
+    """Sottomenu regressioni"""
+    ui.section("Rileva Regressioni")
+
+    ui.print("\n  Quale run analizzare?")
+    ui.print("  [1] Ultima run (confronta con precedente)")
+    ui.print("  [2] Run specifica")
+
+    choice = input("\n  > ").strip()
+
+    try:
+        if choice == '1':
+            regressions = detector.check_for_regressions(0)  # 0 = ultima
+        else:
+            run_num = int(input("  Numero RUN: ").strip())
+            regressions = detector.check_for_regressions(run_num)
+
+        if not regressions:
+            ui.success("Nessuna regressione rilevata")
+        else:
+            # Filtra solo regressioni (PASS->FAIL)
+            real_regressions = [r for r in regressions if r.change_type == 'regression']
+            improvements = [r for r in regressions if r.change_type == 'improvement']
+
+            if real_regressions:
+                ui.print(f"\n  [red]REGRESSIONI ({len(real_regressions)}):[/red]")
+                for r in real_regressions:
+                    ui.print(f"    - {r.test_id}: PASS -> FAIL")
+
+            if improvements:
+                ui.print(f"\n  [green]MIGLIORAMENTI ({len(improvements)}):[/green]")
+                for r in improvements:
+                    ui.print(f"    + {r.test_id}: FAIL -> PASS")
+
+    except Exception as e:
+        ui.error(f"Errore: {e}")
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
+
+
+def _analysis_flaky(ui: ConsoleUI, detector) -> None:
+    """Sottomenu test flaky"""
+    ui.section("Test Flaky")
+
+    n_runs = input("  Analizza ultimi N run (default 10): ").strip()
+    n_runs = int(n_runs) if n_runs.isdigit() else 10
+
+    threshold = input("  Soglia flaky 0-1 (default 0.3): ").strip()
+    try:
+        threshold = float(threshold) if threshold else 0.3
+    except ValueError:
+        threshold = 0.3
+
+    ui.print(f"\n  Analisi test flaky su ultimi {n_runs} run (soglia: {threshold})...")
+
+    try:
+        flaky_tests = detector.detect_flaky_tests(n_runs, threshold)
+
+        if not flaky_tests:
+            ui.success("Nessun test flaky rilevato")
+        else:
+            ui.print(f"\n  [yellow]TEST FLAKY ({len(flaky_tests)}):[/yellow]")
+            for ft in flaky_tests[:20]:  # Mostra max 20
+                score_bar = "#" * int(ft.flaky_score * 10)
+                ui.print(f"    {ft.test_id}: score={ft.flaky_score:.2f} [{score_bar}]")
+                ui.print(f"      PASS: {ft.pass_count}, FAIL: {ft.fail_count}, SKIP: {ft.skip_count}")
+
+            if len(flaky_tests) > 20:
+                ui.print(f"    [dim]... +{len(flaky_tests)-20} altri[/dim]")
+
+    except Exception as e:
+        ui.error(f"Errore: {e}")
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
+
+
+def _analysis_coverage(ui: ConsoleUI, project) -> None:
+    """Sottomenu coverage"""
+    from src.comparison import CoverageAnalyzer
+
+    ui.section("Analisi Coverage")
+
+    try:
+        analyzer = CoverageAnalyzer(project)
+        # Carica test da file
+        from src.tester import ChatbotTester
+        test_file = project.project_dir / "tests.csv"
+        if not test_file.exists():
+            ui.warning("File tests.csv non trovato")
+            input()
+            return
+
+        import csv
+        tests = []
+        with open(test_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                tests.append(row)
+
+        report = analyzer.analyze(tests)
+
+        ui.print(f"\n  Totale test: [cyan]{report.total_tests}[/cyan]")
+        ui.print(f"  Categorie coperte: [cyan]{report.categories_covered}[/cyan]")
+
+        if report.category_distribution:
+            ui.print("\n  Distribuzione per categoria:")
+            for cat, count in sorted(report.category_distribution.items(), key=lambda x: -x[1]):
+                pct = count / report.total_tests * 100
+                bar = "#" * int(pct / 5)
+                ui.print(f"    {cat}: {count} ({pct:.0f}%) [{bar}]")
+
+        if report.gaps:
+            ui.print("\n  [yellow]Gap identificati:[/yellow]")
+            for gap in report.gaps:
+                ui.print(f"    - {gap}")
+
+    except Exception as e:
+        ui.error(f"Errore: {e}")
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
+
+
+def _analysis_stability(ui: ConsoleUI, detector) -> None:
+    """Sottomenu report stabilita"""
+    ui.section("Report Stabilita")
+
+    n_runs = input("  Analizza ultimi N run (default 10): ").strip()
+    n_runs = int(n_runs) if n_runs.isdigit() else 10
+
+    try:
+        report = detector.get_stability_report(n_runs)
+
+        ui.print(f"\n  [bold]Stabilita Test Suite[/bold] (ultimi {n_runs} run)\n")
+
+        ui.print(f"  Test totali analizzati: {report['total_tests']}")
+        ui.print(f"  Run analizzati: {report['runs_analyzed']}")
+
+        stable_pct = report['stable_tests'] / report['total_tests'] * 100 if report['total_tests'] > 0 else 0
+        ui.print(f"\n  Test stabili: [green]{report['stable_tests']}[/green] ({stable_pct:.0f}%)")
+        ui.print(f"  Test flaky: [yellow]{report['flaky_tests']}[/yellow]")
+        ui.print(f"  Test sempre falliti: [red]{report['always_failing']}[/red]")
+
+        ui.print(f"\n  Score medio stabilita: [cyan]{report['average_stability']:.2f}[/cyan] / 1.0")
+
+        # Visualizza barra stabilita
+        bar_filled = int(report['average_stability'] * 20)
+        bar = "[" + "#" * bar_filled + "-" * (20 - bar_filled) + "]"
+        ui.print(f"  {bar}")
+
+    except Exception as e:
+        ui.error(f"Errore: {e}")
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
 
 
 def show_finetuning_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
@@ -1307,10 +1584,14 @@ async def main_interactive(args):
             show_cloud_menu(ui, loader)
 
         elif choice == '5':
+            # Analisi Testing
+            show_analysis_menu(ui, loader)
+
+        elif choice == '6':
             # Impostazioni
             ui.info("Impostazioni non ancora implementate")
 
-        elif choice == '6':
+        elif choice == '7':
             # Aiuto
             ui.help_text(t('help_guide'))
 
@@ -1369,9 +1650,97 @@ async def main_direct(args):
             traceback.print_exc()
 
 
+def run_cli_analysis(args):
+    """Esegue analisi da CLI (--compare, --regressions, --flaky)"""
+    from src.comparison import (
+        RunComparator, RegressionDetector, FlakyTestDetector,
+        format_comparison_report
+    )
+
+    ui = get_ui()
+    loader = ConfigLoader()
+
+    if not args.project:
+        ui.error("Specifica un progetto con --project=NOME")
+        return
+
+    try:
+        project = loader.load_project(args.project)
+    except FileNotFoundError:
+        ui.error(f"Progetto '{args.project}' non trovato")
+        return
+
+    # --compare
+    if args.compare is not None:
+        comparator = RunComparator(project)
+
+        if args.compare == 'latest':
+            result = comparator.compare_latest()
+            if result:
+                print(format_comparison_report(result))
+            else:
+                ui.warning("Servono almeno 2 run per confrontare")
+        else:
+            try:
+                parts = args.compare.split(':')
+                if len(parts) == 2:
+                    run_a, run_b = int(parts[0]), int(parts[1])
+                    result = comparator.compare(run_a, run_b)
+                    print(format_comparison_report(result))
+                else:
+                    ui.error("Formato: --compare RUN_A:RUN_B (es: --compare 15:16)")
+            except ValueError:
+                ui.error("Formato: --compare RUN_A:RUN_B (es: --compare 15:16)")
+        return
+
+    # --regressions
+    if args.regressions is not None:
+        detector = RegressionDetector(project)
+        run_num = args.regressions if args.regressions > 0 else None
+
+        regressions = detector.check_for_regressions(run_num or 0)
+
+        if not regressions:
+            ui.success("Nessuna regressione rilevata")
+        else:
+            real_regressions = [r for r in regressions if r.change_type == 'regression']
+            improvements = [r for r in regressions if r.change_type == 'improvement']
+
+            if real_regressions:
+                ui.print(f"\n[red]REGRESSIONI ({len(real_regressions)}):[/red]")
+                for r in real_regressions:
+                    ui.print(f"  - {r.test_id}: PASS -> FAIL")
+
+            if improvements:
+                ui.print(f"\n[green]MIGLIORAMENTI ({len(improvements)}):[/green]")
+                for r in improvements:
+                    ui.print(f"  + {r.test_id}: FAIL -> PASS")
+        return
+
+    # --flaky
+    if args.flaky is not None:
+        detector = FlakyTestDetector(project)
+        n_runs = args.flaky
+
+        flaky_tests = detector.detect_flaky_tests(n_runs, 0.3)
+
+        if not flaky_tests:
+            ui.success(f"Nessun test flaky rilevato su ultimi {n_runs} run")
+        else:
+            ui.print(f"\n[yellow]TEST FLAKY ({len(flaky_tests)}) su ultimi {n_runs} run:[/yellow]")
+            for ft in flaky_tests:
+                ui.print(f"  {ft.test_id}: score={ft.flaky_score:.2f} (PASS:{ft.pass_count} FAIL:{ft.fail_count})")
+        return
+
+
 def main():
     """Entry point"""
     args = parse_args()
+
+    # Comandi analisi da CLI
+    if args.compare is not None or args.regressions is not None or args.flaky is not None:
+        run_cli_analysis(args)
+        return
 
     # Health check standalone
     if args.health_check:

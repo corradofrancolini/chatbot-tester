@@ -11,9 +11,10 @@ Moduli disponibili:
 - report_local: Generazione report HTML/CSV
 - ui: Interfaccia CLI con Rich
 - i18n: Sistema traduzioni IT/EN
+- health: Health checks, circuit breaker, auto-retry
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "Chatbot Tester Team"
 
 from .config_loader import (
@@ -48,6 +49,17 @@ from .ui import (
     get_ui
 )
 
+from .health import (
+    HealthChecker,
+    HealthCheckResult,
+    SystemHealth,
+    ServiceStatus,
+    CircuitBreaker,
+    CircuitBreakerOpen,
+    retry_with_backoff,
+    quick_health_check
+)
+
 __all__ = [
     # Config
     'ConfigLoader',
@@ -76,4 +88,14 @@ __all__ = [
     'ConsoleUI',
     'MenuItem',
     'get_ui',
+
+    # Health
+    'HealthChecker',
+    'HealthCheckResult',
+    'SystemHealth',
+    'ServiceStatus',
+    'CircuitBreaker',
+    'CircuitBreakerOpen',
+    'retry_with_backoff',
+    'quick_health_check',
 ]

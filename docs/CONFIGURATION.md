@@ -72,6 +72,14 @@ Tutte le opzioni disponibili via `python run.py [OPZIONI]`:
 - CI/CD dove il tempo e critico
 - Hardware con RAM sufficiente (ogni browser ~200MB)
 
+### Analisi Testing
+
+| Opzione | Descrizione | Esempio |
+|---------|-------------|---------|
+| `--compare` | Confronta run | `--compare 15:16` o `--compare` |
+| `--regressions` | Mostra regressioni | `--regressions 16` o `--regressions` |
+| `--flaky` | Test flaky | `--flaky 20` (default: 10 run) |
+
 ### Lingua e Versione
 
 | Opzione | Descrizione | Default |
@@ -97,6 +105,15 @@ python run.py --lang en
 
 # Esecuzione parallela con 4 worker
 python run.py -p my-chatbot -m auto --parallel --workers 4 --no-interactive
+
+# Confronta ultimi 2 run
+python run.py -p my-chatbot --compare
+
+# Regressioni nella run 16
+python run.py -p my-chatbot --regressions 16
+
+# Test flaky su 20 run
+python run.py -p my-chatbot --flaky 20
 ```
 
 ---

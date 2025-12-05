@@ -121,6 +121,7 @@ reports/{project}/run_{N}/
 | `src/finetuning.py` | Pipeline fine-tuning |
 | `src/parallel.py` | Esecuzione parallela, browser pool |
 | `src/cache.py` | Caching in-memory e disk |
+| `src/comparison.py` | A/B comparison, regressioni, flaky tests |
 | `src/github_actions.py` | Integrazione GitHub Actions |
 | `wizard/main.py` | Wizard nuovo progetto |
 
@@ -174,6 +175,77 @@ cache:
     max_entries: 1000
     default_ttl_seconds: 300
 ```
+
+---
+
+## Analisi Testing (v1.2.0)
+
+### CLI
+```bash
+# Confronta ultimi 2 run
+python run.py -p my-chatbot --compare
+
+# Confronta run specifici
+python run.py -p my-chatbot --compare 15:16
+
+# Mostra regressioni nell'ultima run
+python run.py -p my-chatbot --regressions
+
+# Regressioni in una run specifica
+python run.py -p my-chatbot --regressions 16
+
+# Test flaky su ultimi 10 run
+python run.py -p my-chatbot --flaky
+
+# Test flaky su ultimi 20 run
+python run.py -p my-chatbot --flaky 20
+```
+
+### Menu Interattivo
+Da `python run.py` > **[5] Analisi Testing**:
+- **Confronta RUN** - A/B comparison tra due run
+- **Rileva Regressioni** - Test PASS->FAIL
+- **Test Flaky** - Risultati inconsistenti
+- **Coverage** - Distribuzione test per categoria
+- **Report Stabilita** - Overview qualita test suite
+
+### Moduli (`src/comparison.py`)
+
+```python
+from src.comparison import (
+    RunComparator, RegressionDetector,
+    CoverageAnalyzer, FlakyTestDetector
+)
+
+# Confronto A/B
+comparator = RunComparator(project)
+result = comparator.compare(15, 16)  # RUN 15 vs 16
+result = comparator.compare_latest() # Ultimi 2
+
+# Regressioni
+detector = RegressionDetector(project)
+regressions = detector.check_for_regressions(16)
+# TestChange(test_id, old_status, new_status, change_type)
+
+# Test flaky
+flaky = FlakyTestDetector(project)
+flaky_tests = flaky.detect_flaky_tests(last_n_runs=10, threshold=0.3)
+# FlakyTestReport(test_id, flaky_score, pass_count, fail_count)
+
+# Coverage
+coverage = CoverageAnalyzer(project)
+report = coverage.analyze(tests)
+# CoverageReport(total_tests, categories_covered, gaps)
+```
+
+### Concetti chiave
+
+| Termine | Definizione |
+|---------|-------------|
+| **Regressione** | Test che passava e ora fallisce (PASS->FAIL) |
+| **Miglioramento** | Test che falliva e ora passa (FAIL->PASS) |
+| **Flaky Score** | 0 = stabile, 1 = risultati casuali |
+| **Coverage Gap** | Categorie con pochi test |
 
 ---
 
