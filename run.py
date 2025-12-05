@@ -193,6 +193,37 @@ Esempi:
         help='Rileva test flaky sugli ultimi N run (default: 10)'
     )
 
+    # Export
+    parser.add_argument(
+        '--export',
+        type=str,
+        choices=['pdf', 'excel', 'html', 'csv', 'all'],
+        metavar='FORMAT',
+        help='Esporta report (pdf, excel, html, csv, all)'
+    )
+
+    parser.add_argument(
+        '--export-run',
+        type=int,
+        metavar='RUN',
+        help='Run da esportare (default: ultimo)'
+    )
+
+    # Notifiche
+    parser.add_argument(
+        '--notify',
+        type=str,
+        choices=['desktop', 'email', 'teams', 'all'],
+        metavar='CHANNEL',
+        help='Invia notifica test (desktop, email, teams, all)'
+    )
+
+    parser.add_argument(
+        '--test-notify',
+        action='store_true',
+        help='Invia notifica di test per verificare configurazione'
+    )
+
     parser.add_argument(
         '-v', '--version',
         action='version',
@@ -1874,6 +1905,194 @@ def run_cli_analysis(args):
         return
 
 
+def run_export_commands(args):
+    """Gestisce comandi export da CLI"""
+    ui = get_ui()
+
+    if not args.project:
+        ui.error("Specifica un progetto con -p PROJECT")
+        sys.exit(1)
+
+    from src.export import RunReport, ReportExporter, check_dependencies
+
+    # Verifica dipendenze
+    deps = check_dependencies()
+    if args.export == 'pdf' and not deps['pdf']:
+        ui.error("PDF export richiede: pip install reportlab pillow")
+        sys.exit(1)
+    if args.export == 'excel' and not deps['excel']:
+        ui.error("Excel export richiede: pip install openpyxl")
+        sys.exit(1)
+
+    # Trova report locale
+    reports_dir = Path(f"reports/{args.project}")
+    if not reports_dir.exists():
+        ui.error(f"Nessun report trovato per {args.project}")
+        sys.exit(1)
+
+    # Determina quale run esportare
+    run_dirs = sorted(reports_dir.glob("run_*"), key=lambda p: int(p.name.split('_')[1]))
+    if not run_dirs:
+        ui.error("Nessun run trovato")
+        sys.exit(1)
+
+    if args.export_run:
+        # Prova entrambi i formati: run_19 e run_019
+        target_dir = reports_dir / f"run_{args.export_run}"
+        if not target_dir.exists():
+            target_dir = reports_dir / f"run_{args.export_run:03d}"
+        if not target_dir.exists():
+            ui.error(f"Run {args.export_run} non trovato")
+            sys.exit(1)
+    else:
+        target_dir = run_dirs[-1]
+
+    # Cerca report JSON (supporta sia report.json che summary.json + report.csv)
+    report_json = target_dir / "report.json"
+    summary_json = target_dir / "summary.json"
+    report_csv = target_dir / "report.csv"
+
+    ui.section(f"Export Report - {target_dir.name}")
+
+    if report_json.exists():
+        # Formato nuovo: report.json completo
+        report = RunReport.from_local_report(report_json)
+    elif summary_json.exists():
+        # Formato esistente: summary.json + report.csv
+        report = RunReport.from_summary_and_csv(summary_json, report_csv if report_csv.exists() else None)
+    else:
+        ui.error(f"Nessun report trovato in {target_dir}")
+        sys.exit(1)
+    exporter = ReportExporter(report)
+
+    # Export
+    output_dir = target_dir / "exports"
+    output_dir.mkdir(exist_ok=True)
+
+    base_name = f"{report.project}_run{report.run_number}"
+
+    if args.export == 'all':
+        results = exporter.export_all(output_dir)
+        for fmt, path in results.items():
+            ui.success(f"{fmt.upper()}: {path}")
+    elif args.export == 'pdf':
+        path = exporter.to_pdf(output_dir / f"{base_name}.pdf")
+        ui.success(f"PDF: {path}")
+    elif args.export == 'excel':
+        path = exporter.to_excel(output_dir / f"{base_name}.xlsx")
+        ui.success(f"Excel: {path}")
+    elif args.export == 'html':
+        path = exporter.to_html(output_dir / f"{base_name}.html")
+        ui.success(f"HTML: {path}")
+    elif args.export == 'csv':
+        path = exporter.to_csv(output_dir / f"{base_name}.csv")
+        ui.success(f"CSV: {path}")
+
+
+def run_notify_commands(args):
+    """Gestisce comandi notifica da CLI"""
+    ui = get_ui()
+
+    from src.notifications import NotificationConfig, NotificationManager, TestRunSummary
+
+    # Carica config notifiche da settings
+    loader = ConfigLoader()
+    try:
+        settings = loader.load_global_settings()
+        notify_config_data = getattr(settings, 'notifications', {}) or {}
+        config = NotificationConfig.from_dict(notify_config_data)
+    except Exception:
+        # Default config
+        config = NotificationConfig(desktop_enabled=True)
+
+    manager = NotificationManager(config)
+
+    # Test notifica
+    if args.test_notify:
+        ui.section("Test Notifiche")
+
+        # Test desktop
+        ui.print("Testing desktop notification...")
+        if manager.send_desktop("Chatbot Tester", "Test notification", "Configurazione OK"):
+            ui.success("Desktop: OK")
+        else:
+            ui.warning("Desktop: Non disponibile")
+
+        # Test email (solo se configurata)
+        if config.email_enabled:
+            ui.print("Testing email...")
+            if manager.send_email("[TEST] Chatbot Tester", "Test email configuration"):
+                ui.success("Email: OK")
+            else:
+                ui.warning("Email: Configurazione non valida")
+
+        # Test Teams (solo se configurato)
+        if config.teams_enabled:
+            ui.print("Testing Teams...")
+            if manager.send_teams("Chatbot Tester Test", "Test Teams webhook"):
+                ui.success("Teams: OK")
+            else:
+                ui.warning("Teams: Webhook non configurato")
+
+        return
+
+    # Notifica manuale con dati di test
+    if args.notify:
+        ui.section("Invio Notifica")
+
+        # Crea summary di esempio (o carica da ultimo run)
+        summary = TestRunSummary(
+            project=args.project or "test-project",
+            run_number=1,
+            total_tests=10,
+            passed=8,
+            failed=2,
+            pass_rate=80.0
+        )
+
+        # Se abbiamo un progetto, cerca ultimo run
+        if args.project:
+            reports_dir = Path(f"reports/{args.project}")
+            if reports_dir.exists():
+                run_dirs = sorted(reports_dir.glob("run_*"), key=lambda p: int(p.name.split('_')[1]))
+                if run_dirs:
+                    report_json = run_dirs[-1] / "report.json"
+                    if report_json.exists():
+                        import json
+                        with open(report_json) as f:
+                            data = json.load(f)
+                        summary = TestRunSummary(
+                            project=data.get('project', args.project),
+                            run_number=data.get('run_number', 0),
+                            total_tests=data.get('total_tests', 0),
+                            passed=data.get('passed', 0),
+                            failed=data.get('failed', 0),
+                            pass_rate=data.get('pass_rate', 0)
+                        )
+
+        # Invia notifica
+        if args.notify == 'desktop':
+            if manager.desktop.send_run_summary(summary):
+                ui.success("Notifica desktop inviata")
+        elif args.notify == 'email':
+            if manager.email.send_run_summary(summary):
+                ui.success("Email inviata")
+            else:
+                ui.error("Invio email fallito - controlla configurazione")
+        elif args.notify == 'teams':
+            if manager.teams.send_run_summary(summary):
+                ui.success("Notifica Teams inviata")
+            else:
+                ui.error("Invio Teams fallito - controlla webhook")
+        elif args.notify == 'all':
+            results = manager.notify_run_complete(summary)
+            for channel, success in results.items():
+                if success:
+                    ui.success(f"{channel}: OK")
+                else:
+                    ui.warning(f"{channel}: fallito")
+
+
 def main():
     """Entry point"""
     args = parse_args()
@@ -1881,6 +2100,16 @@ def main():
     # Comandi scheduler da CLI
     if args.scheduler or args.add_schedule or args.list_schedules:
         run_scheduler_commands(args)
+        return
+
+    # Comandi export da CLI
+    if args.export:
+        run_export_commands(args)
+        return
+
+    # Comandi notifica da CLI
+    if args.notify or args.test_notify:
+        run_notify_commands(args)
         return
 
     # Comandi analisi da CLI

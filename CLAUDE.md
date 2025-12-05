@@ -77,6 +77,14 @@ python run.py [OPZIONI]
 --debug             Output dettagliato
 --lang              it | en
 -v, --version       Mostra versione
+
+# Export
+--export            pdf | excel | html | csv | all
+--export-run        Numero run da esportare
+
+# Notifiche
+--notify            desktop | email | teams | all
+--test-notify       Testa configurazione notifiche
 ```
 
 ---
@@ -123,6 +131,8 @@ reports/{project}/run_{N}/
 | `src/cache.py` | Caching in-memory e disk |
 | `src/comparison.py` | A/B comparison, regressioni, flaky tests |
 | `src/scheduler.py` | Scheduled runs, esecuzione distribuita |
+| `src/notifications.py` | Notifiche Email, Desktop, Teams |
+| `src/export.py` | Export PDF, Excel, HTML, CSV |
 | `src/github_actions.py` | Integrazione GitHub Actions |
 | `wizard/main.py` | Wizard nuovo progetto |
 
@@ -324,6 +334,155 @@ coordinator.register_worker(WorkerConfig(
 # Distribuisci test
 distribution = coordinator.distribute_tests(tests, project="my-chatbot")
 # {"worker-1": [test1, test3], "worker-2": [test2, test4]}
+```
+
+---
+
+## Export Report (v1.2.0)
+
+### CLI
+
+```bash
+# Export PDF ultimo run
+python run.py -p my-chatbot --export pdf
+
+# Export Excel di una run specifica
+python run.py -p my-chatbot --export excel --export-run 15
+
+# Export tutti i formati
+python run.py -p my-chatbot --export all
+
+# Formati disponibili: pdf, excel, html, csv, all
+```
+
+### Dipendenze opzionali
+
+```bash
+# Per PDF
+pip install reportlab pillow
+
+# Per Excel
+pip install openpyxl
+```
+
+### Output
+
+I file esportati vengono salvati in:
+```
+reports/{project}/run_{N}/exports/
+├── project_runN.pdf
+├── project_runN.xlsx
+├── project_runN.html
+└── project_runN.csv
+```
+
+### API
+
+```python
+from src.export import RunReport, ReportExporter
+
+# Carica report
+report = RunReport.from_local_report(Path("reports/my-chatbot/run_15/report.json"))
+
+# Export
+exporter = ReportExporter(report)
+exporter.to_pdf(Path("output.pdf"))
+exporter.to_excel(Path("output.xlsx"))
+exporter.to_html(Path("output.html"))
+exporter.to_csv(Path("output.csv"))
+
+# Export multiplo
+results = exporter.export_all(Path("exports/"))
+```
+
+---
+
+## Notifiche (v1.2.0)
+
+### CLI
+
+```bash
+# Test configurazione notifiche
+python run.py --test-notify
+
+# Invia notifica desktop (ultimo run)
+python run.py -p my-chatbot --notify desktop
+
+# Invia email
+python run.py -p my-chatbot --notify email
+
+# Invia a Teams
+python run.py -p my-chatbot --notify teams
+
+# Invia su tutti i canali configurati
+python run.py -p my-chatbot --notify all
+```
+
+### Configurazione (settings.yaml)
+
+```yaml
+notifications:
+  email:
+    enabled: true
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    smtp_user: "your@email.com"
+    smtp_password_env: "SMTP_PASSWORD"  # export SMTP_PASSWORD=xxx
+    recipients:
+      - "team@example.com"
+
+  desktop:
+    enabled: true
+    sound: true
+
+  teams:
+    enabled: true
+    webhook_url_env: "TEAMS_WEBHOOK_URL"  # export TEAMS_WEBHOOK_URL=https://...
+
+  triggers:
+    on_complete: false    # Ogni run completato
+    on_failure: true      # Solo fallimenti
+    on_regression: true   # Regressioni rilevate
+```
+
+### Teams Webhook
+
+Per configurare Teams:
+1. Vai nel canale Teams > Connettori > Incoming Webhook
+2. Crea webhook e copia URL
+3. `export TEAMS_WEBHOOK_URL="https://..."`
+
+### API
+
+```python
+from src.notifications import NotificationManager, NotificationConfig, TestRunSummary
+
+# Config
+config = NotificationConfig(
+    desktop_enabled=True,
+    email_enabled=True,
+    teams_enabled=True
+)
+
+manager = NotificationManager(config)
+
+# Summary risultati
+summary = TestRunSummary(
+    project="my-chatbot",
+    run_number=15,
+    total_tests=50,
+    passed=45,
+    failed=5,
+    pass_rate=90.0
+)
+
+# Notifica su tutti i canali
+manager.notify_run_complete(summary)
+
+# Notifica singolo canale
+manager.send_desktop("Titolo", "Messaggio")
+manager.send_email("Subject", "Body")
+manager.send_teams("Titolo", "Messaggio")
 ```
 
 ---

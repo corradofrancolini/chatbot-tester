@@ -71,6 +71,37 @@ cache:
     report_ttl_seconds: 600 # Cache report (10 minuti)
 
 # -----------------------------------------------------------------------------
+# Notifiche
+# -----------------------------------------------------------------------------
+notifications:
+  # Email SMTP
+  email:
+    enabled: false
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    smtp_user: ""             # Il tuo indirizzo email
+    smtp_password_env: "SMTP_PASSWORD"  # Nome variabile ambiente con password
+    from: ""                  # Mittente (default: smtp_user)
+    recipients: []            # Lista destinatari
+
+  # Desktop (macOS)
+  desktop:
+    enabled: true
+    sound: true               # Suono notifica
+
+  # Microsoft Teams
+  teams:
+    enabled: false
+    webhook_url_env: "TEAMS_WEBHOOK_URL"  # Nome variabile ambiente
+
+  # Quando notificare
+  triggers:
+    on_complete: false        # Ogni run completato
+    on_failure: true          # Solo se ci sono fallimenti
+    on_regression: true       # Se rilevate regressioni
+    on_flaky: false           # Se rilevati test flaky
+
+# -----------------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------------
 logging:
