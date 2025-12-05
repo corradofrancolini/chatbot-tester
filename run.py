@@ -801,6 +801,7 @@ def show_analysis_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
         RunComparator, RegressionDetector, CoverageAnalyzer,
         FlakyTestDetector, format_comparison_report
     )
+    from src.sheets_client import GoogleSheetsClient
 
     # Seleziona progetto
     project_name = show_project_menu(ui, loader)
@@ -813,10 +814,27 @@ def show_analysis_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
         ui.error(f"Progetto '{project_name}' non trovato")
         return
 
-    # Inizializza comparator
-    comparator = RunComparator(project)
-    regression_detector = RegressionDetector(project)
-    flaky_detector = FlakyTestDetector(project)
+    # Inizializza sheets client
+    sheets_client = None
+    local_reports_path = Path(f"reports/{project_name}")
+
+    if project.google_sheets.enabled:
+        try:
+            sheets_client = GoogleSheetsClient(
+                spreadsheet_id=project.google_sheets.spreadsheet_id,
+                drive_folder_id=project.google_sheets.drive_folder_id
+            )
+            ui.info(f"Connesso a Google Sheets")
+        except Exception as e:
+            ui.warning(f"Google Sheets non disponibile: {e}")
+
+    # Inizializza comparator con parametri corretti
+    comparator = RunComparator(
+        sheets_client=sheets_client,
+        local_reports_path=local_reports_path
+    )
+    regression_detector = RegressionDetector(comparator)
+    flaky_detector = FlakyTestDetector(comparator)
 
     while True:
         ui.section(f"Analisi Testing: {project_name}")
@@ -844,7 +862,7 @@ def show_analysis_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
             _analysis_flaky(ui, flaky_detector)
 
         elif choice == '4':
-            _analysis_coverage(ui, project)
+            _analysis_coverage(ui, project, comparator)
 
         elif choice == '5':
             _analysis_stability(ui, flaky_detector)
@@ -963,16 +981,15 @@ def _analysis_flaky(ui: ConsoleUI, detector) -> None:
     input()
 
 
-def _analysis_coverage(ui: ConsoleUI, project) -> None:
+def _analysis_coverage(ui: ConsoleUI, project, comparator) -> None:
     """Sottomenu coverage"""
     from src.comparison import CoverageAnalyzer
 
     ui.section("Analisi Coverage")
 
     try:
-        analyzer = CoverageAnalyzer(project)
+        analyzer = CoverageAnalyzer(comparator)
         # Carica test da file
-        from src.tester import ChatbotTester
         test_file = project.project_dir / "tests.csv"
         if not test_file.exists():
             ui.warning("File tests.csv non trovato")
@@ -1656,6 +1673,7 @@ def run_cli_analysis(args):
         RunComparator, RegressionDetector, FlakyTestDetector,
         format_comparison_report
     )
+    from src.sheets_client import GoogleSheetsClient
 
     ui = get_ui()
     loader = ConfigLoader()
@@ -1670,9 +1688,27 @@ def run_cli_analysis(args):
         ui.error(f"Progetto '{args.project}' non trovato")
         return
 
+    # Inizializza sheets client
+    sheets_client = None
+    local_reports_path = Path(f"reports/{args.project}")
+
+    if project.google_sheets.enabled:
+        try:
+            sheets_client = GoogleSheetsClient(
+                spreadsheet_id=project.google_sheets.spreadsheet_id,
+                drive_folder_id=project.google_sheets.drive_folder_id
+            )
+        except Exception:
+            pass  # Usa report locali
+
+    # Crea comparator
+    comparator = RunComparator(
+        sheets_client=sheets_client,
+        local_reports_path=local_reports_path
+    )
+
     # --compare
     if args.compare is not None:
-        comparator = RunComparator(project)
 
         if args.compare == 'latest':
             result = comparator.compare_latest()
@@ -1695,7 +1731,7 @@ def run_cli_analysis(args):
 
     # --regressions
     if args.regressions is not None:
-        detector = RegressionDetector(project)
+        detector = RegressionDetector(comparator)
         run_num = args.regressions if args.regressions > 0 else None
 
         regressions = detector.check_for_regressions(run_num or 0)
@@ -1719,7 +1755,7 @@ def run_cli_analysis(args):
 
     # --flaky
     if args.flaky is not None:
-        detector = FlakyTestDetector(project)
+        detector = FlakyTestDetector(comparator)
         n_runs = args.flaky
 
         flaky_tests = detector.detect_flaky_tests(n_runs, 0.3)
