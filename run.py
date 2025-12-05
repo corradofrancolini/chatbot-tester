@@ -135,6 +135,19 @@ Esempi:
     )
 
     parser.add_argument(
+        '--parallel',
+        action='store_true',
+        help='Esegui test in parallelo (piu browser)'
+    )
+
+    parser.add_argument(
+        '--workers',
+        type=int,
+        default=3,
+        help='Numero di browser paralleli (default: 3, max: 5)'
+    )
+
+    parser.add_argument(
         '-v', '--version',
         action='version',
         version='Chatbot Tester v1.1.0'

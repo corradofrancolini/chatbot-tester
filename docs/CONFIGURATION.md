@@ -54,6 +54,13 @@ Tutte le opzioni disponibili via `python run.py [OPZIONI]`:
 | `--skip-health-check` | Salta verifica iniziale | Velocizza avvio |
 | `--debug` | Output debug dettagliato | Per troubleshooting |
 
+### Esecuzione Parallela
+
+| Opzione | Descrizione | Default |
+|---------|-------------|---------|
+| `--parallel` | Esegui test in parallelo | `false` |
+| `--workers` | Numero browser paralleli | `3` (max: 5) |
+
 ### Lingua e Versione
 
 | Opzione | Descrizione | Default |
@@ -76,6 +83,9 @@ python run.py --health-check -p my-chatbot
 
 # Interfaccia in inglese
 python run.py --lang en
+
+# Esecuzione parallela con 4 worker
+python run.py -p my-chatbot -m auto --parallel --workers 4 --no-interactive
 ```
 
 ---
@@ -136,6 +146,29 @@ ui:
   clear_screen: true          # Pulisce schermo tra step
 
 # -----------------------------------------------------------------------------
+# Esecuzione Parallela
+# -----------------------------------------------------------------------------
+parallel:
+  enabled: false            # true = abilita esecuzione parallela
+  max_workers: 3            # Numero browser in parallelo (1-5)
+  retry_strategy: "exponential"  # none | linear | exponential
+  max_retries: 2            # Tentativi per test fallito
+  base_delay_ms: 1000       # Delay base tra retry
+  rate_limit_per_minute: 60 # Limite richieste al chatbot
+
+# -----------------------------------------------------------------------------
+# Cache
+# -----------------------------------------------------------------------------
+cache:
+  enabled: true             # Abilita caching risposte
+  memory:
+    max_entries: 1000       # Max entry in memoria
+    default_ttl_seconds: 300  # TTL default (5 minuti)
+  langsmith:
+    trace_ttl_seconds: 300  # Cache trace (5 minuti)
+    report_ttl_seconds: 600 # Cache report (10 minuti)
+
+# -----------------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------------
 logging:
@@ -157,6 +190,11 @@ logging:
 | `test.default_wait_after_send` | Pausa dopo invio | Aumentare se chatbot e lento |
 | `reports.keep_last_n` | Pulizia automatica | `0` = mantieni tutto |
 | `ui.colors` | Output colorato | `false` per pipe/log |
+| `parallel.enabled` | Esecuzione parallela | `true` per test veloci |
+| `parallel.max_workers` | Browser simultanei | 1-5, piu worker = piu RAM |
+| `parallel.retry_strategy` | Strategia retry | `exponential` per API lente |
+| `cache.enabled` | Caching risposte | Riduce chiamate LangSmith |
+| `cache.memory.max_entries` | Limite cache | Bilanciare RAM vs hit rate |
 | `logging.level` | Verbosita log | `DEBUG` per troubleshooting |
 
 ---

@@ -1,6 +1,6 @@
 # Chatbot Tester - Backlog
 
-Versione attuale: **v1.1.0** (2025-12-04)
+Versione attuale: **v1.2.0** (2025-12-05)
 
 ---
 
@@ -8,17 +8,40 @@ Versione attuale: **v1.1.0** (2025-12-04)
 
 ### Prossimi step
 
-(aggiungere qui man mano)
+- [ ] Testing: A/B comparison tra versioni chatbot
+- [ ] UX: Dashboard web per visualizzazione risultati
+- [ ] Automation: Scheduled runs con cron
 
 ---
 
 ## Idee future
 
-(aggiungere qui man mano)
+- [ ] Notifiche Slack/Teams per risultati
+- [ ] Export report in PDF
+- [ ] Comparazione storica performance
 
 ---
 
 ## Completati
+
+### v1.2.0 (2025-12-05)
+- [x] **Esecuzione Parallela** (`src/parallel.py`)
+  - BrowserPool con worker riutilizzabili
+  - ParallelTestRunner per esecuzione concorrente
+  - CLI flags: `--parallel`, `--workers N`
+- [x] **Smart Retry** con backoff esponenziale
+  - Strategia configurabile: none, linear, exponential
+  - Max retries e delay configurabili
+- [x] **Cache Module** (`src/cache.py`)
+  - MemoryCache con TTL e LRU eviction
+  - DiskCache per persistenza
+  - LangSmithCache specializzato
+- [x] **Performance Metrics** (MetricsCollector)
+  - Timing dettagliato per ogni fase
+  - Export CSV per analisi
+- [x] **Rate Limiting** per evitare sovraccarico
+- [x] **Cloud Execution** via GitHub Actions menu
+- [x] **Documentazione** aggiornata (CONFIGURATION.md)
 
 ### v1.1.0 (2025-12-04)
 - [x] **LangSmith Report avanzato**
