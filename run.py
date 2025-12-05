@@ -148,6 +148,25 @@ Esempi:
     )
 
     parser.add_argument(
+        '--scheduler',
+        action='store_true',
+        help='Avvia scheduler locale (cron-like)'
+    )
+
+    parser.add_argument(
+        '--add-schedule',
+        type=str,
+        metavar='PROJECT:TYPE',
+        help='Aggiungi schedule (es: --add-schedule my-chatbot:daily)'
+    )
+
+    parser.add_argument(
+        '--list-schedules',
+        action='store_true',
+        help='Lista tutti gli schedule configurati'
+    )
+
+    parser.add_argument(
         '--compare',
         type=str,
         nargs='?',
@@ -1669,6 +1688,88 @@ async def main_direct(args):
             traceback.print_exc()
 
 
+def run_scheduler_commands(args):
+    """Gestisce comandi scheduler da CLI"""
+    from src.scheduler import LocalScheduler, ScheduleConfig, ScheduleType
+
+    ui = get_ui()
+    scheduler = LocalScheduler()
+
+    # --list-schedules
+    if args.list_schedules:
+        schedules = scheduler.list_schedules()
+
+        if not schedules:
+            ui.print("\nNessuno schedule configurato")
+            ui.print("Usa --add-schedule PROJECT:TYPE per aggiungere")
+            return
+
+        ui.print("\n[bold]Schedule Configurati[/bold]\n")
+        for s in schedules:
+            status = "[green]ON[/green]" if s.enabled else "[dim]OFF[/dim]"
+            next_run = s.next_run[:16] if s.next_run else "N/A"
+            ui.print(f"  {status} {s.name}")
+            ui.print(f"      Progetto: {s.project} | Tipo: {s.schedule_type.value}")
+            ui.print(f"      Prossimo: {next_run}")
+            ui.print("")
+        return
+
+    # --add-schedule
+    if args.add_schedule:
+        try:
+            parts = args.add_schedule.split(':')
+            if len(parts) != 2:
+                ui.error("Formato: --add-schedule PROJECT:TYPE (es: my-chatbot:daily)")
+                return
+
+            project, schedule_type = parts
+
+            type_map = {
+                'daily': ScheduleType.DAILY,
+                'weekly': ScheduleType.WEEKLY,
+                'hourly': ScheduleType.HOURLY
+            }
+
+            if schedule_type not in type_map:
+                ui.error(f"Tipo non valido. Usa: {', '.join(type_map.keys())}")
+                return
+
+            config = ScheduleConfig(
+                name=f"{project}-{schedule_type}",
+                project=project,
+                schedule_type=type_map[schedule_type],
+                mode="auto",
+                tests="pending"
+            )
+
+            scheduler.add_schedule(config)
+            ui.success(f"Schedule '{config.name}' aggiunto")
+            ui.print(f"  Prossimo run: {config.next_run[:16] if config.next_run else 'N/A'}")
+
+        except Exception as e:
+            ui.error(f"Errore: {e}")
+        return
+
+    # --scheduler (avvia)
+    if args.scheduler:
+        schedules = scheduler.list_schedules()
+
+        if not schedules:
+            ui.warning("Nessuno schedule configurato")
+            ui.print("Usa --add-schedule PROJECT:TYPE per aggiungere")
+            return
+
+        ui.print(f"\n[bold]Avvio Scheduler[/bold]")
+        ui.print(f"  Schedule attivi: {len([s for s in schedules if s.enabled])}")
+        ui.print("  Premi Ctrl+C per fermare\n")
+
+        try:
+            scheduler.start()
+        except KeyboardInterrupt:
+            ui.print("\nScheduler fermato")
+        return
+
+
 def run_cli_analysis(args):
     """Esegue analisi da CLI (--compare, --regressions, --flaky)"""
     from src.comparison import (
@@ -1776,6 +1877,11 @@ def run_cli_analysis(args):
 def main():
     """Entry point"""
     args = parse_args()
+
+    # Comandi scheduler da CLI
+    if args.scheduler or args.add_schedule or args.list_schedules:
+        run_scheduler_commands(args)
+        return
 
     # Comandi analisi da CLI
     if args.compare is not None or args.regressions is not None or args.flaky is not None:

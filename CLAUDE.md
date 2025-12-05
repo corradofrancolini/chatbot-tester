@@ -122,6 +122,7 @@ reports/{project}/run_{N}/
 | `src/parallel.py` | Esecuzione parallela, browser pool |
 | `src/cache.py` | Caching in-memory e disk |
 | `src/comparison.py` | A/B comparison, regressioni, flaky tests |
+| `src/scheduler.py` | Scheduled runs, esecuzione distribuita |
 | `src/github_actions.py` | Integrazione GitHub Actions |
 | `wizard/main.py` | Wizard nuovo progetto |
 
@@ -246,6 +247,84 @@ report = coverage.analyze(tests)
 | **Miglioramento** | Test che falliva e ora passa (FAIL->PASS) |
 | **Flaky Score** | 0 = stabile, 1 = risultati casuali |
 | **Coverage Gap** | Categorie con pochi test |
+
+---
+
+## Automazione (v1.2.0)
+
+### Scheduled Runs (Locale)
+
+```bash
+# Aggiungi schedule giornaliero
+python run.py --add-schedule my-chatbot:daily
+
+# Aggiungi schedule settimanale
+python run.py --add-schedule my-chatbot:weekly
+
+# Lista schedule configurati
+python run.py --list-schedules
+
+# Avvia scheduler locale (cron-like, Ctrl+C per fermare)
+python run.py --scheduler
+```
+
+### Scheduled Runs (GitHub Actions)
+
+Il workflow `.github/workflows/scheduled-tests.yml` esegue automaticamente:
+- **Daily** (6:00 UTC): Test pending su tutti i progetti
+- **Weekly** (Lun 2:00 UTC): Full run con nuovo RUN
+
+```yaml
+# Per abilitare, i secrets richiesti sono:
+# - LANGSMITH_API_KEY
+# - GOOGLE_CREDENTIALS_JSON
+# - SLACK_WEBHOOK_URL (opzionale, per notifiche)
+```
+
+### API Scheduler
+
+```python
+from src.scheduler import LocalScheduler, ScheduleConfig, ScheduleType
+
+scheduler = LocalScheduler()
+
+# Aggiungi schedule personalizzato
+scheduler.add_schedule(ScheduleConfig(
+    name="my-schedule",
+    project="my-chatbot",
+    schedule_type=ScheduleType.DAILY,  # DAILY, WEEKLY, HOURLY, INTERVAL
+    mode="auto",
+    tests="pending",
+    cron_hour=6,
+    cron_minute=0
+))
+
+# Avvia (blocca il processo)
+scheduler.start()
+
+# Oppure in background
+scheduler.start_background()
+```
+
+### Esecuzione Distribuita
+
+```python
+from src.scheduler import DistributedCoordinator, WorkerConfig
+
+coordinator = DistributedCoordinator()
+
+# Registra worker
+coordinator.register_worker(WorkerConfig(
+    worker_id="worker-1",
+    host="192.168.1.10",
+    port=5000,
+    projects=["my-chatbot"]
+))
+
+# Distribuisci test
+distribution = coordinator.distribute_tests(tests, project="my-chatbot")
+# {"worker-1": [test1, test3], "worker-2": [test2, test4]}
+```
 
 ---
 
