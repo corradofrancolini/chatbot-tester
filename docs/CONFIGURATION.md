@@ -61,6 +61,17 @@ Tutte le opzioni disponibili via `python run.py [OPZIONI]`:
 | `--parallel` | Esegui test in parallelo | `false` |
 | `--workers` | Numero browser paralleli | `3` (max: 5) |
 
+**Come funziona:**
+- Ogni worker ha un browser Chromium isolato
+- I risultati vengono accumulati in memoria
+- Alla fine vengono scritti in batch su Google Sheets
+- Thread-safe: nessun rischio di sovrascrittura
+
+**Quando usarlo:**
+- Suite di test grandi (50+ test)
+- CI/CD dove il tempo e critico
+- Hardware con RAM sufficiente (ogni browser ~200MB)
+
 ### Lingua e Versione
 
 | Opzione | Descrizione | Default |
