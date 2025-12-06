@@ -668,8 +668,18 @@ class InteractiveDiagnostic:
             response = self.ui.menu([
                 MenuItem("s", "Si", "Conferma questa ipotesi"),
                 MenuItem("n", "No", "Respingi questa ipotesi"),
-                MenuItem("?", "Non so", "Salta, non sono sicuro")
-            ], prompt=f"Plausibile? >")
+                MenuItem("?", "Non so", "Salta, non sono sicuro"),
+                MenuItem("q", "Esci", "Termina diagnosi e mostra risultati parziali")
+            ], prompt=f"Plausibile? >", allow_back=True)
+
+            # Gestisci back/quit
+            if response is None:  # Back
+                self.ui.info("Tornando al menu precedente...")
+                return hypotheses, questions_asked
+
+            if response == "q":  # Quit
+                self.ui.info("Diagnosi interrotta. Mostro risultati parziali...")
+                return hypotheses, questions_asked
 
             questions_asked.append({
                 'question': h.cause,

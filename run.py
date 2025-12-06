@@ -17,8 +17,10 @@ Usage:
 import asyncio
 import argparse
 import sys
+import yaml
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 
 # Aggiungi src al path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -763,12 +765,20 @@ def show_run_menu(ui: ConsoleUI, project: ProjectConfig, run_config: RunConfig) 
     else:
         ui.print(f"\n  [yellow]{t('run_menu.no_active_run')}[/yellow]\n")
 
-    items = [
-        MenuItem('1', t('run_menu.continue_run') if run_config.active_run else t('run_menu.start_run'), ''),
-        MenuItem('2', t('run_menu.new_run'), t('run_menu.new_run_desc')),
-        MenuItem('3', t('run_menu.configure'), t('run_menu.configure_desc')),
-        MenuItem('4', t('run_menu.toggle'), t('run_menu.toggle_desc')),
-    ]
+    if run_config.active_run:
+        items = [
+            MenuItem('1', t('run_menu.continue_run'), t('run_menu.continue_run_desc')),
+            MenuItem('2', t('run_menu.new_run'), t('run_menu.new_run_desc')),
+            MenuItem('3', t('run_menu.configure'), t('run_menu.configure_desc')),
+            MenuItem('4', t('run_menu.toggle'), t('run_menu.toggle_desc')),
+        ]
+    else:
+        items = [
+            MenuItem('1', t('run_menu.start_run'), t('run_menu.start_run_desc')),
+            MenuItem('2', t('run_menu.new_run'), t('run_menu.new_run_desc')),
+            MenuItem('3', t('run_menu.configure'), t('run_menu.configure_desc')),
+            MenuItem('4', t('run_menu.toggle'), t('run_menu.toggle_desc')),
+        ]
 
     return ui.menu(items, t('common.next'), allow_back=True)
 
@@ -854,7 +864,7 @@ def toggle_options_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
 
         choice = ui.menu(items, t('common.next'), allow_back=True)
 
-        if choice == 'b' or choice == '':
+        if choice is None:
             return True
         elif choice == '1':
             run_config.dry_run = not run_config.dry_run
@@ -1076,25 +1086,39 @@ def show_settings_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
     settings_path = Path("config/settings.yaml")
 
     while True:
-        settings = loader.load_global_settings()
+        # Legge direttamente dal YAML per avere accesso a tutte le sezioni
+        with open(settings_path, 'r', encoding='utf-8') as f:
+            yaml_data = yaml.safe_load(f) or {}
+
+        app = yaml_data.get('app', {})
+        browser = yaml_data.get('browser', {})
+        notifications = yaml_data.get('notifications', {})
+        logging_cfg = yaml_data.get('logging', {})
+
+        language = app.get('language', 'it')
+        headless = browser.get('headless', False)
+        desktop_enabled = notifications.get('desktop', {}).get('enabled', False)
+        email_enabled = notifications.get('email', {}).get('enabled', False)
+        teams_enabled = notifications.get('teams', {}).get('enabled', False)
+        log_level = logging_cfg.get('level', 'INFO')
 
         ui.section("Impostazioni")
 
         # Mostra stato corrente
         ui.print("")
-        ui.print(f"  Lingua:      {settings.app.language.upper()}")
-        ui.print(f"  Headless:    {'ON' if settings.browser.headless else 'OFF'}")
-        ui.print(f"  Notifiche:   Desktop={'ON' if settings.notifications.desktop.enabled else 'OFF'}, "
-                f"Email={'ON' if settings.notifications.email.enabled else 'OFF'}, "
-                f"Teams={'ON' if settings.notifications.teams.enabled else 'OFF'}")
-        ui.print(f"  Log Level:   {settings.logging.level}")
+        ui.print(f"  Lingua:      {language.upper()}")
+        ui.print(f"  Headless:    {'ON' if headless else 'OFF'}")
+        ui.print(f"  Notifiche:   Desktop={'ON' if desktop_enabled else 'OFF'}, "
+                f"Email={'ON' if email_enabled else 'OFF'}, "
+                f"Teams={'ON' if teams_enabled else 'OFF'}")
+        ui.print(f"  Log Level:   {log_level}")
         ui.print("")
 
         items = [
-            MenuItem('1', 'Lingua', f"Attuale: {settings.app.language.upper()}"),
+            MenuItem('1', 'Lingua', f"Attuale: {language.upper()}"),
             MenuItem('2', 'Notifiche', 'Configura Desktop, Email, Teams'),
             MenuItem('3', 'Browser', 'Headless, viewport, screenshot'),
-            MenuItem('4', 'Logging', f"Livello: {settings.logging.level}"),
+            MenuItem('4', 'Logging', f"Livello: {log_level}"),
             MenuItem('5', 'Test Notifiche', 'Invia notifica di test'),
         ]
 
@@ -1117,6 +1141,12 @@ def show_settings_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
 
         elif choice == '5':
             _settings_test_notify(ui, loader)
+
+
+def _load_settings_yaml(settings_path: Path) -> dict:
+    """Helper per caricare settings.yaml come dizionario"""
+    with open(settings_path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f) or {}
 
 
 def _settings_language(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) -> None:
@@ -1143,13 +1173,14 @@ def _settings_language(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path)
 def _settings_notifications(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) -> None:
     """Menu configurazione notifiche"""
     while True:
-        settings = loader.load_global_settings()
+        data = _load_settings_yaml(settings_path)
+        notifications = data.get('notifications', {})
 
         ui.section("Notifiche")
 
-        desktop_status = "ON" if settings.notifications.desktop.enabled else "OFF"
-        email_status = "ON" if settings.notifications.email.enabled else "OFF"
-        teams_status = "ON" if settings.notifications.teams.enabled else "OFF"
+        desktop_status = "ON" if notifications.get('desktop', {}).get('enabled', False) else "OFF"
+        email_status = "ON" if notifications.get('email', {}).get('enabled', False) else "OFF"
+        teams_status = "ON" if notifications.get('teams', {}).get('enabled', False) else "OFF"
 
         items = [
             MenuItem('1', f'Desktop: {desktop_status}', 'Notifiche macOS native'),
@@ -1165,7 +1196,8 @@ def _settings_notifications(ui: ConsoleUI, loader: ConfigLoader, settings_path: 
 
         elif choice == '1':
             # Toggle Desktop
-            new_val = not settings.notifications.desktop.enabled
+            current = notifications.get('desktop', {}).get('enabled', False)
+            new_val = not current
             _update_settings_yaml(settings_path, ['notifications', 'desktop', 'enabled'], new_val)
             ui.success(f"Desktop notifications {'abilitate' if new_val else 'disabilitate'}")
 
@@ -1175,7 +1207,8 @@ def _settings_notifications(ui: ConsoleUI, loader: ConfigLoader, settings_path: 
 
         elif choice == '3':
             # Toggle Teams
-            new_val = not settings.notifications.teams.enabled
+            current = notifications.get('teams', {}).get('enabled', False)
+            new_val = not current
             _update_settings_yaml(settings_path, ['notifications', 'teams', 'enabled'], new_val)
             ui.success(f"Teams notifications {'abilitate' if new_val else 'disabilitate'}")
             if new_val:
@@ -1188,18 +1221,23 @@ def _settings_notifications(ui: ConsoleUI, loader: ConfigLoader, settings_path: 
 
 def _settings_email(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) -> None:
     """Configurazione email"""
-    settings = loader.load_global_settings()
+    data = _load_settings_yaml(settings_path)
+    email = data.get('notifications', {}).get('email', {})
 
     ui.section("Configurazione Email")
 
-    # Toggle enabled
-    enabled = settings.notifications.email.enabled
+    enabled = email.get('enabled', False)
+    smtp_host = email.get('smtp_host', 'smtp.gmail.com')
+    smtp_port = email.get('smtp_port', 587)
+    smtp_user = email.get('smtp_user', '')
+    recipients = email.get('recipients', [])
+
     items = [
         MenuItem('1', f"Abilita: {'ON' if enabled else 'OFF'}", 'Toggle abilitazione'),
-        MenuItem('2', 'SMTP Host', f"Attuale: {settings.notifications.email.smtp_host}"),
-        MenuItem('3', 'SMTP Port', f"Attuale: {settings.notifications.email.smtp_port}"),
-        MenuItem('4', 'Username', f"Attuale: {settings.notifications.email.smtp_user or '-'}"),
-        MenuItem('5', 'Destinatari', f"Attuale: {', '.join(settings.notifications.email.recipients) or '-'}"),
+        MenuItem('2', 'SMTP Host', f"Attuale: {smtp_host}"),
+        MenuItem('3', 'SMTP Port', f"Attuale: {smtp_port}"),
+        MenuItem('4', 'Username', f"Attuale: {smtp_user or '-'}"),
+        MenuItem('5', 'Destinatari', f"Attuale: {', '.join(recipients) or '-'}"),
     ]
 
     choice = ui.menu(items, ">", allow_back=True)
@@ -1213,41 +1251,45 @@ def _settings_email(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) ->
         ui.success(f"Email notifications {'abilitate' if new_val else 'disabilitate'}")
 
     elif choice == '2':
-        host = ui.input("SMTP Host", settings.notifications.email.smtp_host)
+        host = ui.input("SMTP Host", smtp_host)
         _update_settings_yaml(settings_path, ['notifications', 'email', 'smtp_host'], host)
         ui.success(f"SMTP Host impostato: {host}")
 
     elif choice == '3':
-        port = ui.input("SMTP Port", str(settings.notifications.email.smtp_port))
+        port = ui.input("SMTP Port", str(smtp_port))
         _update_settings_yaml(settings_path, ['notifications', 'email', 'smtp_port'], int(port))
         ui.success(f"SMTP Port impostato: {port}")
 
     elif choice == '4':
-        user = ui.input("SMTP Username (email)", settings.notifications.email.smtp_user)
+        user = ui.input("SMTP Username (email)", smtp_user)
         _update_settings_yaml(settings_path, ['notifications', 'email', 'smtp_user'], user)
         ui.success(f"SMTP User impostato: {user}")
 
     elif choice == '5':
-        recipients = ui.input("Destinatari (separati da virgola)", ', '.join(settings.notifications.email.recipients))
-        recipients_list = [r.strip() for r in recipients.split(',') if r.strip()]
+        recipients_input = ui.input("Destinatari (separati da virgola)", ', '.join(recipients))
+        recipients_list = [r.strip() for r in recipients_input.split(',') if r.strip()]
         _update_settings_yaml(settings_path, ['notifications', 'email', 'recipients'], recipients_list)
         ui.success(f"Destinatari impostati: {recipients_list}")
 
 
 def _settings_triggers(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) -> None:
     """Configurazione trigger notifiche"""
-    settings = loader.load_global_settings()
+    data = _load_settings_yaml(settings_path)
+    triggers = data.get('notifications', {}).get('triggers', {})
 
     ui.section("Trigger Notifiche")
     ui.print("\n  Quando inviare notifiche:\n")
 
-    triggers = settings.notifications.triggers
+    on_complete = triggers.get('on_complete', False)
+    on_failure = triggers.get('on_failure', True)
+    on_regression = triggers.get('on_regression', True)
+    on_flaky = triggers.get('on_flaky', False)
 
     items = [
-        MenuItem('1', f"On Complete: {'ON' if triggers.on_complete else 'OFF'}", 'Ogni run completato'),
-        MenuItem('2', f"On Failure: {'ON' if triggers.on_failure else 'OFF'}", 'Solo se fallimenti'),
-        MenuItem('3', f"On Regression: {'ON' if triggers.on_regression else 'OFF'}", 'Se rilevate regressioni'),
-        MenuItem('4', f"On Flaky: {'ON' if triggers.on_flaky else 'OFF'}", 'Se test flaky rilevati'),
+        MenuItem('1', f"On Complete: {'ON' if on_complete else 'OFF'}", 'Ogni run completato'),
+        MenuItem('2', f"On Failure: {'ON' if on_failure else 'OFF'}", 'Solo se fallimenti'),
+        MenuItem('3', f"On Regression: {'ON' if on_regression else 'OFF'}", 'Se rilevate regressioni'),
+        MenuItem('4', f"On Flaky: {'ON' if on_flaky else 'OFF'}", 'Se test flaky rilevati'),
     ]
 
     choice = ui.menu(items, ">", allow_back=True)
@@ -1256,10 +1298,10 @@ def _settings_triggers(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path)
         return
 
     trigger_map = {
-        '1': ('on_complete', triggers.on_complete),
-        '2': ('on_failure', triggers.on_failure),
-        '3': ('on_regression', triggers.on_regression),
-        '4': ('on_flaky', triggers.on_flaky),
+        '1': ('on_complete', on_complete),
+        '2': ('on_failure', on_failure),
+        '3': ('on_regression', on_regression),
+        '4': ('on_flaky', on_flaky),
     }
 
     if choice in trigger_map:
@@ -1271,14 +1313,21 @@ def _settings_triggers(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path)
 
 def _settings_browser(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) -> None:
     """Configurazione browser"""
-    settings = loader.load_global_settings()
+    data = _load_settings_yaml(settings_path)
+    browser = data.get('browser', {})
+    viewport = browser.get('viewport', {})
+
+    headless = browser.get('headless', False)
+    vp_width = viewport.get('width', 1280)
+    vp_height = viewport.get('height', 720)
+    slow_mo = browser.get('slow_mo', 0)
 
     ui.section("Configurazione Browser")
 
     items = [
-        MenuItem('1', f"Headless: {'ON' if settings.browser.headless else 'OFF'}", 'Browser nascosto'),
-        MenuItem('2', f"Viewport: {settings.browser.viewport.width}x{settings.browser.viewport.height}", 'Dimensioni finestra'),
-        MenuItem('3', f"Slow Mo: {settings.browser.slow_mo}ms", 'Rallenta azioni (debug)'),
+        MenuItem('1', f"Headless: {'ON' if headless else 'OFF'}", 'Browser nascosto'),
+        MenuItem('2', f"Viewport: {vp_width}x{vp_height}", 'Dimensioni finestra'),
+        MenuItem('3', f"Slow Mo: {slow_mo}ms", 'Rallenta azioni (debug)'),
     ]
 
     choice = ui.menu(items, ">", allow_back=True)
@@ -1287,19 +1336,19 @@ def _settings_browser(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) 
         return
 
     elif choice == '1':
-        new_val = not settings.browser.headless
+        new_val = not headless
         _update_settings_yaml(settings_path, ['browser', 'headless'], new_val)
         ui.success(f"Headless {'abilitato' if new_val else 'disabilitato'}")
 
     elif choice == '2':
-        width = ui.input("Larghezza", str(settings.browser.viewport.width))
-        height = ui.input("Altezza", str(settings.browser.viewport.height))
+        width = ui.input("Larghezza", str(vp_width))
+        height = ui.input("Altezza", str(vp_height))
         _update_settings_yaml(settings_path, ['browser', 'viewport', 'width'], int(width))
         _update_settings_yaml(settings_path, ['browser', 'viewport', 'height'], int(height))
         ui.success(f"Viewport impostato: {width}x{height}")
 
     elif choice == '3':
-        slow = ui.input("Slow Mo (ms)", str(settings.browser.slow_mo))
+        slow = ui.input("Slow Mo (ms)", str(slow_mo))
         _update_settings_yaml(settings_path, ['browser', 'slow_mo'], int(slow))
         ui.success(f"Slow Mo impostato: {slow}ms")
 
@@ -1330,23 +1379,30 @@ def _settings_logging(ui: ConsoleUI, loader: ConfigLoader, settings_path: Path) 
 
 def _settings_test_notify(ui: ConsoleUI, loader: ConfigLoader) -> None:
     """Testa le notifiche configurate"""
-    from src.notifications import NotificationManager, TestRunSummary
+    from src.notifications import NotificationManager, NotificationConfig, TestRunSummary
 
-    settings = loader.load_global_settings()
+    settings_path = Path("config/settings.yaml")
+    data = _load_settings_yaml(settings_path)
+    notifications = data.get('notifications', {})
 
     ui.section("Test Notifiche")
 
-    # Crea summary di test
+    # Crea summary di test (pass_rate è calcolato automaticamente come property)
     summary = TestRunSummary(
         project="test-project",
         run_number=999,
         total_tests=10,
         passed=8,
-        failed=2,
-        pass_rate=80.0
+        failed=2
     )
 
-    manager = NotificationManager.from_settings(settings.notifications)
+    # Crea NotificationConfig dai dati YAML
+    config = NotificationConfig(
+        desktop_enabled=notifications.get('desktop', {}).get('enabled', False),
+        email_enabled=notifications.get('email', {}).get('enabled', False),
+        teams_enabled=notifications.get('teams', {}).get('enabled', False),
+    )
+    manager = NotificationManager(config)
 
     ui.info("Invio notifiche di test...")
     results = manager.notify_run_complete(summary)
@@ -1362,8 +1418,6 @@ def _settings_test_notify(ui: ConsoleUI, loader: ConfigLoader) -> None:
 
 def _update_settings_yaml(path: Path, keys: list, value) -> None:
     """Aggiorna un valore nel file settings.yaml preservando la struttura"""
-    import yaml
-
     with open(path, 'r') as f:
         data = yaml.safe_load(f)
 
@@ -1644,6 +1698,286 @@ def _analysis_stability(ui: ConsoleUI, detector) -> None:
 
     ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
     input()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Interactive Menu: Prompt Manager
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def show_project_actions_menu(ui: ConsoleUI, project_name: str) -> Optional[str]:
+    """
+    Menu azioni progetto (dopo selezione progetto).
+
+    Returns:
+        Scelta utente: 'run', 'prompt', 'visualizer', 'diagnose', None per back
+    """
+    ui.section(f"Progetto: {project_name}")
+
+    items = [
+        MenuItem('1', 'Gestione RUN', 'Esegui test, configura run'),
+        MenuItem('2', 'Prompt Manager', 'Versioni, import, export prompt'),
+        MenuItem('3', 'Visualizer', 'Visualizza prompt e test'),
+        MenuItem('4', 'Diagnosi', 'Analizza fallimenti test'),
+    ]
+
+    choice = ui.menu(items, ">", allow_back=True)
+
+    if choice is None:
+        return None
+
+    return {'1': 'run', '2': 'prompt', '3': 'visualizer', '4': 'diagnose'}.get(choice)
+
+
+def show_prompt_manager_menu(ui: ConsoleUI, project_name: str, base_dir: Path) -> None:
+    """Menu interattivo per gestione prompt"""
+    from src.prompt_manager import PromptManager
+
+    manager = PromptManager(project_name, base_dir)
+
+    while True:
+        versions = manager.list_versions()
+        current = manager.get_current_version()  # PromptVersion, non contenuto
+
+        ui.section(f"Prompt Manager: {project_name}")
+
+        if current:
+            version_id = f"v{current.version:03d}"
+            if current.tag:
+                version_id += f"_{current.tag}"
+            ui.print(f"  Versione corrente: [cyan]{version_id}[/cyan]")
+            ui.print(f"  Data: [dim]{current.date}[/dim]")
+            ui.print("")
+        else:
+            ui.warning("Nessun prompt versionato")
+            ui.print("")
+
+        items = [
+            MenuItem('1', 'Lista versioni', f'{len(versions)} versioni disponibili'),
+            MenuItem('2', 'Mostra corrente', 'Visualizza prompt attuale'),
+            MenuItem('3', 'Importa prompt', 'Da file esterno'),
+            MenuItem('4', 'Esporta prompt', 'Salva versione su file'),
+            MenuItem('5', 'Diff versioni', 'Confronta due versioni'),
+        ]
+
+        choice = ui.menu(items, ">", allow_back=True)
+
+        if choice is None:
+            break
+
+        elif choice == '1':
+            # Lista versioni
+            _prompt_list_interactive(ui, manager)
+
+        elif choice == '2':
+            # Mostra corrente
+            _prompt_show_interactive(ui, manager)
+
+        elif choice == '3':
+            # Importa prompt
+            _prompt_import_interactive(ui, manager)
+
+        elif choice == '4':
+            # Esporta prompt
+            _prompt_export_interactive(ui, manager)
+
+        elif choice == '5':
+            # Diff versioni
+            _prompt_diff_interactive(ui, manager)
+
+
+def _prompt_list_interactive(ui: ConsoleUI, manager) -> None:
+    """Lista versioni prompt"""
+    versions = manager.list_versions()
+
+    if not versions:
+        ui.warning("Nessuna versione salvata")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    ui.section(f"Versioni ({len(versions)})")
+
+    # Header
+    ui.print(f"  {'Ver':<8} {'Data':<12} {'Tag':<15} {'Note':<30}")
+    ui.print("  " + "-" * 70)
+
+    for v in versions[-10:]:  # Ultime 10
+        version_id = f"v{v.version:03d}"
+        tag = v.tag[:15] if v.tag else "-"
+        note = (v.note[:28] + "..") if len(v.note) > 30 else v.note
+        ui.print(f"  {version_id:<8} {v.date[:10]:<12} {tag:<15} {note:<30}")
+
+    if len(versions) > 10:
+        ui.muted(f"\n  ... e altre {len(versions) - 10} versioni")
+
+    input("\n  Premi INVIO per continuare...")
+
+
+def _prompt_show_interactive(ui: ConsoleUI, manager) -> None:
+    """Mostra prompt corrente"""
+    current = manager.get_current_version()
+
+    if not current:
+        ui.warning("Nessun prompt salvato")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    content = manager.get_version(current.version)
+    if not content:
+        ui.error("File prompt non trovato")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    ui.section(f"Prompt v{current.version:03d}")
+    ui.print(f"  Data: {current.date}")
+    ui.print(f"  Note: {current.note}")
+    if current.tag:
+        ui.print(f"  Tag: {current.tag}")
+    ui.print("")
+
+    # Mostra prime 30 righe
+    lines = content.split('\n')[:30]
+    for line in lines:
+        ui.print(f"  {line[:100]}")
+
+    if len(content.split('\n')) > 30:
+        ui.muted(f"\n  ... ({len(content.split(chr(10)))} righe totali)")
+
+    input("\n  Premi INVIO per continuare...")
+
+
+def _prompt_import_interactive(ui: ConsoleUI, manager) -> None:
+    """Importa prompt da file"""
+    ui.section("Importa Prompt")
+
+    filepath = ui.input("Percorso file prompt", default="")
+    if not filepath:
+        return
+
+    path = Path(filepath).expanduser()
+    if not path.exists():
+        ui.error(f"File non trovato: {path}")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    # Leggi preview
+    content = path.read_text()
+    lines = content.split('\n')
+
+    ui.print(f"\n  Preview ({len(lines)} righe):")
+    for line in lines[:5]:
+        ui.print(f"    {line[:80]}")
+    if len(lines) > 5:
+        ui.muted(f"    ... e altre {len(lines) - 5} righe")
+
+    # Chiedi tag
+    tag = ui.input("Tag versione (opzionale)", default="")
+    note = ui.input("Note", default="imported from file")
+
+    if ui.confirm("Importare come nuova versione?", default=True):
+        try:
+            # Usa save() direttamente per supportare tag
+            version = manager.save(content, note=note, tag=tag, source="import")
+            if version:
+                ui.success(f"Importato come v{version.version:03d}")
+            else:
+                ui.warning("Contenuto identico alla versione precedente")
+        except Exception as e:
+            ui.error(f"Errore: {e}")
+
+    input("\n  Premi INVIO per continuare...")
+
+
+def _prompt_export_interactive(ui: ConsoleUI, manager) -> None:
+    """Esporta prompt su file"""
+    current = manager.get_current_version()
+
+    if not current:
+        ui.warning("Nessun prompt da esportare")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    ui.section("Esporta Prompt")
+
+    # Chiedi versione
+    version_str = ui.input("Versione da esportare", default=str(current.version))
+    try:
+        version_num = int(version_str)
+    except ValueError:
+        ui.error("Versione non valida")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    # Chiedi destinazione
+    default_path = f"./prompt_v{version_num:03d}.txt"
+    filepath = ui.input("Percorso destinazione", default=default_path)
+
+    path = Path(filepath).expanduser()
+
+    try:
+        content = manager.get_version(version_num)
+        if not content:
+            ui.error(f"Versione {version_num} non trovata")
+        else:
+            path.write_text(content)
+            ui.success(f"Esportato: {path}")
+    except Exception as e:
+        ui.error(f"Errore: {e}")
+
+    input("\n  Premi INVIO per continuare...")
+
+
+def _prompt_diff_interactive(ui: ConsoleUI, manager) -> None:
+    """Confronta due versioni"""
+    versions = manager.list_versions()
+
+    if len(versions) < 2:
+        ui.warning("Servono almeno 2 versioni per il confronto")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    ui.section("Diff Versioni")
+
+    # Lista versioni disponibili
+    ui.print("  Versioni disponibili:")
+    for v in versions[-5:]:
+        ui.print(f"    v{v.version:03d} - {v.date[:10]} - {v.note[:40]}")
+
+    # Chiedi versioni
+    v1_str = ui.input("Prima versione", default=str(versions[-2].version))
+    v2_str = ui.input("Seconda versione", default=str(versions[-1].version))
+
+    try:
+        v1 = int(v1_str)
+        v2 = int(v2_str)
+    except ValueError:
+        ui.error("Versione non valida")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    try:
+        diff = manager.diff(v1, v2)
+
+        ui.section(f"Diff v{v1:03d} -> v{v2:03d}")
+
+        # Mostra diff (prime 50 righe)
+        lines = diff.split('\n')[:50]
+        for line in lines:
+            if line.startswith('+'):
+                ui.print(f"  [green]{line[:100]}[/green]")
+            elif line.startswith('-'):
+                ui.print(f"  [red]{line[:100]}[/red]")
+            elif line.startswith('@'):
+                ui.print(f"  [cyan]{line[:100]}[/cyan]")
+            else:
+                ui.print(f"  {line[:100]}")
+
+        if len(diff.split('\n')) > 50:
+            ui.muted(f"\n  ... e altre {len(diff.split(chr(10))) - 50} righe")
+
+    except Exception as e:
+        ui.error(f"Errore: {e}")
+
+    input("\n  Premi INVIO per continuare...")
 
 
 def show_finetuning_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
@@ -1956,25 +2290,26 @@ async def run_test_session(
     mode: TestMode,
     test_filter: str = 'pending',
     single_test: str = None,
-    force_new_run: bool = False
+    force_new_run: bool = False,
+    no_interactive: bool = False
 ):
     """Esegue una sessione di test"""
     ui = get_ui()
-    
+
     def on_status(msg):
         ui.print(msg)
-    
+
     def on_progress(current, total):
         ui.print(f"[{current}/{total}]", "dim")
-    
+
     # Carica RunConfig
     run_config = RunConfig.load(project.run_config_file)
     run_config.mode = mode.value
-    
+
     # Se forza nuova RUN o non c'è RUN attiva
     if force_new_run:
         run_config.reset()
-    
+
     # Passa toggle al tester
     tester = ChatbotTester(
         project,
@@ -1985,7 +2320,7 @@ async def run_test_session(
         use_langsmith=run_config.use_langsmith,
         single_turn=run_config.single_turn
     )
-    
+
     try:
         # Inizializza
         ui.section(t('test_execution.initializing'))
@@ -2076,7 +2411,7 @@ async def run_test_session(
         })
 
         # Next steps suggerimenti
-        if results and not args.no_interactive:
+        if results and not no_interactive:
             steps = NextSteps.after_test_run(
                 project=project.name,
                 run_number=run_config.active_run or 0,
@@ -2086,7 +2421,7 @@ async def run_test_session(
             ui.muted(NextSteps.format(steps))
 
         # Auto-diagnosi se ci sono fallimenti
-        if failed > 0 and not args.no_interactive:
+        if failed > 0 and not no_interactive:
             ui.print("")
             if ui.confirm("Eseguire diagnosi sui test falliti?", default=True):
                 ui.print("")
@@ -2109,21 +2444,21 @@ async def main_interactive(args):
     set_language(args.lang)
     ui = get_ui()
     loader = ConfigLoader()
-    
+
     while True:
         choice = show_main_menu(ui, loader)
-        
+
         if choice == 'quit':
             ui.print(t('main_menu.goodbye'))
             break
-        
+
         elif choice == '1':
             # Nuovo progetto - avvia wizard
             from wizard.main import run_wizard
             success = run_wizard(language="it")
             if success:
                 ui.success("Progetto creato! Selezionalo dal menu.")
-        
+
         elif choice == '2':
             # Apri progetto
             project_name = show_project_menu(ui, loader)
@@ -2131,77 +2466,104 @@ async def main_interactive(args):
                 try:
                     project = loader.load_project(project_name)
                     settings = loader.load_global_settings()
-                    
-                    # Carica RunConfig
-                    run_config = RunConfig.load(project.run_config_file)
-                    
-                    # Menu gestione RUN
-                    run_choice = show_run_menu(ui, project, run_config)
-                    
-                    force_new_run = False
-                    
-                    if run_choice is None:
-                        continue  # Torna al menu principale
-                    
-                    elif run_choice == '1':
-                        # Continua/Inizia RUN
-                        if not run_config.active_run:
-                            # Configura nuova RUN se non esiste
-                            configure_run_interactive(ui, run_config)
-                            run_config.save(project.run_config_file)
-                    
-                    elif run_choice == '2':
-                        # Forza nuova RUN
-                        if start_new_run_interactive(ui, run_config):
-                            force_new_run = True
-                            run_config.save(project.run_config_file)
-                        else:
-                            continue
-                    
-                    elif run_choice == '3':
-                        # Solo configura, non esegui
-                        configure_run_interactive(ui, run_config)
-                        run_config.save(project.run_config_file)
-                        continue
-                    
-                    elif run_choice == '4':
-                        # Toggle opzioni
-                        toggle_options_interactive(ui, run_config)
-                        run_config.save(project.run_config_file)
-                        continue
-                    
-                    # Scegli modalità
-                    mode_choice = show_mode_menu(ui, project, run_config)
-                    if mode_choice:
-                        mode_map = {'1': TestMode.TRAIN, '2': TestMode.ASSISTED, '3': TestMode.AUTO}
-                        mode = mode_map.get(mode_choice, TestMode.TRAIN)
-                        
-                        # Chiedi se vuole selezionare test specifici
-                        select_items = [
-                            MenuItem('1', t('test_selection.pending'), t('test_selection.pending_desc')),
-                            MenuItem('2', t('test_selection.all'), t('test_selection.all_desc').format(count='')),
-                            MenuItem('3', t('test_selection.specific'), t('test_selection.specific_desc')),
-                        ]
-                        ui.section(t('test_selection.title'))
-                        select_choice = ui.menu(select_items, t('common.next'), allow_back=True)
-                        
-                        if select_choice is None:
-                            continue
-                        
-                        test_filter_map = {'1': 'pending', '2': 'all', '3': 'select'}
-                        test_filter = test_filter_map.get(select_choice, 'pending')
-                        
-                        await run_test_session(
-                            project, 
-                            settings, 
-                            mode,
-                            test_filter=test_filter,
-                            force_new_run=force_new_run
-                        )
-                
+
+                    # Menu azioni progetto (nuovo livello)
+                    while True:
+                        action = show_project_actions_menu(ui, project_name)
+
+                        if action is None:
+                            break  # Torna al menu principale
+
+                        elif action == 'prompt':
+                            # Prompt Manager
+                            show_prompt_manager_menu(ui, project_name, loader.base_dir)
+
+                        elif action == 'visualizer':
+                            # Visualizer (TODO: implementare menu)
+                            ui.warning("Visualizer: usa CLI --viz-prompt o --viz-test")
+                            input("\n  Premi INVIO per continuare...")
+
+                        elif action == 'diagnose':
+                            # Diagnosi
+                            class DiagnoseArgs:
+                                project = project_name
+                                diagnose = True
+                                diagnose_test = None
+                                diagnose_run = None
+                                diagnose_interactive = True
+                                diagnose_model = 'generic'
+                            run_diagnose_command(DiagnoseArgs())
+                            input("\n  Premi INVIO per continuare...")
+
+                        elif action == 'run':
+                            # Gestione RUN (flusso esistente)
+                            run_config = RunConfig.load(project.run_config_file)
+
+                            run_choice = show_run_menu(ui, project, run_config)
+
+                            force_new_run = False
+
+                            if run_choice is None:
+                                continue  # Torna al menu azioni progetto
+
+                            elif run_choice == '1':
+                                # Continua/Inizia RUN
+                                if not run_config.active_run:
+                                    configure_run_interactive(ui, run_config)
+                                    run_config.save(project.run_config_file)
+
+                            elif run_choice == '2':
+                                # Forza nuova RUN
+                                if start_new_run_interactive(ui, run_config):
+                                    force_new_run = True
+                                    run_config.save(project.run_config_file)
+                                else:
+                                    continue
+
+                            elif run_choice == '3':
+                                # Solo configura, non esegui
+                                configure_run_interactive(ui, run_config)
+                                run_config.save(project.run_config_file)
+                                continue
+
+                            elif run_choice == '4':
+                                # Toggle opzioni
+                                toggle_options_interactive(ui, run_config)
+                                run_config.save(project.run_config_file)
+                                continue
+
+                            # Scegli modalità
+                            mode_choice = show_mode_menu(ui, project, run_config)
+                            if mode_choice:
+                                mode_map = {'1': TestMode.TRAIN, '2': TestMode.ASSISTED, '3': TestMode.AUTO}
+                                mode = mode_map.get(mode_choice, TestMode.TRAIN)
+
+                                # Chiedi se vuole selezionare test specifici
+                                select_items = [
+                                    MenuItem('1', t('test_selection.pending'), t('test_selection.pending_desc')),
+                                    MenuItem('2', t('test_selection.all'), t('test_selection.all_desc').format(count='')),
+                                    MenuItem('3', t('test_selection.specific'), t('test_selection.specific_desc')),
+                                ]
+                                ui.section(t('test_selection.title'))
+                                select_choice = ui.menu(select_items, t('common.next'), allow_back=True)
+
+                                if select_choice is None:
+                                    continue
+
+                                test_filter_map = {'1': 'pending', '2': 'all', '3': 'select'}
+                                test_filter = test_filter_map.get(select_choice, 'pending')
+
+                                await run_test_session(
+                                    project,
+                                    settings,
+                                    mode,
+                                    test_filter=test_filter,
+                                    force_new_run=force_new_run
+                                )
+
                 except FileNotFoundError:
                     ui.error(f"Progetto '{project_name}' non trovato")
-        
+
         elif choice == '3':
             # Fine-tuning
             show_finetuning_menu(ui, loader)
@@ -2228,18 +2590,18 @@ async def main_direct(args):
     set_language(args.lang)
     ui = get_ui()
     loader = ConfigLoader()
-    
+
     if args.new_project:
         from wizard.main import run_wizard
         success = run_wizard(language=args.lang)
         if success:
             ui.success("Progetto creato con successo!")
         return
-    
+
     if not args.project:
         ui.error("Specifica un progetto con --project=NOME")
         return
-    
+
     try:
         project = loader.load_project(args.project)
         settings = loader.load_global_settings()
@@ -2264,10 +2626,10 @@ async def main_direct(args):
             mode,
             test_filter=args.tests,
             single_test=args.test,
-            
-            force_new_run=args.new_run
+            force_new_run=args.new_run,
+            no_interactive=args.no_interactive
         )
-        
+
     except FileNotFoundError:
         ui.error(f"Progetto '{args.project}' non trovato")
     except Exception as e:

@@ -798,7 +798,9 @@ run_menu:
 
   # Opzioni menu
   continue_run: "Continua RUN attiva"
-  start_run: "Inizia test"
+  continue_run_desc: "Riprendi i test dalla RUN corrente"
+  start_run: "Esegui test"
+  start_run_desc: "Avvia i test (usa RUN esistente o crea nuova)"
   new_run: "Nuova RUN"
   new_run_desc: "Crea nuovo foglio per regression test"
   configure: "Configura RUN"
