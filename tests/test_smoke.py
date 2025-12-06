@@ -68,6 +68,34 @@ class TestImports:
         assert t is not None
         assert callable(set_language)
 
+    def test_prompt_manager_module(self):
+        from src.prompt_manager import PromptManager, PromptVersion, PromptMetadata
+        assert PromptManager is not None
+        assert PromptVersion is not None
+        assert PromptMetadata is not None
+
+    def test_analyzer_module(self):
+        from src.analyzer import (
+            create_analyzer, DebugPackageGenerator,
+            TestFailure, DebugPackage, AnalysisResult
+        )
+        assert create_analyzer is not None
+        assert DebugPackageGenerator is not None
+        assert TestFailure is not None
+        assert DebugPackage is not None
+        assert AnalysisResult is not None
+
+    def test_visualizer_module(self):
+        from src.visualizer import (
+            PromptVisualizer, TestVisualizer, PromptParser,
+            HTMLRenderer, TerminalRenderer
+        )
+        assert PromptVisualizer is not None
+        assert TestVisualizer is not None
+        assert PromptParser is not None
+        assert HTMLRenderer is not None
+        assert TerminalRenderer is not None
+
 
 class TestConfig:
     """Verifica configurazione"""

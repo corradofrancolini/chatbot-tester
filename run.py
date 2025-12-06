@@ -29,208 +29,396 @@ from src.ui import ConsoleUI, MenuItem, get_ui
 from src.i18n import get_i18n, set_language, t
 from src.health import HealthChecker, ServiceStatus
 from src.github_actions import GitHubActionsClient
+from src.cli_utils import (
+    ExitCode, suggest_project, NextSteps,
+    confirm_action, ConfirmLevel, handle_keyboard_interrupt,
+    print_startup_feedback
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HELPER: Project validation with suggestions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def validate_project(project_name: str, ui: ConsoleUI) -> bool:
+    """
+    Valida progetto con suggerimenti 'did you mean'.
+
+    Returns:
+        True se progetto valido, False altrimenti (con messaggio errore)
+    """
+    projects_dir = Path(__file__).parent / "projects"
+
+    if not projects_dir.exists():
+        ui.error("Directory projects/ non trovata")
+        return False
+
+    project_dir = projects_dir / project_name
+    project_file = project_dir / "project.yaml"
+
+    if project_file.exists():
+        return True
+
+    # Progetto non trovato - suggerisci alternativa
+    suggestion = suggest_project(project_name, projects_dir)
+
+    if suggestion:
+        ui.error(f"Progetto '{project_name}' non trovato. Intendevi '{suggestion}'?")
+        ui.muted(f"  Usa: chatbot-tester -p {suggestion}")
+    else:
+        ui.error(f"Progetto '{project_name}' non trovato")
+        available = [
+            p.name for p in projects_dir.iterdir()
+            if p.is_dir() and (p / "project.yaml").exists()
+        ]
+        if available:
+            ui.muted(f"  Progetti disponibili: {', '.join(available)}")
+
+    return False
 
 
 def parse_args():
-    """Parse command line arguments"""
+    """Parse command line arguments - clig.dev compliant"""
+    import os
+
     parser = argparse.ArgumentParser(
-        description='Chatbot Tester - Tool parametrizzabile per testing chatbot',
+        prog='chatbot-tester',
+        description='Chatbot Tester - Test automatizzati per chatbot',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Esempi:
-  python run.py                              Menu interattivo
-  python run.py --new-project                Wizard nuovo progetto  
-  python run.py --project example-bot       Apri progetto esistente
-  python run.py -p example-bot -m auto      Modalità auto su progetto
-  python run.py -p example-bot --test TC001 Esegui singolo test
-  python run.py -p example-bot --new-run    Forza nuova RUN
-  python run.py --lang en                    Interfaccia in inglese
+  %(prog)s                                   Menu interattivo
+  %(prog)s -p my-chatbot -m auto              Esegui test in modalita auto
+  %(prog)s -p my-chatbot --compare            Confronta ultime 2 run
+  %(prog)s -p my-chatbot --export html        Esporta report HTML
+  %(prog)s --new-project                     Wizard nuovo progetto
+
+Variabili ambiente:
+  NO_COLOR      Disabilita output colorato
+  DEBUG         Abilita output di debug (equivale a --debug)
+
+Documentazione: https://github.com/user/chatbot-tester
         """
     )
-    
-    parser.add_argument(
-        '--new-project',
-        action='store_true',
-        help='Avvia wizard per nuovo progetto'
-    )
-    
-    parser.add_argument(
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Progetto
+    # ═══════════════════════════════════════════════════════════════════
+    project_group = parser.add_argument_group('Progetto')
+    project_group.add_argument(
         '-p', '--project',
         type=str,
-        default=None,
-        help='Nome del progetto da aprire'
+        metavar='NAME',
+        help='Nome progetto (es: -p my-chatbot)'
     )
-    
-    parser.add_argument(
+    project_group.add_argument(
+        '--new-project',
+        action='store_true',
+        help='Avvia wizard creazione progetto'
+    )
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Test Execution
+    # ═══════════════════════════════════════════════════════════════════
+    test_group = parser.add_argument_group('Esecuzione Test')
+    test_group.add_argument(
         '-m', '--mode',
         type=str,
         choices=['train', 'assisted', 'auto'],
-        default=None,
-        help='Modalità di test: train, assisted, auto'
+        metavar='MODE',
+        help='Modalita: train, assisted, auto'
     )
-    
-    parser.add_argument(
+    test_group.add_argument(
         '-t', '--test',
         type=str,
-        default=None,
-        help='ID singolo test da eseguire'
+        metavar='ID',
+        help='Esegui singolo test (es: -t TC001)'
     )
-    
-    parser.add_argument(
+    test_group.add_argument(
         '--tests',
         type=str,
         default='pending',
         choices=['all', 'pending', 'failed'],
-        help='Quali test eseguire: all, pending (default), failed'
+        help='Filtro test: all, pending (default), failed'
     )
-    
-    parser.add_argument(
+    test_group.add_argument(
         '--new-run',
         action='store_true',
-        help='Forza creazione di una nuova RUN'
+        help='Forza nuova RUN invece di continuare'
     )
-    
-    parser.add_argument(
-        '--lang',
-        type=str,
-        default='it',
-        choices=['it', 'en'],
-        help='Lingua interfaccia: it (default), en'
-    )
-    
-    parser.add_argument(
-        '--no-interactive',
+    test_group.add_argument(
+        '-n', '--dry-run',
         action='store_true',
-        help='Modalità non interattiva (per CI/automazione)'
-    )
-    
-    parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Simula senza eseguire realmente i test'
-    )
-    
-    parser.add_argument(
-        '--headless',
-        action='store_true',
-        help='Esegui browser in modalità headless'
-    )
-    
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help='Abilita output di debug'
+        help='Simula senza eseguire (mostra cosa farebbe)'
     )
 
-    parser.add_argument(
-        '--health-check',
-        action='store_true',
-        help='Esegui health check dei servizi e esci'
-    )
-
-    parser.add_argument(
-        '--skip-health-check',
-        action='store_true',
-        help='Salta health check pre-esecuzione'
-    )
-
-    parser.add_argument(
-        '--parallel',
-        action='store_true',
-        help='Esegui test in parallelo (piu browser)'
-    )
-
-    parser.add_argument(
-        '--workers',
-        type=int,
-        default=3,
-        help='Numero di browser paralleli (default: 3, max: 5)'
-    )
-
-    parser.add_argument(
-        '--scheduler',
-        action='store_true',
-        help='Avvia scheduler locale (cron-like)'
-    )
-
-    parser.add_argument(
-        '--add-schedule',
-        type=str,
-        metavar='PROJECT:TYPE',
-        help='Aggiungi schedule (es: --add-schedule my-chatbot:daily)'
-    )
-
-    parser.add_argument(
-        '--list-schedules',
-        action='store_true',
-        help='Lista tutti gli schedule configurati'
-    )
-
-    parser.add_argument(
+    # ═══════════════════════════════════════════════════════════════════
+    # Analisi
+    # ═══════════════════════════════════════════════════════════════════
+    analysis_group = parser.add_argument_group('Analisi')
+    analysis_group.add_argument(
         '--compare',
         type=str,
         nargs='?',
         const='latest',
-        metavar='RUN_A:RUN_B',
-        help='Confronta run (es: --compare 15:16 oppure --compare per ultimi 2)'
+        metavar='A:B',
+        help='Confronta run (es: --compare 15:16, --compare per ultime 2)'
     )
-
-    parser.add_argument(
+    analysis_group.add_argument(
         '--regressions',
         type=int,
         nargs='?',
         const=0,
         metavar='RUN',
-        help='Mostra regressioni (es: --regressions 16 oppure --regressions per ultima)'
+        help='Mostra regressioni (es: --regressions 16)'
     )
-
-    parser.add_argument(
+    analysis_group.add_argument(
         '--flaky',
         type=int,
         nargs='?',
         const=10,
-        metavar='N_RUNS',
-        help='Rileva test flaky sugli ultimi N run (default: 10)'
+        metavar='N',
+        help='Rileva test flaky su ultime N run (default: 10)'
+    )
+    analysis_group.add_argument(
+        '--analyze',
+        action='store_true',
+        help='Analizza test falliti (genera debug package)'
+    )
+    analysis_group.add_argument(
+        '--provider',
+        type=str,
+        choices=['manual', 'claude', 'groq'],
+        default='manual',
+        metavar='PROV',
+        help='Provider analisi: manual (clipboard), claude, groq'
+    )
+    analysis_group.add_argument(
+        '--analyze-run',
+        type=int,
+        metavar='RUN',
+        help='Run da analizzare (default: ultima)'
+    )
+    analysis_group.add_argument(
+        '-y', '--yes',
+        action='store_true',
+        help='Salta conferma costi API'
     )
 
-    # Export
-    parser.add_argument(
+    # ═══════════════════════════════════════════════════════════════════
+    # Prompt Manager
+    # ═══════════════════════════════════════════════════════════════════
+    prompt_group = parser.add_argument_group('Prompt Manager')
+    prompt_group.add_argument(
+        '--prompt-list',
+        action='store_true',
+        help='Lista versioni prompt salvate'
+    )
+    prompt_group.add_argument(
+        '--prompt-show',
+        type=int,
+        nargs='?',
+        const=0,
+        metavar='VER',
+        help='Mostra prompt (default: corrente, oppure versione)'
+    )
+    prompt_group.add_argument(
+        '--prompt-import',
+        type=str,
+        metavar='FILE',
+        help='Importa prompt da file .md'
+    )
+    prompt_group.add_argument(
+        '--prompt-export',
+        type=str,
+        nargs='?',
+        const='auto',
+        metavar='FILE',
+        help='Esporta prompt su file'
+    )
+    prompt_group.add_argument(
+        '--prompt-diff',
+        type=str,
+        metavar='V1:V2',
+        help='Diff tra versioni (es: --prompt-diff 1:2)'
+    )
+    prompt_group.add_argument(
+        '--prompt-note',
+        type=str,
+        default='update',
+        metavar='NOTE',
+        help='Nota per import prompt (default: "update")'
+    )
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Visualizer
+    # ═══════════════════════════════════════════════════════════════════
+    viz_group = parser.add_argument_group('Visualizer')
+    viz_group.add_argument(
+        '--viz-prompt',
+        action='store_true',
+        help='Visualizza struttura prompt (flowchart + mindmap)'
+    )
+    viz_group.add_argument(
+        '--viz-test',
+        type=str,
+        nargs='?',
+        const='latest',
+        metavar='TEST_ID',
+        help='Visualizza test (waterfall + timeline). Default: ultimo test'
+    )
+    viz_group.add_argument(
+        '--viz-run',
+        type=int,
+        metavar='RUN',
+        help='Run da visualizzare (default: ultimo)'
+    )
+    viz_group.add_argument(
+        '--viz-output',
+        type=str,
+        choices=['html', 'terminal'],
+        default='html',
+        metavar='OUT',
+        help='Output: html (browser) o terminal (ASCII)'
+    )
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Export & Notifiche
+    # ═══════════════════════════════════════════════════════════════════
+    export_group = parser.add_argument_group('Export & Notifiche')
+    export_group.add_argument(
         '--export',
         type=str,
         choices=['pdf', 'excel', 'html', 'csv', 'all'],
-        metavar='FORMAT',
-        help='Esporta report (pdf, excel, html, csv, all)'
+        metavar='FMT',
+        help='Esporta report: pdf, excel, html, csv, all'
     )
-
-    parser.add_argument(
+    export_group.add_argument(
         '--export-run',
         type=int,
         metavar='RUN',
         help='Run da esportare (default: ultimo)'
     )
-
-    # Notifiche
-    parser.add_argument(
+    export_group.add_argument(
         '--notify',
         type=str,
         choices=['desktop', 'email', 'teams', 'all'],
-        metavar='CHANNEL',
-        help='Invia notifica test (desktop, email, teams, all)'
+        metavar='CH',
+        help='Invia notifica: desktop, email, teams, all'
     )
-
-    parser.add_argument(
+    export_group.add_argument(
         '--test-notify',
         action='store_true',
-        help='Invia notifica di test per verificare configurazione'
+        help='Test notifiche (verifica configurazione)'
     )
 
-    parser.add_argument(
+    # ═══════════════════════════════════════════════════════════════════
+    # Scheduler
+    # ═══════════════════════════════════════════════════════════════════
+    sched_group = parser.add_argument_group('Scheduler')
+    sched_group.add_argument(
+        '--scheduler',
+        action='store_true',
+        help='Avvia scheduler locale (cron-like)'
+    )
+    sched_group.add_argument(
+        '--add-schedule',
+        type=str,
+        metavar='PROJ:TYPE',
+        help='Aggiungi schedule (es: my-chatbot:daily)'
+    )
+    sched_group.add_argument(
+        '--list-schedules',
+        action='store_true',
+        help='Lista schedule configurati'
+    )
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Output
+    # ═══════════════════════════════════════════════════════════════════
+    output_group = parser.add_argument_group('Output')
+    output_group.add_argument(
+        '-q', '--quiet',
+        action='store_true',
+        help='Output minimo (solo errori)'
+    )
+    output_group.add_argument(
+        '--json',
+        action='store_true',
+        help='Output JSON (machine-readable)'
+    )
+    output_group.add_argument(
+        '--no-color',
+        action='store_true',
+        help='Disabilita colori (oppure: NO_COLOR=1)'
+    )
+    output_group.add_argument(
+        '--debug',
+        action='store_true',
+        default=os.environ.get('DEBUG', '').lower() in ('1', 'true'),
+        help='Output di debug verbose'
+    )
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Runtime
+    # ═══════════════════════════════════════════════════════════════════
+    runtime_group = parser.add_argument_group('Runtime')
+    runtime_group.add_argument(
+        '--headless',
+        action='store_true',
+        help='Browser in background (senza finestra)'
+    )
+    runtime_group.add_argument(
+        '--parallel',
+        action='store_true',
+        help='Esecuzione parallela (multi-browser)'
+    )
+    runtime_group.add_argument(
+        '--workers',
+        type=int,
+        default=3,
+        metavar='N',
+        help='Numero browser paralleli (default: 3, max: 5)'
+    )
+    runtime_group.add_argument(
+        '--no-interactive',
+        action='store_true',
+        help='Disabilita prompt (per CI/script)'
+    )
+    runtime_group.add_argument(
+        '--lang',
+        type=str,
+        default='it',
+        choices=['it', 'en'],
+        help='Lingua UI: it (default), en'
+    )
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Diagnostica
+    # ═══════════════════════════════════════════════════════════════════
+    diag_group = parser.add_argument_group('Diagnostica')
+    diag_group.add_argument(
+        '--health-check',
+        action='store_true',
+        help='Verifica servizi e esci'
+    )
+    diag_group.add_argument(
+        '--skip-health-check',
+        action='store_true',
+        help='Salta verifica servizi all\'avvio'
+    )
+    diag_group.add_argument(
         '-v', '--version',
         action='version',
-        version='Chatbot Tester v1.2.0'
+        version='%(prog)s v1.4.0'
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Supporto NO_COLOR env var (clig.dev standard)
+    if os.environ.get('NO_COLOR'):
+        args.no_color = True
+
+    return args
 
 
 def run_health_check(project: ProjectConfig = None, settings = None) -> bool:
@@ -1852,7 +2040,17 @@ async def run_test_session(
             t('test_execution.failed'): failed,
             t('test_execution.pass_rate'): f"{(passed/len(results)*100):.1f}%" if results else "N/A"
         })
-        
+
+        # Next steps suggerimenti
+        if results and not args.no_interactive:
+            steps = NextSteps.after_test_run(
+                project=project.name,
+                run_number=run_config.active_run or 0,
+                passed=passed,
+                failed=failed
+            )
+            ui.muted(NextSteps.format(steps))
+
     finally:
         await tester.shutdown()
 
@@ -2222,7 +2420,7 @@ def run_export_commands(args):
 
     if not args.project:
         ui.error("Specifica un progetto con -p PROJECT")
-        sys.exit(1)
+        sys.exit(ExitCode.USAGE_ERROR)
 
     from src.export import RunReport, ReportExporter, check_dependencies
 
@@ -2230,22 +2428,22 @@ def run_export_commands(args):
     deps = check_dependencies()
     if args.export == 'pdf' and not deps['pdf']:
         ui.error("PDF export richiede: pip install reportlab pillow")
-        sys.exit(1)
+        sys.exit(ExitCode.CONFIG)
     if args.export == 'excel' and not deps['excel']:
         ui.error("Excel export richiede: pip install openpyxl")
-        sys.exit(1)
+        sys.exit(ExitCode.CONFIG)
 
     # Trova report locale
     reports_dir = Path(f"reports/{args.project}")
     if not reports_dir.exists():
         ui.error(f"Nessun report trovato per {args.project}")
-        sys.exit(1)
+        sys.exit(ExitCode.NO_INPUT)
 
     # Determina quale run esportare
     run_dirs = sorted(reports_dir.glob("run_*"), key=lambda p: int(p.name.split('_')[1]))
     if not run_dirs:
         ui.error("Nessun run trovato")
-        sys.exit(1)
+        sys.exit(ExitCode.NO_INPUT)
 
     if args.export_run:
         # Prova entrambi i formati: run_19 e run_019
@@ -2254,7 +2452,7 @@ def run_export_commands(args):
             target_dir = reports_dir / f"run_{args.export_run:03d}"
         if not target_dir.exists():
             ui.error(f"Run {args.export_run} non trovato")
-            sys.exit(1)
+            sys.exit(ExitCode.NO_INPUT)
     else:
         target_dir = run_dirs[-1]
 
@@ -2273,7 +2471,7 @@ def run_export_commands(args):
         report = RunReport.from_summary_and_csv(summary_json, report_csv if report_csv.exists() else None)
     else:
         ui.error(f"Nessun report trovato in {target_dir}")
-        sys.exit(1)
+        sys.exit(ExitCode.NO_INPUT)
     exporter = ReportExporter(report)
 
     # Export
@@ -2298,6 +2496,12 @@ def run_export_commands(args):
     elif args.export == 'csv':
         path = exporter.to_csv(output_dir / f"{base_name}.csv")
         ui.success(f"CSV: {path}")
+
+    # Next steps suggerimenti
+    if args.export != 'all':
+        output_path = output_dir / f"{base_name}.{args.export}"
+        steps = NextSteps.after_export(output_path)
+        ui.muted(NextSteps.format(steps))
 
 
 def run_notify_commands(args):
@@ -2404,33 +2608,232 @@ def run_notify_commands(args):
                     ui.warning(f"{channel}: fallito")
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLI: Analyze Commands
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def run_analyze_command(args):
+    """
+    Esegue comando --analyze.
+
+    Genera debug package dai test falliti e opzionalmente
+    li analizza con un LLM (manual/claude/groq).
+    """
+    from src.analyzer import run_analysis
+
+    ui = get_ui()
+
+    result = run_analysis(
+        project_name=args.project,
+        provider=args.provider,
+        run_number=args.analyze_run,
+        skip_confirm=args.yes
+    )
+
+    if result is None:
+        return
+
+    # Mostra risultato
+    ui.section("Risultato Analisi")
+
+    if result.suggestions:
+        ui.print("\nSuggerimenti:")
+        for i, suggestion in enumerate(result.suggestions, 1):
+            ui.print(f"  {i}. {suggestion}")
+
+    if result.prompt_fixes:
+        ui.print("\nFix prompt suggeriti:")
+        for fix in result.prompt_fixes:
+            ui.print(f"  - {fix}")
+
+    # Next steps
+    ui.muted("\nProssimi passi:")
+    ui.muted(f"  - Modifica il prompt in projects/{args.project}/prompts/")
+    ui.muted(f"  - Esegui nuovi test: chatbot-tester -p {args.project} -m auto")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLI: Prompt Manager Commands
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def run_prompt_commands(args):
+    """
+    Esegue comandi --prompt-*.
+
+    Gestione versionata dei prompt di progetto.
+    """
+    from src.prompt_manager import prompt_manager_cli, PromptManager
+
+    ui = get_ui()
+
+    # List versions
+    if args.prompt_list:
+        prompt_manager_cli(args.project, 'list')
+        return
+
+    # Show prompt
+    if args.prompt_show is not None:
+        version = args.prompt_show if args.prompt_show > 0 else None
+        prompt_manager_cli(args.project, 'show', version=version)
+        return
+
+    # Import prompt
+    if args.prompt_import:
+        prompt_manager_cli(
+            args.project, 'import',
+            filepath=args.prompt_import,
+            note=args.prompt_note
+        )
+        # Next steps
+        ui.muted("\nProssimi passi:")
+        ui.muted(f"  - Verifica: chatbot-tester -p {args.project} --prompt-show")
+        ui.muted(f"  - Lista versioni: chatbot-tester -p {args.project} --prompt-list")
+        return
+
+    # Export prompt
+    if args.prompt_export:
+        output = args.prompt_export if args.prompt_export != 'auto' else None
+        prompt_manager_cli(
+            args.project, 'export',
+            output=output
+        )
+        return
+
+    # Diff versions
+    if args.prompt_diff:
+        try:
+            parts = args.prompt_diff.split(':')
+            v1, v2 = int(parts[0]), int(parts[1])
+            prompt_manager_cli(
+                args.project, 'diff',
+                version_a=v1,
+                version_b=v2
+            )
+        except (ValueError, IndexError):
+            ui.error("Formato diff non valido. Usa: --prompt-diff V1:V2 (es: --prompt-diff 1:2)")
+        return
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLI: Visualizer Commands
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def run_visualize_commands(args):
+    """
+    Esegue comandi --viz-*.
+
+    Visualizzazione grafica di prompt e test.
+    """
+    from src.visualizer import PromptVisualizer, TestVisualizer
+
+    ui = get_ui()
+    output = args.viz_output
+
+    # Visualizza prompt
+    if args.viz_prompt:
+        viz = PromptVisualizer(args.project)
+        if output == 'html':
+            path = viz.render_html()
+            if path:
+                ui.success(f"Visualizzazione prompt aperta: {path}")
+            else:
+                ui.error("Nessun prompt disponibile per questo progetto")
+                ui.muted("  Importa un prompt con: --prompt-import FILE")
+        else:
+            result = viz.render_terminal()
+            print(result)
+        return
+
+    # Visualizza test
+    if args.viz_test:
+        test_id = args.viz_test if args.viz_test != 'latest' else None
+        run_number = args.viz_run
+
+        viz = TestVisualizer(args.project, run_number, test_id)
+
+        if output == 'html':
+            path = viz.render_html()
+            if path:
+                ui.success(f"Visualizzazione test aperta: {path}")
+            else:
+                ui.error("Nessun test trovato")
+        else:
+            result = viz.render_terminal()
+            print(result)
+        return
+
+
 def main():
-    """Entry point"""
+    """Entry point - clig.dev compliant"""
+    import signal
+
+    # Ctrl+C handler pulito
+    signal.signal(signal.SIGINT, lambda s, f: handle_keyboard_interrupt())
+
     args = parse_args()
+
+    # Inizializza UI con opzioni da args
+    use_colors = not getattr(args, 'no_color', False)
+    quiet = getattr(args, 'quiet', False)
+
+    # Feedback immediato (<100ms) - clig.dev compliant
+    if not quiet:
+        print_startup_feedback()
+
+    ui = get_ui(use_colors=use_colors, quiet=quiet)
+
+    # Validazione progetto con suggerimenti (se specificato)
+    if args.project and not args.new_project:
+        if not validate_project(args.project, ui):
+            sys.exit(ExitCode.PROJECT_NOT_FOUND)
 
     # Comandi scheduler da CLI
     if args.scheduler or args.add_schedule or args.list_schedules:
         run_scheduler_commands(args)
-        return
+        sys.exit(ExitCode.SUCCESS)
 
     # Comandi export da CLI
     if args.export:
         run_export_commands(args)
-        return
+        sys.exit(ExitCode.SUCCESS)
 
     # Comandi notifica da CLI
     if args.notify or args.test_notify:
         run_notify_commands(args)
-        return
+        sys.exit(ExitCode.SUCCESS)
 
     # Comandi analisi da CLI
     if args.compare is not None or args.regressions is not None or args.flaky is not None:
         run_cli_analysis(args)
-        return
+        sys.exit(ExitCode.SUCCESS)
+
+    # Comandi analyze (debug package + LLM)
+    if args.analyze:
+        if not args.project:
+            ui.error("Specifica un progetto con -p PROJECT")
+            sys.exit(ExitCode.USAGE_ERROR)
+        run_analyze_command(args)
+        sys.exit(ExitCode.SUCCESS)
+
+    # Comandi prompt manager
+    if any([args.prompt_list, args.prompt_show is not None,
+            args.prompt_import, args.prompt_export, args.prompt_diff]):
+        if not args.project:
+            ui.error("Specifica un progetto con -p PROJECT")
+            sys.exit(ExitCode.USAGE_ERROR)
+        run_prompt_commands(args)
+        sys.exit(ExitCode.SUCCESS)
+
+    # Comandi visualizer
+    if args.viz_prompt or args.viz_test:
+        if not args.project:
+            ui.error("Specifica un progetto con -p PROJECT")
+            sys.exit(ExitCode.USAGE_ERROR)
+        run_visualize_commands(args)
+        sys.exit(ExitCode.SUCCESS)
 
     # Health check standalone
     if args.health_check:
-        ui = get_ui()
         loader = ConfigLoader()
 
         # Se specificato progetto, carica config
@@ -2441,19 +2844,29 @@ def main():
                 project = loader.load_project(args.project)
                 settings = loader.load_global_settings()
             except FileNotFoundError:
-                ui.error(f"Progetto '{args.project}' non trovato")
-                sys.exit(1)
+                # validate_project gia chiamato sopra
+                sys.exit(ExitCode.PROJECT_NOT_FOUND)
 
         success = run_health_check(project, settings)
-        sys.exit(0 if success else 1)
+        sys.exit(ExitCode.SUCCESS if success else ExitCode.HEALTH_CHECK_FAILED)
 
-    # Determina modalità
-    if args.no_interactive or args.project or args.new_project:
-        # Modalità diretta
-        asyncio.run(main_direct(args))
-    else:
-        # Modalità interattiva
-        asyncio.run(main_interactive(args))
+    # Determina modalita
+    try:
+        if args.no_interactive or args.project or args.new_project:
+            # Modalita diretta
+            asyncio.run(main_direct(args))
+        else:
+            # Modalita interattiva
+            asyncio.run(main_interactive(args))
+        sys.exit(ExitCode.SUCCESS)
+    except KeyboardInterrupt:
+        handle_keyboard_interrupt()
+    except Exception as e:
+        ui.error(f"Errore: {e}")
+        if getattr(args, 'debug', False):
+            import traceback
+            traceback.print_exc()
+        sys.exit(ExitCode.ERROR)
 
 
 if __name__ == '__main__':

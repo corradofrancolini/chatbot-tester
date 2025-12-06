@@ -70,15 +70,31 @@ class ConsoleUI:
         ])
     """
     
-    def __init__(self, use_colors: bool = True):
+    def __init__(self, use_colors: bool = True, quiet: bool = False):
         """
         Inizializza la console.
-        
+
         Args:
-            use_colors: Abilita colori (default True)
+            use_colors: Abilita colori (default True, auto-detect TTY)
+            quiet: Output minimo (default False)
         """
+        import os
+        import sys
+
+        self.quiet = quiet
+
+        # TTY detection (clig.dev compliant)
+        is_tty = sys.stdout.isatty()
+        no_color_env = os.environ.get('NO_COLOR')
+        term_dumb = os.environ.get('TERM', '').lower() == 'dumb'
+
+        # Disabilita colori se: non TTY, NO_COLOR set, TERM=dumb, o esplicito
+        if not is_tty or no_color_env or term_dumb:
+            use_colors = False
+
         self.use_colors = use_colors and RICH_AVAILABLE
-        
+        self.is_tty = is_tty
+
         if self.use_colors:
             self.console = Console()
         else:
@@ -819,9 +835,21 @@ def show_key_value(key: str, value: Any, style: str = "") -> None:
 _default_ui: Optional[ConsoleUI] = None
 
 
-def get_ui(use_colors: bool = True) -> ConsoleUI:
-    """Ottiene l'istanza UI globale"""
+def get_ui(use_colors: bool = True, quiet: bool = False) -> ConsoleUI:
+    """
+    Ottiene l'istanza UI globale.
+
+    Args:
+        use_colors: Abilita colori (auto-detect TTY se True)
+        quiet: Output minimo (solo errori)
+    """
     global _default_ui
     if _default_ui is None:
-        _default_ui = ConsoleUI(use_colors)
+        _default_ui = ConsoleUI(use_colors, quiet)
     return _default_ui
+
+
+def reset_ui() -> None:
+    """Reset UI instance (utile per test)"""
+    global _default_ui
+    _default_ui = None
