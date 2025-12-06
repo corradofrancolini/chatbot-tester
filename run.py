@@ -393,9 +393,43 @@ Documentazione: https://github.com/user/chatbot-tester
     )
 
     # ═══════════════════════════════════════════════════════════════════
-    # Diagnostica
+    # Diagnostic Engine (failure analysis)
     # ═══════════════════════════════════════════════════════════════════
-    diag_group = parser.add_argument_group('Diagnostica')
+    diagnostic_group = parser.add_argument_group('Diagnostic Engine')
+    diagnostic_group.add_argument(
+        '--diagnose',
+        action='store_true',
+        help='Esegue diagnosi intelligente sui test falliti'
+    )
+    diagnostic_group.add_argument(
+        '--diagnose-test',
+        type=str,
+        metavar='TEST_ID',
+        help='Diagnosi su test specifico (es: --diagnose-test TEST_001)'
+    )
+    diagnostic_group.add_argument(
+        '--diagnose-run',
+        type=int,
+        metavar='RUN',
+        help='Run da diagnosticare (default: ultimo)'
+    )
+    diagnostic_group.add_argument(
+        '--diagnose-interactive',
+        action='store_true',
+        help='Modalita interattiva (conferma ipotesi)'
+    )
+    diagnostic_group.add_argument(
+        '--diagnose-model',
+        type=str,
+        default='generic',
+        choices=['generic', 'openai', 'claude', 'gemini'],
+        help='Modello target per fix (default: generic)'
+    )
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Health Check
+    # ═══════════════════════════════════════════════════════════════════
+    diag_group = parser.add_argument_group('Health Check')
     diag_group.add_argument(
         '--health-check',
         action='store_true',
@@ -409,7 +443,7 @@ Documentazione: https://github.com/user/chatbot-tester
     diag_group.add_argument(
         '-v', '--version',
         action='version',
-        version='%(prog)s v1.4.0'
+        version='%(prog)s v1.5.0'
     )
 
     args = parser.parse_args()
@@ -2653,6 +2687,177 @@ def run_analyze_command(args):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# CLI: Diagnostic Engine Commands
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def run_diagnose_command(args):
+    """
+    Esegue comando --diagnose.
+
+    Analizza test falliti con DiagnosticEngine, genera ipotesi
+    e suggerisce fix basati su knowledge base.
+    """
+    from src.diagnostic import DiagnosticEngine, InteractiveDiagnostic, TestFailure
+    from src.prompt_manager import PromptManager
+    import json
+
+    ui = get_ui()
+
+    # Carica prompt corrente
+    pm = PromptManager(args.project)
+    prompt = pm.get_current()
+    if not prompt:
+        ui.error(f"Nessun prompt trovato per {args.project}")
+        ui.muted("  Importa un prompt con: --prompt-import FILE")
+        return
+
+    # Trova run da analizzare
+    reports_dir = Path(f"reports/{args.project}")
+    if not reports_dir.exists():
+        ui.error(f"Nessun report trovato per {args.project}")
+        return
+
+    run_number = args.diagnose_run
+    if run_number is None:
+        # Trova ultima run
+        runs = sorted([d for d in reports_dir.iterdir() if d.is_dir() and d.name.startswith('run_')])
+        if not runs:
+            ui.error("Nessuna run trovata")
+            return
+        run_dir = runs[-1]
+        run_number = int(run_dir.name.split('_')[1])
+    else:
+        run_dir = reports_dir / f"run_{run_number:03d}"
+
+    if not run_dir.exists():
+        ui.error(f"Run {run_number} non trovata")
+        return
+
+    # Carica report (supporta sia JSON che CSV)
+    report_json = run_dir / "report.json"
+    report_csv = run_dir / "report.csv"
+
+    failed_tests = []
+
+    if report_json.exists():
+        with open(report_json) as f:
+            report = json.load(f)
+        failed_tests = [t for t in report.get('tests', []) if t.get('status') == 'FAIL']
+    elif report_csv.exists():
+        import csv
+        with open(report_csv, newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row.get('esito') == 'FAIL':
+                    # Estrai risposta dal campo conversation
+                    conversation = row.get('conversation', '')
+                    response = ''
+                    if 'BOT:' in conversation:
+                        response = conversation.split('BOT:')[-1].strip()
+
+                    failed_tests.append({
+                        'test_id': row.get('test_id'),
+                        'query': row.get('question'),
+                        'response': response,
+                        'notes': row.get('notes'),
+                        'expected': None
+                    })
+    else:
+        ui.error(f"Report non trovato in {run_dir}")
+        return
+
+    if args.diagnose_test:
+        # Filtra per test specifico
+        failed_tests = [t for t in failed_tests if t.get('test_id') == args.diagnose_test]
+        if not failed_tests:
+            ui.warning(f"Test {args.diagnose_test} non trovato o non fallito")
+            return
+
+    if not failed_tests:
+        ui.success(f"Nessun test fallito nella run {run_number}")
+        return
+
+    ui.header(f"Diagnostic Engine - {args.project}")
+    ui.info(f"Run: {run_number} | Test falliti: {len(failed_tests)}")
+    ui.info(f"Modello target: {args.diagnose_model}")
+    ui.print("")
+
+    # Crea engine
+    if args.diagnose_interactive:
+        session = InteractiveDiagnostic(ui)
+    else:
+        engine = DiagnosticEngine()
+
+    # Diagnostica ogni test fallito
+    diagnoses = []
+    for test in failed_tests:
+        failure = TestFailure(
+            test_id=test.get('test_id', 'UNKNOWN'),
+            question=test.get('query', ''),
+            expected=test.get('expected', ''),
+            actual=test.get('response', '')[:500],
+            error_type=test.get('error_type'),
+            notes=test.get('notes')
+        )
+
+        if args.diagnose_interactive:
+            diagnosis = session.run(
+                prompt=prompt,
+                failure=failure,
+                model=args.diagnose_model
+            )
+        else:
+            diagnosis = engine.diagnose(
+                prompt=prompt,
+                failure=failure,
+                model=args.diagnose_model
+            )
+
+        diagnoses.append((failure, diagnosis))
+
+        # Mostra diagnosi (non-interactive mode)
+        if not args.diagnose_interactive:
+            ui.section(f"Test: {failure.test_id}")
+            ui.print(diagnosis.summary())
+            ui.print("")
+
+    # Riepilogo finale
+    ui.divider()
+    ui.section("Riepilogo Diagnosi")
+
+    total_verified = sum(len(d.verified_hypotheses) for _, d in diagnoses)
+    total_fixes = sum(len(d.suggested_fixes) for _, d in diagnoses)
+
+    ui.stats_row({
+        "Test analizzati": len(diagnoses),
+        "Ipotesi verificate": total_verified,
+        "Fix suggeriti": total_fixes
+    })
+
+    # Top fix suggeriti
+    all_fixes = []
+    for failure, diagnosis in diagnoses:
+        for fix in diagnosis.suggested_fixes:
+            all_fixes.append((failure.test_id, fix))
+
+    if all_fixes:
+        ui.section("Top Fix Suggeriti")
+        seen_fixes = set()
+        for test_id, fix in sorted(all_fixes, key=lambda x: x[1].confidence, reverse=True)[:5]:
+            if fix.description not in seen_fixes:
+                seen_fixes.add(fix.description)
+                ui.print(f"  [{fix.confidence:.0%}] {fix.description}")
+                ui.muted(f"       {fix.template[:100]}...")
+
+    # Next steps
+    ui.print("")
+    ui.muted("Prossimi passi:")
+    ui.muted(f"  - Applica i fix suggeriti al prompt")
+    ui.muted(f"  - Salva nuova versione: --prompt-import FILE --prompt-note 'fix: ...'")
+    ui.muted(f"  - Ri-esegui test: -p {args.project} -m auto --new-run")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # CLI: Prompt Manager Commands
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2813,6 +3018,14 @@ def main():
             ui.error("Specifica un progetto con -p PROJECT")
             sys.exit(ExitCode.USAGE_ERROR)
         run_analyze_command(args)
+        sys.exit(ExitCode.SUCCESS)
+
+    # Comandi diagnostic engine
+    if args.diagnose or args.diagnose_test:
+        if not args.project:
+            ui.error("Specifica un progetto con -p PROJECT")
+            sys.exit(ExitCode.USAGE_ERROR)
+        run_diagnose_command(args)
         sys.exit(ExitCode.SUCCESS)
 
     # Comandi prompt manager

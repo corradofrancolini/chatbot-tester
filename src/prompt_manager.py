@@ -39,11 +39,28 @@ class PromptVersion:
     note: str
     filename: str
     hash: str
+    tag: str = ""  # Tag human-readable (es. "fix-priority")
+    parent_version: Optional[int] = None  # Versione da cui deriva
+    source: str = "manual"  # Fonte: manual, diagnostic, import, test-run
+    test_run: Optional[str] = None  # Run associato (es. "run_015")
+
+    @property
+    def version_id(self) -> str:
+        """ID versione: v{NNN}_{tag}."""
+        if self.tag:
+            return f"v{self.version:03d}_{self.tag}"
+        return f"v{self.version:03d}"
 
     @property
     def display_name(self) -> str:
         """Nome visualizzabile."""
-        return f"v{self.version:03d} ({self.date}) - {self.note}"
+        parts = [f"v{self.version:03d}"]
+        if self.tag:
+            parts.append(f"[{self.tag}]")
+        parts.append(f"({self.date})")
+        if self.note:
+            parts.append(f"- {self.note}")
+        return " ".join(parts)
 
 
 @dataclass
@@ -135,16 +152,30 @@ class PromptManager:
             return 1
         return max(v['version'] for v in self.metadata.versions) + 1
 
-    def save(self, content: str, note: str = "update") -> PromptVersion:
+    def save(
+        self,
+        content: str,
+        note: str = "update",
+        tag: str = "",
+        parent_version: Optional[int] = None,
+        source: str = "manual",
+        test_run: Optional[str] = None,
+        confirm_callback: Optional[callable] = None
+    ) -> Optional[PromptVersion]:
         """
         Salva una nuova versione del prompt.
 
         Args:
             content: Contenuto del prompt
             note: Nota descrittiva della modifica
+            tag: Tag human-readable (es. "fix-priority")
+            parent_version: Versione da cui deriva
+            source: Fonte della modifica (manual, diagnostic, import, test-run)
+            test_run: Run di test associato (es. "run_015")
+            confirm_callback: Callback per conferma utente (opzionale)
 
         Returns:
-            PromptVersion creata
+            PromptVersion creata o None se utente annulla
         """
         # Verifica se il contenuto e' cambiato
         content_hash = self._compute_hash(content)
@@ -158,11 +189,41 @@ class PromptManager:
         version_num = self._get_next_version()
         date_str = datetime.now().strftime('%Y-%m-%d')
 
-        # Sanitizza nota per filename
-        safe_note = "".join(c if c.isalnum() or c in '-_' else '-' for c in note.lower())
-        safe_note = safe_note[:30]  # Limita lunghezza
+        # Determina parent version se non specificato
+        if parent_version is None and self.metadata.current_version:
+            parent_version = self.metadata.current_version
 
-        filename = f"v{version_num:03d}_{date_str}_{safe_note}.md"
+        # Sanitizza tag per filename (es. "fix-priority" -> "fix-priority")
+        safe_tag = "".join(c if c.isalnum() or c == '-' else '-' for c in tag.lower())
+        safe_tag = safe_tag[:20].strip('-')  # Limita lunghezza
+
+        # Genera filename: v{NNN}_{tag}.md o v{NNN}_{date}_{note}.md se no tag
+        if safe_tag:
+            filename = f"v{version_num:03d}_{safe_tag}.md"
+        else:
+            safe_note = "".join(c if c.isalnum() or c in '-_' else '-' for c in note.lower())
+            safe_note = safe_note[:20]
+            filename = f"v{version_num:03d}_{date_str}_{safe_note}.md"
+
+        # Prepara version_data
+        version_data = {
+            'version': version_num,
+            'date': date_str,
+            'note': note,
+            'filename': filename,
+            'hash': content_hash,
+            'tag': tag,
+            'parent_version': parent_version,
+            'source': source,
+            'test_run': test_run
+        }
+
+        # Chiedi conferma se callback fornito
+        if confirm_callback:
+            version_preview = PromptVersion(**version_data)
+            if not confirm_callback(version_preview, content):
+                return None  # Utente ha annullato
+
         filepath = self.prompts_dir / filename
 
         # Scrivi file
@@ -170,13 +231,6 @@ class PromptManager:
             f.write(content)
 
         # Aggiorna metadata
-        version_data = {
-            'version': version_num,
-            'date': date_str,
-            'note': note,
-            'filename': filename,
-            'hash': content_hash
-        }
         self.metadata.versions.append(version_data)
         self.metadata.current_version = version_num
         self._save_metadata()
@@ -185,6 +239,71 @@ class PromptManager:
         self._update_current_link(filename)
 
         return PromptVersion(**version_data)
+
+    def save_with_confirmation(
+        self,
+        content: str,
+        note: str,
+        tag: str = "",
+        source: str = "manual",
+        test_run: Optional[str] = None,
+        ui: Optional[Any] = None
+    ) -> Optional[PromptVersion]:
+        """
+        Salva con conferma interattiva.
+
+        Args:
+            content: Contenuto del prompt
+            note: Nota descrittiva
+            tag: Tag (es. "fix-priority")
+            source: Fonte della modifica
+            test_run: Run associato
+            ui: UI per interazione (da src.ui)
+
+        Returns:
+            PromptVersion o None se annullato
+        """
+        if ui is None:
+            # No UI, salva direttamente
+            return self.save(content, note=note, tag=tag, source=source, test_run=test_run)
+
+        # Mostra anteprima
+        version_num = self._get_next_version()
+        version_id = f"v{version_num:03d}_{tag}" if tag else f"v{version_num:03d}"
+
+        ui.section("Salvare nuova versione?")
+        ui.print(f"  Version: {version_id}")
+        ui.print(f"  Note: {note}")
+        if tag:
+            ui.print(f"  Tag: {tag}")
+        ui.print(f"  Source: {source}")
+        if test_run:
+            ui.print(f"  Test Run: {test_run}")
+        ui.print(f"  Content: {len(content)} chars")
+        ui.print("")
+
+        # Mostra diff se esiste versione precedente
+        if self.metadata.current_version:
+            current_content = self.get_current()
+            if current_content:
+                import difflib
+                diff_lines = list(difflib.unified_diff(
+                    current_content.splitlines()[:10],
+                    content.splitlines()[:10],
+                    lineterm='',
+                    n=1
+                ))
+                if diff_lines:
+                    ui.muted("  Diff (prime 10 righe):")
+                    for line in diff_lines[:15]:
+                        ui.print(f"  {line}")
+
+        # Conferma
+        if ui.confirm("Salvare?", default=True):
+            return self.save(content, note=note, tag=tag, source=source, test_run=test_run)
+
+        ui.warning("Salvataggio annullato")
+        return None
 
     def _update_current_link(self, filename: str) -> None:
         """Aggiorna il symlink 'current' al file specificato."""
@@ -249,10 +368,85 @@ class PromptManager:
         Returns:
             Lista di PromptVersion ordinate per versione
         """
-        return [
-            PromptVersion(**v)
-            for v in sorted(self.metadata.versions, key=lambda x: x['version'])
-        ]
+        versions = []
+        for v in sorted(self.metadata.versions, key=lambda x: x['version']):
+            # Compatibilità con versioni vecchie (senza nuovi campi)
+            version_data = {
+                'version': v['version'],
+                'date': v['date'],
+                'note': v['note'],
+                'filename': v['filename'],
+                'hash': v['hash'],
+                'tag': v.get('tag', ''),
+                'parent_version': v.get('parent_version'),
+                'source': v.get('source', 'manual'),
+                'test_run': v.get('test_run')
+            }
+            versions.append(PromptVersion(**version_data))
+        return versions
+
+    def get_by_tag(self, tag: str) -> Optional[PromptVersion]:
+        """
+        Trova una versione per tag.
+
+        Args:
+            tag: Tag da cercare (es. "fix-priority")
+
+        Returns:
+            PromptVersion o None se non trovata
+        """
+        for v in reversed(self.metadata.versions):
+            if v.get('tag', '').lower() == tag.lower():
+                return PromptVersion(**v)
+        return None
+
+    def get_by_version_id(self, version_id: str) -> Optional[PromptVersion]:
+        """
+        Trova versione per ID (es. "v003_fix-priority" o "v003").
+
+        Args:
+            version_id: ID versione
+
+        Returns:
+            PromptVersion o None
+        """
+        # Parse version_id
+        if version_id.startswith('v'):
+            parts = version_id[1:].split('_', 1)
+            try:
+                version_num = int(parts[0])
+            except ValueError:
+                return None
+
+            # Cerca per numero versione
+            for v in self.metadata.versions:
+                if v['version'] == version_num:
+                    return PromptVersion(**v)
+        return None
+
+    def get_version_chain(self, version: int) -> List[PromptVersion]:
+        """
+        Ritorna la catena di versioni parent.
+
+        Args:
+            version: Versione da cui partire
+
+        Returns:
+            Lista di versioni dalla più recente alla più vecchia
+        """
+        chain = []
+        current = version
+
+        while current is not None:
+            for v in self.metadata.versions:
+                if v['version'] == current:
+                    chain.append(PromptVersion(**v))
+                    current = v.get('parent_version')
+                    break
+            else:
+                break
+
+        return chain
 
     def diff(self, version_a: int, version_b: int) -> Optional[str]:
         """
@@ -382,7 +576,18 @@ def prompt_manager_cli(project_name: str, action: str, **kwargs) -> None:
         current = manager.metadata.current_version
         for v in versions:
             marker = " [current]" if v.version == current else ""
-            ui.print(f"  v{v.version:03d}  {v.date}  {v.note}{marker}")
+            # Formato: v{NNN}_{tag} o v{NNN}
+            version_str = v.version_id
+            # Aggiungi info su source e parent
+            extras = []
+            if v.source != "manual":
+                extras.append(f"[{v.source}]")
+            if v.parent_version:
+                extras.append(f"< v{v.parent_version:03d}")
+            if v.test_run:
+                extras.append(f"@{v.test_run}")
+            extra_str = " ".join(extras)
+            ui.print(f"  {version_str:20}  {v.date}  {v.note}{marker}  {extra_str}")
 
     elif action == 'show':
         version = kwargs.get('version')
