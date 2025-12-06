@@ -219,7 +219,7 @@ jobs:
 
     steps:
       - name: Notify on failure (Slack)
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
+        if: vars.SLACK_ENABLED == 'true'
         uses: slackapi/slack-github-action@v1.26.0
         with:
           payload: |
