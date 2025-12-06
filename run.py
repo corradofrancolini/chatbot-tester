@@ -2085,6 +2085,21 @@ async def run_test_session(
             )
             ui.muted(NextSteps.format(steps))
 
+        # Auto-diagnosi se ci sono fallimenti
+        if failed > 0 and not args.no_interactive:
+            ui.print("")
+            if ui.confirm("Eseguire diagnosi sui test falliti?", default=True):
+                ui.print("")
+                # Simula args per diagnose
+                class DiagnoseArgs:
+                    project = project.name
+                    diagnose = True
+                    diagnose_test = None
+                    diagnose_run = run_config.active_run
+                    diagnose_interactive = False
+                    diagnose_model = 'generic'
+                run_diagnose_command(DiagnoseArgs())
+
     finally:
         await tester.shutdown()
 

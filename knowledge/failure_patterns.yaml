@@ -416,3 +416,133 @@ symptom_mapping:
   "flaky": ["consistency_failure"]
   "wrong logic": ["reasoning_failure"]
   "skipped step": ["reasoning_failure"]
+  # E-commerce specific
+  "wrong product": ["content_incorrect", "priority_conflict"]
+  "wrong price": ["content_incorrect"]
+  "wrong availability": ["content_incorrect"]
+  "prodotto sbagliato": ["content_incorrect", "priority_conflict"]
+  "prezzo sbagliato": ["content_incorrect"]
+  "disponibilita errata": ["content_incorrect"]
+  "non trova prodotti": ["scope_violation", "content_incorrect"]
+  "troppi prodotti": ["scope_violation"]
+  "filtro ignorato": ["priority_conflict"]
+  "colore sbagliato": ["priority_conflict"]
+  "taglia sbagliata": ["priority_conflict"]
+
+
+# =============================================================================
+# E-COMMERCE SPECIFIC PATTERNS
+# =============================================================================
+# Additional patterns for product catalog chatbots
+
+ecommerce_patterns:
+
+  product_search_failure:
+    description: "Bot returns wrong products or no results"
+    symptoms:
+      - "Returns products not matching query"
+      - "Empty results when products exist"
+      - "Wrong category products"
+      - "Ignores search filters"
+
+    hypotheses:
+      - id: "ECM-01"
+        cause: "No product matching criteria in prompt"
+        confidence: 0.80
+        check: "Verify prompt includes product matching rules"
+        source: "ecommerce-patterns"
+
+      - id: "ECM-02"
+        cause: "Filter priority not specified"
+        confidence: 0.75
+        check: "Check if color/size/price filters have priority order"
+        source: "ecommerce-patterns"
+
+      - id: "ECM-03"
+        cause: "Retrieval tool not configured correctly"
+        confidence: 0.65
+        check: "Verify RAG/retrieval tool usage instructions"
+        source: "ecommerce-patterns"
+
+  price_display_failure:
+    description: "Wrong price format or missing price info"
+    symptoms:
+      - "Price in wrong currency"
+      - "Missing price label"
+      - "Price without VAT specification"
+      - "Wrong number format"
+
+    hypotheses:
+      - id: "ECM-04"
+        cause: "Price format not specified in prompt"
+        confidence: 0.85
+        check: "Search for price/currency format instructions"
+        source: "ecommerce-patterns"
+
+      - id: "ECM-05"
+        cause: "Multiple price fields without priority"
+        confidence: 0.70
+        check: "Check if retail/wholesale/public price priority defined"
+        source: "ecommerce-patterns"
+
+  availability_failure:
+    description: "Wrong or missing availability information"
+    symptoms:
+      - "Shows unavailable products"
+      - "Wrong stock count"
+      - "Missing availability status"
+
+    hypotheses:
+      - id: "ECM-06"
+        cause: "Availability check not in prompt"
+        confidence: 0.80
+        check: "Verify instructions to check stock/availability"
+        source: "ecommerce-patterns"
+
+      - id: "ECM-07"
+        cause: "Out-of-stock handling not defined"
+        confidence: 0.70
+        check: "Check for instructions on unavailable products"
+        source: "ecommerce-patterns"
+
+
+# E-commerce verification strategies
+ecommerce_verifications:
+
+  "ECM-01":
+    automated:
+      - pattern: "(prodott|articol|catalog|match|trova|cerca)"
+        expect: "present"
+    manual:
+      - "Check if product selection criteria are explicit"
+
+  "ECM-04":
+    automated:
+      - pattern: "(EUR|euro|prezzo|price|\\d+[,.]\\d{2})"
+        expect: "present"
+    manual:
+      - "Verify price format is specified"
+
+
+# E-commerce fix templates
+ecommerce_fixes:
+
+  "ECM-01":
+    generic: |
+      Add explicit product matching rules:
+      "When searching for products:
+      1. Match ALL user criteria (color, size, price range)
+      2. Prioritize exact matches over partial
+      3. If no exact match, explain what's different"
+
+  "ECM-04":
+    generic: |
+      Add price display format:
+      "Always display prices as: {amount}€ al pubblico
+      Include availability: {count} disponibili"
+
+  "ECM-06":
+    generic: |
+      Add availability check:
+      "Before showing products, verify availability > 0.
+      Never suggest out-of-stock items unless user asks."

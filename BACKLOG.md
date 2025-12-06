@@ -1,6 +1,6 @@
 # Chatbot Tester - Backlog
 
-Versione attuale: **v1.4.0** (2025-12-06)
+Versione attuale: **v1.5.0** (2025-12-06)
 
 ---
 
@@ -9,6 +9,8 @@ Versione attuale: **v1.4.0** (2025-12-06)
 ### Prossimi step
 
 - [ ] UX: Dashboard web per visualizzazione risultati
+- [ ] Auto-diagnosi dopo run fallita
+- [ ] Integrazione diagnosi con --analyze
 
 ---
 
@@ -16,10 +18,31 @@ Versione attuale: **v1.4.0** (2025-12-06)
 
 - [ ] Notifiche Slack (oltre a Teams)
 - [ ] Notifiche remote in GitHub Actions
+- [ ] LLM-powered hypothesis verification
+- [ ] Custom knowledge base per progetto
 
 ---
 
 ## Completati
+
+### v1.5.0 (2025-12-06)
+- [x] **Diagnostic Engine** (`src/diagnostic.py`)
+  - Classificazione intelligente dei fallimenti (7 tipi)
+  - Generazione ipotesi basata su knowledge base
+  - Verifica automatica con pattern matching
+  - Suggerimento fix model-specific (generic, openai, claude, gemini)
+  - Modalita interattiva con conferma ipotesi
+  - CLI: `--diagnose`, `--diagnose-test`, `--diagnose-run`, `--diagnose-interactive`
+- [x] **Knowledge Base** (`knowledge/failure_patterns.yaml`)
+  - Failure patterns da OpenAI, Claude, Gemini, IBM best practices
+  - Verification strategies automatizzate
+  - Fix templates per modello
+  - Symptom mapping per lookup rapido
+- [x] **Prompt Versioning Enhanced** (`src/prompt_manager.py`)
+  - Schema `v{NNN}_{tag}` (es. `v003_fix-priority`)
+  - Tracciabilita: parent_version, source, test_run
+  - Conferma interattiva prima del salvataggio
+  - Metodi get_by_tag(), get_by_version_id(), get_version_chain()
 
 ### v1.4.0 (2025-12-06)
 - [x] **Visualizer** (`src/visualizer.py`)
