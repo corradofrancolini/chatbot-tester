@@ -99,9 +99,14 @@ jobs:
         run: |
           mkdir -p config
 
-          # Google credentials
-          if [ -n "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" ]; then
-            echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > config/credentials.json
+          # Google OAuth credentials per Sheets/Drive
+          if [ -n "${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}" ]; then
+            echo '${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}' > config/oauth_credentials.json
+          fi
+
+          # Google OAuth token (con refresh token per accesso non interattivo)
+          if [ -n "${{ secrets.GOOGLE_TOKEN_JSON }}" ]; then
+            echo '${{ secrets.GOOGLE_TOKEN_JSON }}' > config/token.json
           fi
 
           # Environment variables
@@ -144,9 +149,9 @@ jobs:
               - 'no'
 
           google_sheets:
-            enabled: false
-            spreadsheet_id: ''
-            drive_folder_id: ''
+            enabled: ${{ secrets.GOOGLE_TOKEN_JSON != '' }}
+            spreadsheet_id: 'YOUR_SPREADSHEET_ID'
+            drive_folder_id: 'YOUR_DRIVE_FOLDER_ID'
 
           langsmith:
             enabled: ${{ secrets.LANGSMITH_API_KEY != '' }}

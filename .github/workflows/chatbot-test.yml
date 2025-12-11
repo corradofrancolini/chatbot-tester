@@ -75,6 +75,16 @@ jobs:
             echo "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" >> config/.env
           fi
 
+          # Google OAuth credentials per Sheets/Drive
+          if [ -n "${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}" ]; then
+            echo '${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}' > config/oauth_credentials.json
+          fi
+
+          # Google OAuth token (con refresh token per accesso non interattivo)
+          if [ -n "${{ secrets.GOOGLE_TOKEN_JSON }}" ]; then
+            echo '${{ secrets.GOOGLE_TOKEN_JSON }}' > config/token.json
+          fi
+
       - name: Create my-chatbot project
         if: ${{ inputs.project == 'my-chatbot' }}
         run: |
@@ -110,7 +120,7 @@ jobs:
               - 'no'
 
           google_sheets:
-            enabled: ${{ secrets.GOOGLE_CREDENTIALS_JSON != '' }}
+            enabled: ${{ secrets.GOOGLE_TOKEN_JSON != '' }}
             spreadsheet_id: 'YOUR_SPREADSHEET_ID'
             drive_folder_id: 'YOUR_DRIVE_FOLDER_ID'
 
@@ -182,7 +192,6 @@ jobs:
             $NEW_RUN_FLAG
         env:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
 
       - name: Upload test reports
         uses: actions/upload-artifact@v4
