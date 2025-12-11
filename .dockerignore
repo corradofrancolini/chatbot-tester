@@ -1,0 +1,63 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv/
+ENV/
+env/
+.eggs/
+*.egg-info/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Project runtime data (mount as volumes instead)
+projects/*/browser-data/
+projects/*/token.json
+reports/
+
+# Sensitive files
+config/.env
+config/credentials.json
+config/token.json
+*.pem
+*.key
+
+# Build artifacts
+dist/
+build/
+*.spec
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Tests
+tests/
+*.test.py
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.log
+*.tmp
+tmp/
+temp/

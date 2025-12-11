@@ -1,0 +1,998 @@
+# English Translations - Chatbot Tester
+# =====================================
+
+app:
+  title: "CHATBOT TESTER"
+  subtitle: "Setup Wizard"
+  version: "v1.1.0"
+
+nav:
+  step: "Step"
+  of: "of"
+  remaining: "~{mins} min remaining"
+  press_enter: "[ENTER] Continue"
+  press_back: "[b] Back"
+  press_help: "[?] Help"
+  press_quit: "[q] Exit and save"
+  press_skip: "[s] Skip this step"
+  continue_session: |
+    Found a previous session interrupted at step {step} of {total}.
+    Would you like to resume where you left off?
+  continue_option: "[c] Resume session"
+  restart_option: "[r] Start over"
+
+common:
+  yes: "Yes"
+  no: "No"
+  ok: "OK"
+  cancel: "Cancel"
+  back: "Back"
+  next: "Continue"
+  skip: "Skip"
+  retry: "Retry"
+  exit: "Exit"
+  save: "Save"
+  loading: "Loading..."
+  checking: "Checking..."
+  success: "Completed"
+  error: "Error"
+  warning: "Warning"
+  info: "Info"
+  recommended: "recommended"
+  optional: "optional"
+  required: "required"
+  enabled: "Active"
+  disabled: "Not active"
+  configured: "Configured"
+  not_configured: "Not configured"
+
+status:
+  success: "✓ {message}"
+  error: "✗ {message}"
+  warning: "!  {message}"
+  info: "> {message}"
+  working: "{message}"
+  question: "? {message}"
+
+errors:
+  generic: "An unexpected error occurred"
+  connection: "Unable to connect"
+  timeout: "Operation took too long"
+  invalid_input: "The value entered is not valid"
+  file_not_found: "File not found"
+  permission_denied: "Access denied"
+  already_exists: "Already exists"
+  solutions: "WHAT YOU CAN DO"
+  show_log: "Show error details"
+
+confirm:
+  exit: "Do you want to exit the wizard?"
+  exit_save: "Save progress so you can resume next time?"
+  overwrite: "This file already exists. Overwrite it?"
+  delete: "This action cannot be undone. Confirm?"
+
+# ============================================
+# STEP 1: Prerequisites Check
+# ============================================
+step1:
+  title: "Prerequisites Check"
+  description: |
+    Before we begin, I'll verify that your system has everything
+    needed to run Chatbot Tester.
+
+  # Messages during check
+  checking_os: "Checking macOS version..."
+  checking_python: "Checking Python..."
+  checking_homebrew: "Checking Homebrew..."
+  checking_git: "Checking Git..."
+  checking_disk: "Checking disk space..."
+  checking_network: "Checking internet connection..."
+
+  # Positive results
+  os_ok: "macOS {version} - compatible"
+  python_ok: "Python {version} - compatible"
+  homebrew_ok: "Homebrew installed"
+  git_ok: "Git {version} installed"
+  disk_ok: "{space} MB free - sufficient"
+  network_ok: "Internet connection active"
+
+  # Negative results with explanation
+  os_fail: "Requires macOS 12.0 (Monterey) or newer"
+  python_fail: "Requires Python 3.10 or newer"
+  homebrew_fail: "Homebrew not found (needed to install dependencies)"
+  git_fail: "Git not found (needed for updates)"
+  disk_fail: "At least 500 MB free space required"
+  network_fail: "No internet connection (needed to download components)"
+
+  # Summary
+  all_ok: "All set! The system is ready."
+  some_fail: "Some requirements are not met"
+
+  # Fix instructions
+  fix_homebrew: |
+    To install Homebrew, open Terminal and run:
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  fix_python: |
+    To install Python, run:
+    brew install python@3.11
+  fix_git: |
+    To install Git, run:
+    xcode-select --install
+
+  help: |
+    WHAT IS BEING VERIFIED
+
+    · macOS 12.0+    The tool uses modern system features
+    · Python 3.10+   Language the tool is written in
+    · Homebrew       Package manager to install dependencies
+    · Git            To receive tool updates
+    · 500 MB disk    Space for browser, LLM models, reports
+    · Internet       To download components and access services
+
+# ============================================
+# STEP 2: Project Information
+# ============================================
+step2:
+  title: "Project Name"
+  description: |
+    Each chatbot you test becomes a "project" with its own
+    configuration, tests, and reports. Let's start by naming this project.
+
+  name_prompt: "What would you like to call this project?"
+  name_hint: |
+    Use a short, descriptive name, for example:
+    · silicon-search (chatbot name)
+    · sales-assistant (chatbot function)
+    · intranet-hr (usage context)
+
+    Rules: lowercase letters, numbers, and hyphens (-) only
+  name_invalid: |
+    The name can only contain lowercase letters (a-z), numbers (0-9), and hyphens (-).
+    Valid examples: my-chatbot, test-1, silicon-v2
+  name_exists: "A project with this name already exists. Choose another."
+  name_ok: "Name available"
+
+  description_prompt: "Add a short description"
+  description_hint: "[Optional] E.g.: Customer support chatbot for website"
+
+  help: |
+    WHAT THE PROJECT NAME IS FOR
+
+    The name is used to:
+    · Create the folder where configuration and reports are saved
+    · Identify tests in reports
+    · Launch the tool from command line
+
+    Example: after creating "silicon-search", you can run:
+    python run.py --project=silicon-search
+
+# ============================================
+# STEP 3: Chatbot URL
+# ============================================
+step3:
+  title: "Chatbot Address"
+  description: |
+    Now I need the web address (URL) of the page where
+    the chatbot you want to test is located.
+
+  url_prompt: "What is the URL of the page with the chatbot?"
+  url_hint: |
+    Enter the full URL, for example:
+    https://www.example.com/assistant
+
+    If you don't include http:// or https://, I'll add https:// automatically.
+  url_invalid: |
+    This doesn't look like a valid URL.
+    It must start with http:// or https:// and be a complete web address.
+
+  testing_connection: "Trying to reach the page..."
+  connection_ok: "Page reached (HTTP {status})"
+  connection_fail: |
+    I can't reach this page.
+    This could be a temporary issue, or the page
+    might require VPN or authentication.
+
+  # Options after connection failure
+  connection_fail_options: |
+    What would you like to do?
+    [r] Retry the connection
+    [c] Continue anyway (if you know the URL is correct)
+    [n] Enter a different URL
+
+  needs_login: "Does this page require login?"
+  needs_login_hint: |
+    Answer Yes if, when opening the URL, you see a login screen
+    before you can access the chatbot.
+
+  login_prompt: "Opening a browser for manual login..."
+  login_instructions: |
+    I've opened the page in the browser. Follow these steps:
+
+    1. Log in with your credentials
+    2. Navigate to the page where the chatbot is located
+    3. When ready, come back here and press ENTER
+
+    The session will be saved for future tests.
+  login_saved: "Session saved successfully"
+  login_failed: "Couldn't save the session. Please try again."
+
+  help: |
+    WHICH URL TO ENTER
+
+    Enter the URL of the web page that contains the chatbot.
+    Not an API URL, but the page visible in the browser.
+
+    IF THE PAGE REQUIRES LOGIN
+    I'll open a browser where you can log in manually.
+    Your credentials stay in the local browser; I don't save them anywhere.
+
+    IF THE PAGE REQUIRES VPN
+    Make sure you're connected to the VPN before continuing.
+
+# ============================================
+# STEP 4: Selector Detection
+# ============================================
+step4:
+  title: "Element Recognition"
+  description: |
+    To interact with the chatbot, I need to know where its
+    elements are located on the page: the text box, the send
+    button, and the area where responses appear.
+
+    I'll try to detect them automatically first.
+
+  auto_detect: "Analyzing page structure..."
+  auto_success: "Found all necessary elements!"
+  auto_partial: |
+    Found some elements, but not all.
+    Missing ones will need to be indicated manually.
+  auto_fail: |
+    Couldn't detect elements automatically.
+    I'll guide you through selecting them manually.
+
+  # Found elements
+  found_textarea: "Input field (where you type messages)"
+  found_button: "Send button"
+  found_messages: "Bot message area"
+  found_container: "Conversation container"
+
+  # Manual mode
+  manual_mode: "Manual learning"
+  manual_intro: |
+    Opening the chatbot page in the browser.
+    You'll need to click on the elements I indicate.
+
+  manual_instructions: |
+    Instructions:
+    · Position your mouse over the indicated element
+    · Click once to select it
+    · The selected element will be highlighted
+
+  click_textarea: |
+    STEP 1 of 3: Click on the TEXT BOX
+    (where you normally type messages to the chatbot)
+  click_button: |
+    STEP 2 of 3: Click on the SEND BUTTON
+    (the one you press to send the message)
+  click_message: |
+    STEP 3 of 3: Click on a BOT MESSAGE
+    (any response from the chatbot)
+  click_container: |
+    [Optional] Click on the CONVERSATION CONTAINER
+    (the area containing all messages - needed for screenshots)
+    Press ENTER to skip this step.
+
+  selector_captured: "Element captured"
+  selector_not_captured: "Element not captured"
+
+  confirm_selectors: "Confirm these selectors?"
+  confirm_selectors_hint: |
+    If something isn't correct, you can repeat the learning process.
+
+  test_selectors: "Would you like to run a test to verify they work?"
+  test_selectors_hint: |
+    I'll send a test message to the chatbot to verify
+    that the selectors are correct.
+  test_message: "Test message (e.g.: 'Hello')"
+  test_success: |
+    Test successful! The chatbot responded.
+    Selectors are configured correctly.
+  test_fail: |
+    The test didn't work.
+    This could be a selector issue or a chatbot issue.
+
+  help: |
+    WHAT ARE SELECTORS
+
+    CSS selectors are "addresses" that identify elements
+    on a web page. The tool uses them to:
+    · Type messages in the text box
+    · Click the send button
+    · Read chatbot responses
+    · Take screenshots of the conversation
+
+    AUTOMATIC DETECTION
+    I first try to identify them automatically by looking for common patterns.
+    If that doesn't work, we switch to manual mode.
+
+    MANUAL DETECTION
+    I'll ask you to click on elements in the page.
+    From the click, I derive the correct selector.
+
+# ============================================
+# STEP 5: Google Sheets (optional)
+# ============================================
+step5:
+  title: "Reports on Google Sheets"
+  description: |
+    Test results are always saved locally as HTML and CSV files.
+    If you want, you can also send them automatically to a
+    Google Sheets spreadsheet for online access and sharing.
+
+  options_title: "How would you like to manage reports?"
+  option_local: "Local only (HTML and CSV in project folder)"
+  option_sheets: "Also on Google Sheets [recommended for teams]"
+  option_later: "Decide later (can configure it afterwards)"
+
+  local_selected: |
+    Reports will be saved locally only.
+    You'll find them in: projects/{project}/reports/
+
+  setup_title: "Google Sheets Configuration"
+  setup_intro: |
+    To use Google Sheets, you need OAuth credentials.
+    If you don't have them yet, I'll guide you through creation.
+
+  # Credentials
+  credentials_prompt: "Do you already have an OAuth credentials file?"
+  credentials_prompt_hint: |
+    OAuth credentials are a JSON file you download from Google Cloud Console.
+    They allow the tool to write to your sheets without saving your password.
+
+  credentials_guide: |
+    Opening Google Cloud Console. Follow these steps:
+
+    1. Create a new project (or use an existing one)
+    2. Go to "APIs & Services" > "Library"
+    3. Enable "Google Sheets API" and "Google Drive API"
+    4. Go to "Credentials" > "Create Credentials" > "OAuth client ID"
+    5. Application type: "Desktop app"
+    6. Download the JSON credentials file
+
+  credentials_path: "Path to credentials.json file"
+  credentials_path_hint: |
+    Enter the full path to the file you downloaded.
+    E.g.: ~/Downloads/credentials.json
+  credentials_invalid: |
+    The file doesn't appear to be a valid OAuth credentials file.
+    It should be a JSON with "installed" or "web" fields.
+  credentials_ok: "Credentials valid"
+
+  # Authentication
+  auth_prompt: "Starting Google authentication..."
+  auth_instructions: |
+    A browser window will open to authorize access.
+    Sign in with your Google account and click "Allow".
+  auth_success: "Authentication completed"
+  auth_fail: |
+    Authentication failed.
+    This could be a temporary issue or the credentials might not be correct.
+
+  # Spreadsheet
+  spreadsheet_prompt: "Spreadsheet ID"
+  spreadsheet_prompt_hint: |
+    [Optional] If you already have a sheet, enter its ID.
+    Find it in the URL: docs.google.com/spreadsheets/d/[THIS_IS_THE_ID]/edit
+
+    Leave empty to create a new one automatically.
+  spreadsheet_new: "Creating a new sheet..."
+  spreadsheet_created: "Sheet created: {name}"
+  spreadsheet_found: "Sheet found: {name}"
+  spreadsheet_invalid: |
+    Can't access this sheet.
+    Verify the ID is correct and that you have edit permissions.
+
+  # Drive folder
+  folder_prompt: "Drive folder ID for screenshots"
+  folder_prompt_hint: |
+    [Optional] To save screenshots on Drive, enter the folder ID.
+    Find it in the URL: drive.google.com/drive/folders/[THIS_IS_THE_ID]
+
+    Leave empty to save screenshots locally only.
+  folder_found: "Folder found: {name}"
+  folder_invalid: |
+    Can't access this folder.
+    Verify the ID and that you have write permissions.
+
+  help: |
+    WHY USE GOOGLE SHEETS
+
+    Benefits:
+    · Access reports from any device
+    · Share with the team without sending files
+    · History of all runs in one place
+
+    WHAT YOU NEED
+    · A Google account
+    · OAuth credentials (I'll guide you through creation)
+    · 5 minutes for configuration
+
+    CAN I CONFIGURE IT LATER?
+    Yes. Choose "Decide later" and you can enable Sheets
+    anytime by editing project.yaml
+
+# ============================================
+# STEP 6: LangSmith (optional)
+# ============================================
+step6:
+  title: "LangSmith Integration"
+  description: |
+    LangSmith is a Langchain service that traces conversations
+    with AI chatbots. If the chatbot you're testing uses LangSmith,
+    I can retrieve detailed information about each response.
+
+  options_title: "Does the chatbot use LangSmith?"
+  options_hint: |
+    If you don't know what LangSmith is or whether the chatbot uses it,
+    the answer is probably No. You can always configure it later.
+  option_no: "No / Don't know [recommended if unsure]"
+  option_yes: "Yes, configure LangSmith"
+  option_later: "Decide later"
+
+  skip_message: |
+    LangSmith not configured.
+    Tests will still work, but without trace information.
+
+  # API Key
+  api_key_prompt: "LangSmith API Key"
+  api_key_hint: |
+    [Required] Find it at smith.langchain.com > Settings > API Keys
+    Starts with "lsv2_sk_" or "ls__"
+  api_key_invalid: |
+    This API Key doesn't seem valid.
+    It should start with "lsv2_sk_" or "ls__"
+  api_key_ok: "API Key valid"
+
+  # Project ID
+  project_prompt: "Project ID"
+  project_hint: |
+    [Required] Find it in the LangSmith project URL:
+    smith.langchain.com/o/.../projects/[THIS_IS_THE_ID]
+
+  # Organization ID
+  org_prompt: "Organization ID"
+  org_hint: |
+    [Optional] Only needed if the project is in an organization.
+    Find it in Settings > Organization.
+    Leave empty if using a personal account.
+
+  # Connection test
+  testing: "Verifying LangSmith connection..."
+  test_ok: "Connection successful"
+  test_fail: |
+    Can't connect to LangSmith.
+    Verify that API Key and Project ID are correct.
+
+  # Tool detection
+  detect_tools: "Looking for tool names in recent traces..."
+  detect_tools_hint: |
+    Analyzing recent conversations to find which tools
+    the chatbot uses (e.g.: search, calculator, database).
+  tools_found: "Tools detected: {tools}"
+  tools_not_found: |
+    No tools found in recent traces.
+    This might be normal if the chatbot doesn't use tools.
+  tools_confirm: "Are these tool names correct?"
+  tools_manual: |
+    Enter tool names separated by commas.
+    E.g.: search_documents, get_products, send_email
+    [Optional] Leave empty if you don't know which ones.
+
+  help: |
+    WHAT IS LANGSMITH
+
+    LangSmith is a Langchain platform for monitoring
+    AI applications. If the chatbot uses it, every conversation
+    is "traced" with details about:
+    · Which tools/functions are called
+    · How long each operation takes
+    · Any internal errors
+
+    DO I NEED IT?
+    No, it's completely optional. It's only useful if:
+    · The chatbot you're testing uses LangSmith
+    · You have access to the LangSmith project credentials
+
+    WHERE TO FIND CREDENTIALS
+    Go to smith.langchain.com, sign in with your account,
+    and find API Key and Project ID in settings.
+
+# ============================================
+# STEP 7: Ollama / Local LLM (optional)
+# ============================================
+step7:
+  title: "Automatic Evaluation (Ollama)"
+  description: |
+    The tool has three operating modes:
+
+    · Train:     Run tests and manually evaluate responses
+    · Assisted:  Receive automatic suggestions on response quality
+    · Auto:      Fully automatic tests with AI evaluation
+
+    To use Assisted and Auto, you need a local LLM (Ollama + Mistral).
+    If you only want to use Train, you can skip this step.
+
+  info: |
+    WHAT OLLAMA DOES
+    Ollama is software that runs AI models on your computer.
+    I use it to automatically evaluate chatbot responses
+    without sending data to external services.
+
+  # Current status
+  checking: "Checking if Ollama is already installed..."
+  installed: "Ollama is installed"
+  not_installed: "Ollama is not installed on the system"
+  running: "Ollama is running"
+  not_running: "Ollama is installed but not running"
+
+  # Initial options
+  options_title: "How would you like to proceed?"
+  option_install: "Install Ollama and Mistral [recommended, ~5 min + 4 GB download]"
+  option_configure: "Already have Ollama, just configure the model"
+  option_skip: "Skip (will only use Train mode)"
+
+  skip_message: |
+    Ollama not configured.
+    You can only use Train mode (manual evaluation).
+    To enable Assisted and Auto, configure Ollama later.
+
+  # Installation
+  installing: "Installing Ollama via Homebrew..."
+  install_success: "Ollama installed successfully"
+  install_fail: |
+    Installation failed.
+    Try manually with: brew install ollama
+
+  # Start
+  start_prompt: "Start Ollama?"
+  starting: "Starting Ollama server..."
+  start_success: "Ollama running"
+  start_fail: |
+    Can't start Ollama.
+    Try manually with: ollama serve
+
+  # Model
+  model_checking: "Checking if Mistral model is available..."
+  model_installed: "Mistral model available"
+  model_not_installed: "Mistral model not found"
+  model_install_prompt: "Download the Mistral model?"
+  model_install_hint: |
+    Mistral is a lightweight model (~4 GB) optimized for this type of task.
+    Download takes a few minutes depending on your connection.
+  model_installing: "Downloading Mistral (may take a few minutes)..."
+  model_installed_ok: "Mistral model ready"
+  model_install_fail: |
+    Download failed.
+    Try manually with: ollama pull mistral
+
+  # Test
+  test_prompt: "Verifying Ollama works correctly..."
+  test_ok: "Ollama working correctly"
+  test_fail: |
+    Ollama not responding as expected.
+    Verify the server is running: ollama serve
+
+  help: |
+    THE THREE TEST MODES
+
+    TRAIN (always available)
+    Run tests one by one, read chatbot responses
+    and decide yourself if they're correct. Your evaluations
+    are saved as "training data" for automatic modes.
+
+    ASSISTED (requires Ollama)
+    Like Train, but with suggestions: the local AI analyzes
+    responses and suggests whether they might be correct
+    or problematic. You confirm or correct.
+
+    AUTO (requires Ollama)
+    Fully automatic execution. AI evaluates responses
+    based on patterns learned in Train. Ideal for overnight
+    regression testing or high-volume tests.
+
+    WHY OLLAMA
+    · Free and open source
+    · Works completely offline
+    · Data never leaves your computer
+    · Mistral is fast and accurate for this task
+
+# ============================================
+# STEP 8: Test Cases (optional)
+# ============================================
+step8:
+  title: "Test Cases"
+  description: |
+    Now you can define the tests to run on the chatbot.
+    A test is simply a question (and optionally follow-up
+    questions) to ask the chatbot.
+
+  options_title: "How would you like to proceed?"
+  option_import: "Import from file (JSON, CSV, Excel)"
+  option_create: "Create tests manually"
+  option_skip: "Start without tests (add them during use)"
+
+  skip_message: |
+    No pre-configured tests.
+    You can add tests during execution or by creating
+    a tests.json file in the project folder.
+
+  # Import
+  import_path: "File path"
+  import_path_hint: |
+    Supported formats: JSON, CSV, Excel (.xlsx)
+    E.g.: ~/Desktop/test-cases.json
+  import_format_detect: "Detected format: {format}"
+  import_preview: "Preview of imported tests:"
+  import_count: "Found {count} tests"
+  import_confirm: "Import these tests?"
+  import_success: "Tests imported successfully"
+  import_fail: "Error during import: {error}"
+
+  # Manual creation
+  create_title: "Test Creation"
+  create_intro: |
+    Enter the questions you want to ask the chatbot.
+    For each question, you can add follow-up questions
+    to test multi-turn conversations.
+  create_question: "Main question"
+  create_question_hint: "E.g.: How can I book a meeting room?"
+  create_followup_prompt: "Would you like to add follow-up questions?"
+  create_followup_hint: |
+    Follow-ups simulate a conversation: after the first chatbot
+    response, these additional questions are sent.
+  create_followup: "Follow-up {n}"
+  create_another: "Would you like to add another test?"
+  create_saved: "{count} tests saved"
+
+  # Preview
+  preview_header: "| ID | Question | Follow-ups |"
+
+  help: |
+    TEST STRUCTURE
+
+    Each test has:
+    · ID:        Unique identifier (generated automatically)
+    · Question:  The main question to ask the chatbot
+    · Follow-up: [Optional] Subsequent questions for multi-turn tests
+
+    JSON FILE FORMAT
+    [
+      {
+        "id": "TEST-001",
+        "question": "How can I book a room?",
+        "followups": ["For how many people?", "How much does it cost?"]
+      }
+    ]
+
+    CSV FILE FORMAT
+    id,question,followup1,followup2
+    TEST-001,"How can I book a room?","For how many people?","How much does it cost?"
+
+    CAN I ADD THEM LATER?
+    Yes. You can create or edit the tests.json file anytime.
+
+# ============================================
+# STEP 9: Summary and Save
+# ============================================
+step9:
+  title: "Configuration Summary"
+  description: |
+    Here's the summary of all project settings.
+    Check that everything is correct before saving.
+
+  section_project: "PROJECT"
+  section_chatbot: "CHATBOT"
+  section_selectors: "SELECTORS"
+  section_google: "GOOGLE SHEETS"
+  section_langsmith: "LANGSMITH"
+  section_ollama: "OLLAMA"
+  section_tests: "TEST CASES"
+
+  save_prompt: "Save configuration?"
+  saving: "Saving..."
+  saved: "Configuration saved!"
+  save_fail: "Error saving: {error}"
+
+  files_created: |
+    Files created:
+    · projects/{project}/project.yaml  (configuration)
+    · projects/{project}/tests.json    (test cases)
+    · projects/{project}/browser-data/ (browser session)
+
+  next_steps: |
+
+    SETUP COMPLETE
+
+    The project has been configured successfully.
+
+    To start testing, run:
+    python run.py --project={project}
+
+    Tip: start with Train mode to familiarize yourself
+    with the tool and build training data.
+
+  launch_prompt: "Would you like to launch the tool now?"
+
+  help: |
+    WHAT WAS CONFIGURED
+
+    Configuration is saved in projects/{project}/project.yaml
+    You can edit it manually with any text editor.
+
+    HOW TO MODIFY CONFIGURATION
+    · Restart the wizard: python wizard/main.py --project={project}
+    · Or edit the YAML/JSON files directly
+
+    WHERE TO FIND REPORTS
+    Reports are saved in: projects/{project}/reports/
+    Each run creates a new folder with date and time.
+
+# ============================================
+# MAIN MENU (run.py)
+# ============================================
+main_menu:
+  app_name: "CHATBOT TESTER"
+  welcome: "Automated testing tool for chatbots"
+  goodbye: "See you next time!"
+
+  # Menu options
+  new_project: "New project"
+  new_project_desc: "Create a new project with the guided wizard"
+  open_project: "Open project"
+  open_project_desc: "{count} projects available"
+  open_project_empty: "No projects created"
+  finetuning: "Fine-tuning"
+  finetuning_desc: "Train a custom evaluator model"
+  settings: "Settings"
+  settings_desc: "Configure global options"
+  help: "Help"
+  help_desc: "Quick usage guide"
+  exit: "Exit"
+
+  # Project selection
+  select_project: "Select Project"
+  no_projects: |
+    No projects found.
+    Create a new project with option 1 from the main menu.
+
+# ============================================
+# RUN MANAGEMENT
+# ============================================
+run_menu:
+  title: "RUN Management"
+
+  # What is a RUN
+  what_is_run: |
+    A RUN is a test session. Each RUN has its own sheet on Google
+    Sheets where results are saved. You can continue an existing RUN
+    or start a new one.
+
+  # Status
+  active_run: "Active RUN: Run {number}"
+  no_active_run: "No active RUN"
+  env: "Environment"
+  mode: "Mode"
+  tests_completed: "Tests completed"
+  started_at: "Started"
+
+  # Toggle status
+  toggle_status: "Active options"
+  dry_run_on: "Dry run ON - not saving to Sheets"
+  dry_run_off: "Dry run OFF"
+  langsmith_on: "LangSmith ON"
+  langsmith_off: "LangSmith OFF"
+  rag_on: "RAG ON"
+  rag_off: "RAG OFF"
+  ollama_on: "Ollama ON - Assisted/Auto available"
+  ollama_off: "Ollama OFF - Train only"
+
+  # Menu options
+  continue_run: "Continue active RUN"
+  start_run: "Start testing"
+  new_run: "New RUN"
+  new_run_desc: "Create new sheet for regression testing"
+  configure: "Configure RUN"
+  configure_desc: "Modify environment and versions"
+  toggle: "Toggle options"
+  toggle_desc: "Enable/disable Dry run, LangSmith, Ollama"
+
+  # Configuration
+  config_title: "RUN Configuration"
+  config_current: "Current values:"
+  config_env: "Environment"
+  config_env_hint: "[DEV, STAGING, PROD] - default: DEV"
+  config_env_invalid: "Invalid environment. Use DEV, STAGING, or PROD."
+  config_prompt_version: "Prompt version"
+  config_prompt_hint: "[Optional] E.g.: v1.2.3 or 2024-01-15"
+  config_model_version: "Model version"
+  config_model_hint: "[Optional] E.g.: gpt-4-turbo or claude-3"
+  config_keep_hint: "Press ENTER to keep current value"
+  config_updated: "Configuration updated"
+
+  # Toggle options
+  toggle_title: "Toggle Options"
+  toggle_dry_run: "Dry run"
+  toggle_dry_run_on: "Tests run but don't save to Sheets"
+  toggle_dry_run_off: "Results are saved to Google Sheets"
+  toggle_langsmith: "LangSmith"
+  toggle_langsmith_on: "Retrieve trace info for each response"
+  toggle_langsmith_off: "Don't retrieve trace info"
+  toggle_rag: "Local RAG"
+  toggle_rag_on: "Use RAG for contextual suggestions"
+  toggle_rag_off: "Don't use RAG"
+  toggle_ollama: "Ollama"
+  toggle_ollama_on: "Enable Assisted and Auto modes"
+  toggle_ollama_off: "Only Train mode available"
+
+  # New RUN
+  confirm_new_run: |
+    You have an active RUN with {count} completed tests.
+    Close it and start a new RUN?
+  new_run_ready: "Ready for new RUN. Select a mode to begin."
+  cancelled: "Operation cancelled"
+
+# ============================================
+# MODE SELECTION
+# ============================================
+mode_menu:
+  title: "Select Mode"
+
+  train: "Train"
+  train_desc: "Run tests manually, evaluate responses"
+  assisted: "Assisted"
+  assisted_desc: "Receive AI suggestions, confirm or correct"
+  auto: "Auto"
+  auto_desc: "Fully automatic tests"
+
+  ollama_not_configured: |
+    Ollama is not configured for this project.
+    Assisted and Auto modes are not available.
+    To enable them, configure Ollama in project settings.
+  ollama_disabled: |
+    Ollama is disabled (Toggle options).
+    Enable it to use Assisted and Auto modes.
+
+# ============================================
+# TEST SELECTION
+# ============================================
+test_selection:
+  title: "Test Selection"
+  available: "{count} tests available"
+
+  # Options
+  all: "All"
+  all_desc: "Run all {count} tests"
+  pending: "Pending"
+  pending_desc: "Only tests not completed in this RUN"
+  first_n: "First N"
+  first_n_desc: "Run the first N tests"
+  range: "Range"
+  range_desc: "Run tests from X to Y"
+  specific: "Specific"
+  specific_desc: "Choose tests by ID"
+  search: "Search"
+  search_desc: "Filter by keyword in question"
+  list: "List"
+  list_desc: "Show all tests"
+
+  # Input
+  how_many: "How many tests do you want to run?"
+  how_many_hint: "Enter a number between 1 and {max}"
+  range_input: "Enter range"
+  range_hint: "Format: 10-20 or TEST-010-TEST-020"
+  ids_input: "Enter test IDs"
+  ids_hint: "Separated by commas, e.g.: TEST-001,TEST-005,TEST-010"
+  keyword_input: "Keyword to search"
+  confirm_selection: "Run these {count} tests?"
+
+  # Results
+  selected: "Selected {count} tests"
+  none_found: "No tests found"
+  invalid_number: "Invalid number"
+  invalid_range: "Invalid range"
+  show_more: "Show more? [ENTER]=yes, [q]=menu"
+
+# ============================================
+# TEST EXECUTION
+# ============================================
+test_execution:
+  initializing: "Initializing"
+  init_failed: "Initialization failed"
+
+  dry_run_warning: "DRY RUN active - results will NOT be saved to Google Sheets"
+  langsmith_disabled: "LangSmith disabled for this session"
+
+  sheets_connected: "Google Sheets connected - Run {number}"
+  sheets_completed: "{count} tests already completed in this RUN"
+  sheets_error: "Unable to connect to Google Sheets"
+
+  chatbot_unreachable: "Unable to reach the chatbot"
+
+  running: "Running {count} tests in {mode} mode"
+  no_tests: "No tests to run"
+  test_not_found: "Test {id} not found"
+
+  # Summary
+  summary: "Summary"
+  total: "Total"
+  passed: "Passed"
+  failed: "Failed"
+  pass_rate: "Pass Rate"
+
+# ============================================
+# FINE-TUNING
+# ============================================
+finetuning_menu:
+  title: "Fine-tuning - {project}"
+
+  # Dataset
+  dataset_current: "Current dataset"
+  examples: "{count} examples"
+  pass_count: "PASS"
+  fail_count: "FAIL"
+  skip_count: "SKIP"
+  ready: "Ready for fine-tuning"
+  insufficient: "Insufficient dataset"
+
+  # Options
+  stats: "Detailed statistics"
+  stats_desc: "Analyze dataset quality"
+  export: "Export dataset"
+  export_desc: "Generate JSONL or Modelfile"
+  finetune_ollama: "Fine-tune Ollama"
+  finetune_ollama_desc: "Create custom local model"
+  finetune_openai: "Fine-tune OpenAI"
+  finetune_openai_desc: "Use OpenAI API (paid)"
+  test_model: "Test model"
+  test_model_desc: "Evaluate accuracy on test set"
+  available_models: "Available models"
+  available_models_desc: "List Ollama and OpenAI models"
+
+  # Requirements
+  requirements: |
+    Minimum requirements for fine-tuning:
+    · At least 50 total examples
+    · At least 10 PASS examples
+    · At least 10 FAIL examples
+
+# ============================================
+# QUICK GUIDE
+# ============================================
+help_guide: |
+  CHATBOT TESTER - Quick Guide
+  ============================
+
+  WHAT IS A RUN
+  A RUN is a test session. Each RUN creates a dedicated sheet on
+  Google Sheets where all results are saved. You can:
+  · Continue an existing RUN (adds tests to the same sheet)
+  · Start a new RUN (for regression testing or new versions)
+
+  THE THREE MODES
+  · Train:    You run tests and evaluate responses. The system learns.
+  · Assisted: AI suggests if the response is correct, you confirm.
+  · Auto:     Fully automatic tests (requires training data).
+
+  TERMINAL COMMANDS
+  python run.py                          Interactive menu
+  python run.py --new-project            New project wizard
+  python run.py -p NAME                  Open project
+  python run.py -p NAME -m auto          Automatic tests
+  python run.py -p NAME -t TEST-001      Run single test
+  python run.py -p NAME --new-run        Force new RUN
+
+  IMPORTANT FILES
+  projects/<name>/project.yaml     Project configuration
+  projects/<name>/tests.json       Test cases
+  projects/<name>/run_config.json  Active RUN state
+  projects/<name>/reports/         Local HTML/CSV reports

@@ -1,0 +1,15 @@
+{
+  "env": "DEV",
+  "prompt_version": "",
+  "model_version": "",
+  "active_run": null,
+  "run_start": null,
+  "tests_completed": 0,
+  "mode": "train",
+  "last_test_id": null,
+  "dry_run": false,
+  "use_langsmith": true,
+  "use_rag": false,
+  "use_ollama": true,
+  "single_turn": false
+}

@@ -1,0 +1,318 @@
+{
+  "patterns": [
+    {
+      "id": "country",
+      "name": "country",
+      "bot_patterns": [
+        "which country",
+        "what country",
+        "country are you",
+        "where are you (based|located)",
+        "your (location|country)",
+        "select.{0,20}country"
+      ],
+      "responses": [
+        {
+          "text": "Denmark",
+          "count": 2,
+          "last_used": "2025-12-03T11:27:25.088377"
+        },
+        {
+          "text": "Germany",
+          "count": 1,
+          "last_used": "2025-12-03T11:33:45.093480"
+        }
+      ]
+    },
+    {
+      "id": "email",
+      "name": "email",
+      "bot_patterns": [
+        "(your )?(e-?mail|email address)",
+        "contact.{0,10}(address|info)",
+        "send.{0,10}(to|email)",
+        "provide.{0,10}email"
+      ],
+      "responses": [
+        {
+          "text": "4",
+          "count": 1,
+          "last_used": "2025-12-03T14:58:30.760551"
+        }
+      ]
+    },
+    {
+      "id": "confirmation",
+      "name": "yes/no",
+      "bot_patterns": [
+        "(yes|no)\\??$",
+        "would you like",
+        "do you want",
+        "shall i",
+        "confirm",
+        "proceed\\?",
+        "is (this|that) correct"
+      ],
+      "responses": []
+    },
+    {
+      "id": "date",
+      "name": "date",
+      "bot_patterns": [
+        "which date",
+        "what date",
+        "when (do|would|did)",
+        "(start|end|from|to) date",
+        "select.{0,10}date"
+      ],
+      "responses": []
+    },
+    {
+      "id": "name",
+      "name": "name",
+      "bot_patterns": [
+        "(your |the )?(full )?name",
+        "who (is|are)",
+        "employee.{0,10}name"
+      ],
+      "responses": []
+    }
+  ],
+  "conversations": [
+    {
+      "test_id": "TEST-003",
+      "question": "Slack keeps crashing every time I open it",
+      "turns": [
+        {
+          "bot": "Here are the steps to clear your cache in Slack:\n\nOpen the Slack App on your Desktop.\nClick on \"Sign in to EFG Slack Account.\"\nThis will redirect you to your Browser and open a Window.\nPlease click on \"Open Slack.\"\nIn the upcoming Slack App, click on the three lines on the top left corner.\nNavigate down to \"Help,\" which will open a new menu.\nThen navigate to \"Troubleshooting,\" which will open another new menu.\nFinally, click on \"Clear Cache and Restart.\"\nSlack will restart, and your cache will be clear.\n\nSee also:\nTroubleshooting: How to clear your cache in Slack: \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3960700953",
+          "user": "Slack keeps crashing every time I open it",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-03T11:19:29.215521"
+    },
+    {
+      "test_id": "TEST-004",
+      "question": "What's our parental leave policy?",
+      "turns": [
+        {
+          "bot": "To give you the most accurate information, could you please specify which country this is about?",
+          "user": "What's our parental leave policy?",
+          "pattern_id": "country"
+        },
+        {
+          "bot": "Source: \n            Maternity, Paternity and Parental Leave - Denmark\n          \nDetail:\n\nMaternity Leave: Consists of 4 weeks before the expected due date and 14 weeks after childbirth.\nPaternity Leave: Fathers/co-parents are entitled to 2 weeks of leave after the child's birth.\nParental Leave: An additional period of up to 32 weeks is available, which can be shared between both parents.\nNotice Requirements: Employees must notify their manager and local People Advisory and Compliance Specialist. For pregnancy leave, 3 months' notice before the expected due date is required. For paternity leave, 4 weeks' notice before the expected due date. For parental leave plans, notification is required at the latest 8 weeks after birth.\nParental Pay (for employees employed more than 12 months): If you have been employed for a minimum of 12 months and qualify for maximum state parental leave reimbursement from Barsel.dk and Udbetaling Danmark, the company offers a Parental Pay benefit. This full pay eligibility requires the paid leave to be taken within 52 weeks after birth. The maximum full pay cap is up to 33 weeks for mothers and up to 29 weeks for fathers/co-parents, provided they are the primary recipient and eligible for maximum reimbursement. The company covers the difference between the state reimbursement and your full regular salary.\nParental Pay (for employees employed less than 12 months): If you have been employed for less than 12 months, EFG Denmark provides full pay up to 25,000 DKK or 75% of your monthly salary (if above 33,333.33 DKK) for mothers for 4 weeks before birth and 14 weeks of maternity leave (maximum 18 weeks). For fathers/co-parents, it's full pay up to 25,000 DKK or 75% of your monthly salary (if above 33,333.33 DKK) for 14 weeks, to be taken within 14 weeks from the child's birth.\nAdoption: Employees adopting a child are also entitled to Parental Pay under this policy, with specific provisions for leave prior to receiving the child.\nAdditional Leave Provisions: The policy allows for the transfer of leave entitlement between parents, flexibility in splitting leave, postponing a portion of parental leave, and applying for extended unpaid leave (subject to company discretion).\nAnnual Leave Accrual: Annual leave entitlements continue to accrue during parental leave.\nApplication Process: Maternity or paternity leave requests should be submitted through HiBob, ensuring the timing is coordinated with workload, deliverables, and deadlines.",
+          "user": "Denmark",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-03T11:22:53.353680"
+    },
+    {
+      "test_id": "TEST-005",
+      "question": "I need access to the marketing shared drive",
+      "turns": [
+        {
+          "bot": "Open the Slack App on your Desktop.\nClick on \"Sign in to EFG Slack Account.\"\nThis will redirect you to your Browser and open a window.\nPlease click on \"Open Slack.\"\nIn the upcoming Slack App, please click on the three lines on the top left corner.\nNavigate down to \"Help,\" which will open a new menu.\nThen navigate to \"Troubleshooting,\" which will open another new menu.\nFinally, click on \"Clear Cache and Restart.\"\nSlack will restart, and your cache will be clear.\n\nYou can find more details on this in the document: \"Troubleshooting: How to clear your cache in Slack\" (\n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3960700953.html\n          )\nIf clearing the cache doesn't resolve the issue, please let me know, and we can explore other options or create a support ticket for you. 😊\nSee also:\nSlack Connect (\n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3621716954.html\n          )\nSuggested Slack Setup (\n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3705438209.html\n          )",
+          "user": "I need access to the marketing shared drive",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-03T11:25:32.172313"
+    },
+    {
+      "test_id": "TEST-023",
+      "question": "How much annual leave do I get?",
+      "turns": [
+        {
+          "bot": "To give you the most accurate information, could you please specify which country this is about?",
+          "user": "How much annual leave do I get?",
+          "pattern_id": "country"
+        },
+        {
+          "bot": "Source: \n            https://efgcloud.atlassian.net/wiki/spaces/EFGPCS/pages/4501831732\n          \nDanish employees accrue 2.08 days of paid leave per month. The leave year runs from September 1st to December 31st of the following year (a 16-month period). Employees are entitled to five weeks of annual leave, with at least three consecutive weeks to be taken during the summer leave period (June 1st - September 30th).",
+          "user": "Denmark",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-03T11:28:10.723242"
+    },
+    {
+      "test_id": "TEST-026",
+      "question": "What do I do if I'm sick and can't come to work?",
+      "turns": [
+        {
+          "bot": "To provide the correct policy, I need to know your country. Could you please specify it?",
+          "user": "What do I do if I'm sick and can't come to work?",
+          "pattern_id": "country"
+        },
+        {
+          "bot": "Source: \n            Sickness and Care Leave - Germany\n          \nDetail:\nEmployees are entitled to up to 6 weeks (42 calendar days) of paid sickness leave per calendar year per illness, paid at 100% of their regular salary. After this period, sickness benefits may be received from the German statutory health insurance (GKV). While a medical certificate is not required for sick leave of 1-3 days, your employer can request it earlier. If you return to work before the original end date of your sick leave, you must provide a fitness-to-work certificate from a medical professional.",
+          "user": "Germany",
+          "pattern_id": "date"
+        }
+      ],
+      "timestamp": "2025-12-03T11:34:56.437534"
+    },
+    {
+      "test_id": "TEST-033",
+      "question": "What's the notice period if I want to resign?",
+      "turns": [
+        {
+          "bot": "To give you the most accurate information, could you please specify which country this is about?",
+          "user": "What's the notice period if I want to resign?",
+          "pattern_id": "country"
+        }
+      ],
+      "timestamp": "2025-12-03T14:07:37.531305"
+    },
+    {
+      "test_id": "TEST-033",
+      "question": "What's the notice period if I want to resign?",
+      "turns": [
+        {
+          "bot": "To give you the most accurate information, could you please specify which country this is about?",
+          "user": "What's the notice period if I want to resign?",
+          "pattern_id": "country"
+        }
+      ],
+      "timestamp": "2025-12-03T14:10:29.866725"
+    },
+    {
+      "test_id": "TEST-034",
+      "question": "How can I apply for a position in another department?",
+      "turns": [
+        {
+          "bot": "To give you the most accurate information, could you please specify which country this is about?",
+          "user": "How can I apply for a position in another department?",
+          "pattern_id": "country"
+        }
+      ],
+      "timestamp": "2025-12-03T14:17:25.324765"
+    },
+    {
+      "test_id": "TEST-034",
+      "question": "How can I apply for a position in another department?",
+      "turns": [
+        {
+          "bot": "To give you the most accurate information, could you please specify which country this is about?",
+          "user": "How can I apply for a position in another department?",
+          "pattern_id": "country"
+        }
+      ],
+      "timestamp": "2025-12-03T14:22:53.423430"
+    },
+    {
+      "test_id": "TEST-035",
+      "question": "What's the policy?",
+      "turns": [
+        {
+          "bot": "I can help with that! What kind of policy are you interested in? For example, are you looking for information on HR policies, IT policies, or something else?",
+          "user": "What's the policy?",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-03T14:30:51.501106"
+    },
+    {
+      "test_id": "TEST-036",
+      "question": "I'm based in the UK",
+      "turns": [
+        {
+          "bot": "Hello! It seems like you're starting a new conversation. How can I help you today?",
+          "user": "I'm based in the UK",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-03T14:39:06.925851"
+    },
+    {
+      "test_id": "TEST-037",
+      "question": "I have a laptop issue",
+      "turns": [
+        {
+          "bot": "Restart the application: If the problem is a specific program, close it completely and reopen it.\nCheck your connections: For issues with monitors, keyboards, or the internet, ensure all cables are securely plugged in.\nCheck for updates: Ensure your operating system and drivers are up to date. For Windows, you can search for \"Windows updates\" in the start menu. Dell users can also use \"Dell Command | Update\" via the Company Portal.\nUnplug and plug back in: For peripherals like monitors, try unplugging them from the laptop, waiting a moment, and then plugging them back in. If that doesn't work, try unplugging the peripheral from its power source.\nCheck the clock: Ensure your date and time settings are correct and synchronized.\nFor Dell laptops that won't turn on: Unplug from all power sources, hold the power button for 30 seconds, then plug back in and press power.\n\nIf you're experiencing a specific issue like a 1Password bug on a MacBook, a known workaround is to lock and unlock your Mac using Touch ID. If that fails, you can use the Kandji Self Service app to run the \"Temporary Bugfix - 1Password unlock block\" script, or restart your Mac. Disconnecting 1Password from the browser extension can also help.\nIf these steps don't resolve your laptop issue, please provide more details about the problem you're encountering. If you need further assistance, you can create a general technical support ticket here: \n            https://efgcloud.atlassian.net/servicedesk/customer/portal/16/group/23/create/97\n          \nSee also:\n\nNeed IT Help? A Quick Guide for Faster Support: \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/4868702225\n          \nWindows First Aid: Something on my laptop is not working...: \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3621716867\n          \n1Password Requires MacBook Restart: \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/4823646254",
+          "user": "I have a laptop issue",
+          "pattern_id": "date"
+        }
+      ],
+      "timestamp": "2025-12-03T14:40:40.503185"
+    },
+    {
+      "test_id": "TEST-038",
+      "question": "How many vacation days do I have? I'm in the UK",
+      "turns": [
+        {
+          "bot": "Source: \n            Annual Leave - United Kingdom\n          \nIn line with UK statutory requirements, employees are generally entitled to a minimum of 20 days of paid annual leave per calendar year, with part-time employees receiving a pro-rata entitlement. Public holidays are in addition to this. The holiday year runs from January 1st to December 31st. If your contract specifies a different entitlement, those terms will apply.",
+          "user": "How many vacation days do I have? I'm in the UK",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-03T14:42:20.128871"
+    },
+    {
+      "test_id": "TEST-039",
+      "question": "I'm based in Germany",
+      "turns": [
+        {
+          "bot": "Hello! It seems like you're starting a new conversation. How can I help you today?",
+          "user": "I'm based in Germany",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-03T14:47:24.317246"
+    },
+    {
+      "test_id": "TEST-040",
+      "question": "My laptop is slow and I can't connect to the VPN",
+      "turns": [
+        {
+          "bot": "For your slow laptop:\nHere are some steps you can try to improve your laptop's performance:\n\nCheck for Updates: Make sure your Windows operating system is fully updated. If you have a Dell laptop, also run the Dell Command Update to ensure all drivers and firmware are current.\nRestart your computer: A simple reboot can often resolve many common performance issues.\nUnplug and Re-plug Peripherals: If you have external devices connected (like monitors, keyboards, or docking stations), try unplugging them, waiting a moment, and then plugging them back in.\nCheck the Clock: Ensure your system's date and time settings are correct and synchronized. Incorrect time settings can sometimes cause unexpected behavior.\n\nIn some earlier cases, a remote wipe and reset helped a user with a lagging laptop significantly improve its speed. If the above steps don't resolve the slowness, this might be an option to consider with IT support.\nSee also:\n\nWindows First Aid: Something on my laptop is not working... (\n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3621716867\n          )\nNeed IT Help? A Quick Guide for Faster Support (\n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/4868702225\n          )\n\nFor your VPN connection issue:\nIt looks like you're using CATO VPN. Here’s how you can troubleshoot your connection:\n\nEnsure Access: First, confirm you have been granted access to CATO VPN. Your direct manager can add you to the correct Azure group. If you don't have a manager to assist, you might need to create a Helpdesk ticket to request access.\nClient Installation:\nWindows users: Install the CATO VPN client through the Company Portal.\nMac users: Install CATO VPN from the Kandji Self-Service Portal.\nYou can also download clients for all operating systems from \n            https://clientdownload.catonetworks.com/\n          .\n\n\nConnect: Open the CATO VPN application, click the connect button, enter your company email address, and if prompted for a sub-domain, use eslgaming.via.catonetworks.com. Then, log in using your Microsoft credentials.\n\nIf your VPN issue seems related to your wireless network, you might find helpful information in the EFG WiFi Guide for your specific device.\nSee also:\n\nCATO VPN (\n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3621716421\n          )\nEFG WiFi Guide (Employees only) (\n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/4638998604\n          )\n\nIf you continue to experience issues with your laptop's performance or VPN connection after trying these steps, please consider raising a helpdesk ticket for further assistance. You can use the 'General technical support' form for general issues or 'Technical issue' for unexpected behavior.",
+          "user": "My laptop is slow and I can't connect to the VPN",
+          "pattern_id": "email"
+        },
+        {
+          "bot": "I'm sorry, I'm not sure what you mean by \"4\". Could you please elaborate or tell me how I can help you further?",
+          "user": "4",
+          "pattern_id": null
+        },
+        {
+          "bot": "I'm sorry, I'm not sure what you mean by \"2\". Could you please elaborate or tell me how I can help you further?",
+          "user": "2",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-03T14:58:46.491668"
+    },
+    {
+      "test_id": "TEST-041",
+      "question": "I want to know about parental leave and also how to submit expenses",
+      "turns": [
+        {
+          "bot": "To provide the correct policy, I need to know your country. Could you please specify it?",
+          "user": "I want to know about parental leave and also how to submit expenses",
+          "pattern_id": "country"
+        }
+      ],
+      "timestamp": "2025-12-03T15:02:59.880934"
+    },
+    {
+      "test_id": "TEST-043",
+      "question": "I need help with Slack",
+      "turns": [
+        {
+          "bot": "Account Management:\nIf you need to invite a guest to our Slack workspace, you can submit a Helpdesk Ticket. You can read more about how Slack guests work in the documentation.\nWe have information on enhancing your Slack security with Multi-Factor Authentication (MFA), especially for users who log in directly with a username and password.\nThere are also details on how to reactivate a Slack account or reset a Slack password.\n\n\nUsage and Configuration:\nYou can find instructions on how to delete a Slack Workspace if you accidentally created one.\nIf you're experiencing issues, you can try clearing your cache in the Slack app.\nYou can personalize your Slack workspace by changing your theme on desktop or mobile.\nThere are tips for setting up your Slack profile, managing notifications, connecting your Google Calendar, and updating your status.\nIf you're seeing an incorrect online status, there are suggestions for setting your availability times.\n\n\nCollaboration:\nWe have a detailed explanation of Slack Connect, which helps in creating shared channels and direct messages with users outside the organization, differentiating it from multi-channel guests.\nYou can find information on how to invite people to an existing channel or create a new channel for external organizations.\n\n\nIntegrations:\nThere's a guide for installing the Slack add-on for DocuSign to receive notifications.\nWe also have information about the GG Bot, a Slack-based recognition tool.\n\n\nGeneral IT Help:\nIf you have a technical issue, you can use the IT AI Chatbot in Slack for instant answers and troubleshooting assistance. If the bot can't solve your issue, it will suggest creating a ticket.\n\n\n\nIf your specific issue isn't covered by these topics, or if you need further assistance, I can help you create an IT support ticket.\nSee also:\n\nOops! I made a Slack Workspace! \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3670769856\n          \nSlack Guest Account \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3621716787\n          \nTroubleshooting: How to clear your cache in Slack \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3960700953\n          \nHow to Change Your Slack Theme 🖌️ \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/4748083570\n          \nEnhance Your Slack Security with Multi-Factor Authentication (MFA) \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/4822269981\n          \nSuggested Slack Setup \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3705438209\n          \nSlack Connect \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/3621716954\n          \nSlack add-on for DocuSign - Installation Guide \n            https://efgcloud.atlassian.net/wiki/spaces/DOC/pages/3618799987\n          \nGG bot: user guide \n            https://efgcloud.atlassian.net/wiki/spaces/DBS/pages/5053448214\n          \nNeed IT Help? A Quick Guide for Faster Support \n            https://efgcloud.atlassian.net/wiki/spaces/HKB/pages/4868702225",
+          "user": "I need help with Slack",
+          "pattern_id": "name"
+        }
+      ],
+      "timestamp": "2025-12-03T15:27:53.104662"
+    }
+  ],
+  "meta": {
+    "version": "2.0",
+    "updated": "2025-12-11T14:31:40.872515",
+    "total_patterns": 5,
+    "total_conversations": 17
+  }
+}

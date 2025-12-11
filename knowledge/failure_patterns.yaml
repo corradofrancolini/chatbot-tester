@@ -1,0 +1,548 @@
+# Diagnostic Engine - Knowledge Base
+# Failure patterns extracted from provider best practices
+#
+# Sources:
+# - OpenAI Prompt Optimizer (contradiction-checker, format-checker, few-shot-consistency)
+# - Claude Prompt Improver (structure, reasoning, examples)
+# - Anthropic Tutorial (9 chapters: structure, clarity, roles, CoT, hallucinations)
+# - Google Gemini (few-shot, delimiters, anti-patterns)
+# - IBM Prompt Engineering (general principles)
+
+version: "1.0.0"
+
+# =============================================================================
+# FAILURE PATTERNS
+# =============================================================================
+# Each pattern describes a type of failure with:
+# - symptoms: observable behaviors in test results
+# - hypotheses: ranked possible causes
+# - questions: clarifying questions to ask user (interactive mode)
+
+failure_patterns:
+
+  # ---------------------------------------------------------------------------
+  # FORMAT VIOLATIONS
+  # ---------------------------------------------------------------------------
+  format_violation:
+    description: "Output format does not match expected structure"
+    symptoms:
+      - "Output is not valid JSON/XML"
+      - "Missing required fields in response"
+      - "Wrong data types in structured output"
+      - "Extra fields not requested"
+      - "Inconsistent structure across responses"
+
+    hypotheses:
+      - id: "FMT-01"
+        cause: "Format specification missing or unclear"
+        confidence: 0.85
+        check: "Search prompt for explicit format instructions (JSON, XML, schema)"
+        source: "openai:format-checker"
+
+      - id: "FMT-02"
+        cause: "Examples contradict format specification"
+        confidence: 0.70
+        check: "Compare format in examples vs format instruction"
+        source: "openai:few-shot-consistency"
+
+      - id: "FMT-03"
+        cause: "Format buried in middle of prompt"
+        confidence: 0.60
+        check: "Check if format instruction is at end of prompt (recency bias)"
+        source: "claude:prompt-improver"
+
+      - id: "FMT-04"
+        cause: "Multiple conflicting format instructions"
+        confidence: 0.55
+        check: "Search for multiple format specifications"
+        source: "openai:contradiction-checker"
+
+    questions:
+      - "What exact format do you expect? (JSON schema, XML structure, etc.)"
+      - "Is there a specific field that's always missing?"
+
+  # ---------------------------------------------------------------------------
+  # CONTENT ERRORS
+  # ---------------------------------------------------------------------------
+  content_incorrect:
+    description: "Response content is factually wrong or invented"
+    symptoms:
+      - "Hallucinated information"
+      - "Data not from provided sources"
+      - "Invented product names/prices/details"
+      - "Contradicts known facts"
+
+    hypotheses:
+      - id: "CNT-01"
+        cause: "No grounding instruction"
+        confidence: 0.80
+        check: "Search for instructions to use only provided data"
+        source: "anthropic:ch8-hallucinations"
+
+      - id: "CNT-02"
+        cause: "Sources not enforced"
+        confidence: 0.75
+        check: "Check if prompt explicitly restricts to specific sources"
+        source: "anthropic:ch8-hallucinations"
+
+      - id: "CNT-03"
+        cause: "Instruction to be helpful overrides accuracy"
+        confidence: 0.60
+        check: "Check for conflicting helpfulness vs accuracy instructions"
+        source: "anthropic:ch8-hallucinations"
+
+      - id: "CNT-04"
+        cause: "Edge case not covered - model fills gap"
+        confidence: 0.50
+        check: "Compare query to covered scenarios in prompt"
+        source: "google:prompting-strategies"
+
+    questions:
+      - "Should the model ever generate information not in the sources?"
+      - "What should happen when the requested information is not available?"
+
+  # ---------------------------------------------------------------------------
+  # PRIORITY/RANKING ERRORS
+  # ---------------------------------------------------------------------------
+  priority_conflict:
+    description: "Wrong prioritization when multiple criteria apply"
+    symptoms:
+      - "Chose wrong attribute when multiple match"
+      - "Ignored explicit user preference"
+      - "Ranked results incorrectly"
+      - "Applied filters in wrong order"
+
+    hypotheses:
+      - id: "PRI-01"
+        cause: "No explicit priority order defined"
+        confidence: 0.85
+        check: "Search for priority/ranking instructions"
+        source: "openai:contradiction-checker"
+
+      - id: "PRI-02"
+        cause: "Contradictory priority rules"
+        confidence: 0.75
+        check: "Find rules that could conflict and check for resolution"
+        source: "openai:contradiction-checker"
+
+      - id: "PRI-03"
+        cause: "Priority defined but not for this edge case"
+        confidence: 0.60
+        check: "Compare test case to priority rules coverage"
+        source: "claude:prompt-improver"
+
+      - id: "PRI-04"
+        cause: "Implicit priority assumed by model"
+        confidence: 0.50
+        check: "Analyze if common sense could override explicit rules"
+        source: "google:prompting-strategies"
+
+    questions:
+      - "What is the priority order for: {attributes}?"
+      - "When criteria conflict, which should win?"
+
+  # ---------------------------------------------------------------------------
+  # LANGUAGE/TONE ERRORS
+  # ---------------------------------------------------------------------------
+  language_mismatch:
+    description: "Response in wrong language or tone"
+    symptoms:
+      - "Responded in different language than query"
+      - "Mixed languages in response"
+      - "Wrong formality level"
+      - "Inconsistent tone"
+
+    hypotheses:
+      - id: "LNG-01"
+        cause: "No language instruction"
+        confidence: 0.90
+        check: "Search for language/lingua specification"
+        source: "google:prompting-strategies"
+
+      - id: "LNG-02"
+        cause: "Prompt language differs from expected output language"
+        confidence: 0.70
+        check: "Compare prompt language to expected output language"
+        source: "claude:prompt-improver"
+
+      - id: "LNG-03"
+        cause: "Examples in different language than instruction"
+        confidence: 0.65
+        check: "Check language consistency across prompt sections"
+        source: "openai:few-shot-consistency"
+
+    questions:
+      - "Should the response match the query language or a fixed language?"
+
+  # ---------------------------------------------------------------------------
+  # SCOPE ERRORS
+  # ---------------------------------------------------------------------------
+  scope_violation:
+    description: "Response goes beyond or falls short of expected scope"
+    symptoms:
+      - "Too verbose - includes unrequested information"
+      - "Too terse - missing expected details"
+      - "Answers question not asked"
+      - "Refuses to answer valid question"
+
+    hypotheses:
+      - id: "SCP-01"
+        cause: "Scope boundaries not defined"
+        confidence: 0.80
+        check: "Search for scope/boundary instructions"
+        source: "claude:prompt-improver"
+
+      - id: "SCP-02"
+        cause: "Conflicting scope instructions"
+        confidence: 0.65
+        check: "Find scope-related instructions and check consistency"
+        source: "openai:contradiction-checker"
+
+      - id: "SCP-03"
+        cause: "Examples set wrong scope expectation"
+        confidence: 0.60
+        check: "Compare example response length/detail to expectation"
+        source: "openai:few-shot-consistency"
+
+    questions:
+      - "How detailed should responses be?"
+      - "What topics are in-scope vs out-of-scope?"
+
+  # ---------------------------------------------------------------------------
+  # REASONING ERRORS
+  # ---------------------------------------------------------------------------
+  reasoning_failure:
+    description: "Incorrect logic or reasoning in response"
+    symptoms:
+      - "Wrong conclusion from correct premises"
+      - "Skipped logical steps"
+      - "Circular reasoning"
+      - "Ignored relevant information"
+
+    hypotheses:
+      - id: "RSN-01"
+        cause: "No chain-of-thought instruction"
+        confidence: 0.75
+        check: "Search for step-by-step/reasoning instructions"
+        source: "anthropic:ch6-precognition"
+
+      - id: "RSN-02"
+        cause: "Complex task without decomposition"
+        confidence: 0.70
+        check: "Assess task complexity vs prompt structure"
+        source: "claude:prompt-improver"
+
+      - id: "RSN-03"
+        cause: "Reasoning requested but not shown"
+        confidence: 0.60
+        check: "Check if reasoning wrapper tags are used"
+        source: "claude:prompt-improver"
+
+    questions:
+      - "Should the model show its reasoning or just the answer?"
+      - "Is this a multi-step reasoning task?"
+
+  # ---------------------------------------------------------------------------
+  # CONSISTENCY ERRORS
+  # ---------------------------------------------------------------------------
+  consistency_failure:
+    description: "Inconsistent responses across similar queries"
+    symptoms:
+      - "Different answers to semantically same question"
+      - "Behavior changes unpredictably"
+      - "Works sometimes, fails sometimes (flaky)"
+
+    hypotheses:
+      - id: "CON-01"
+        cause: "Ambiguous instructions with multiple interpretations"
+        confidence: 0.80
+        check: "Identify instructions that could be interpreted differently"
+        source: "google:prompting-strategies"
+
+      - id: "CON-02"
+        cause: "Missing examples for edge cases"
+        confidence: 0.70
+        check: "Compare failing cases to provided examples"
+        source: "anthropic:ch7-examples"
+
+      - id: "CON-03"
+        cause: "Temperature/randomness too high"
+        confidence: 0.50
+        check: "Check model temperature setting"
+        source: "google:prompting-strategies"
+
+    questions:
+      - "Should this query always produce the same response?"
+      - "Is there variation expected in acceptable responses?"
+
+
+# =============================================================================
+# VERIFICATION STRATEGIES
+# =============================================================================
+# How to verify each hypothesis
+
+verification_strategies:
+
+  "FMT-01":
+    automated:
+      - pattern: "(JSON|json|XML|xml|format|schema|structure)"
+        expect: "present"
+    manual:
+      - "Read prompt and identify format instructions"
+      - "Check if format is explicit or implicit"
+
+  "FMT-02":
+    automated:
+      - action: "extract_examples"
+      - action: "parse_example_format"
+      - action: "compare_to_instruction"
+    manual:
+      - "Compare format in examples to format specification"
+
+  "CNT-01":
+    automated:
+      - pattern: "(only use|based on|from the|provided|given|source)"
+        expect: "present"
+      - pattern: "(do not invent|do not make up|no hallucination)"
+        expect: "present"
+    manual:
+      - "Check for explicit grounding instructions"
+
+  "PRI-01":
+    automated:
+      - pattern: "(priority|first|then|before|after|order|rank)"
+        expect: "present"
+    manual:
+      - "Identify all criteria and check for ordering"
+
+  "LNG-01":
+    automated:
+      - pattern: "(respond in|language|lingua|english|italiano|same language)"
+        expect: "present"
+    manual:
+      - "Check for explicit language instruction"
+
+
+# =============================================================================
+# FIX TEMPLATES
+# =============================================================================
+# Suggested fixes for each hypothesis, with model-specific variants
+
+fix_templates:
+
+  "FMT-01":
+    generic: |
+      Add explicit format instruction at the end of the prompt:
+      "Format your response as valid JSON with this structure:
+      {schema}"
+
+    claude: |
+      Add format instruction with XML wrapper:
+      "Format your response as:
+      <response>
+      {schema}
+      </response>"
+
+    openai: |
+      Add format instruction:
+      "You must respond with valid JSON matching this schema:
+      {schema}
+      Do not include any text outside the JSON."
+
+  "CNT-01":
+    generic: |
+      Add grounding instruction:
+      "Only use information from the provided sources.
+      If the information is not available, say so.
+      Never invent or assume information."
+
+    claude: |
+      Add grounding with verification:
+      "Base your response only on <sources>.
+      Before answering, verify the information exists in sources.
+      If not found, respond: 'Information not available in provided sources.'"
+
+  "PRI-01":
+    generic: |
+      Add explicit priority order:
+      "When multiple criteria apply, prioritize in this order:
+      1. {first_priority}
+      2. {second_priority}
+      3. {third_priority}
+
+      If criteria conflict, the higher priority wins."
+
+  "LNG-01":
+    generic: |
+      Add language instruction:
+      "Respond in the same language as the user's query."
+
+    alternative: |
+      Or for fixed language:
+      "Always respond in {language}, regardless of query language."
+
+  "RSN-01":
+    generic: |
+      Add chain-of-thought instruction:
+      "Think through this step by step:
+      1. First, identify...
+      2. Then, analyze...
+      3. Finally, conclude..."
+
+    claude: |
+      Add reasoning wrapper:
+      "Before answering, work through your reasoning in <thinking> tags.
+      Then provide your answer in <answer> tags."
+
+
+# =============================================================================
+# SYMPTOM TO PATTERN MAPPING
+# =============================================================================
+# Quick lookup from observed symptom to relevant patterns
+
+symptom_mapping:
+  "wrong format": ["format_violation"]
+  "not json": ["format_violation"]
+  "missing field": ["format_violation", "scope_violation"]
+  "hallucination": ["content_incorrect"]
+  "invented": ["content_incorrect"]
+  "wrong language": ["language_mismatch"]
+  "mixed language": ["language_mismatch"]
+  "wrong priority": ["priority_conflict"]
+  "ignored preference": ["priority_conflict"]
+  "too verbose": ["scope_violation"]
+  "too short": ["scope_violation"]
+  "inconsistent": ["consistency_failure"]
+  "flaky": ["consistency_failure"]
+  "wrong logic": ["reasoning_failure"]
+  "skipped step": ["reasoning_failure"]
+  # E-commerce specific
+  "wrong product": ["content_incorrect", "priority_conflict"]
+  "wrong price": ["content_incorrect"]
+  "wrong availability": ["content_incorrect"]
+  "prodotto sbagliato": ["content_incorrect", "priority_conflict"]
+  "prezzo sbagliato": ["content_incorrect"]
+  "disponibilita errata": ["content_incorrect"]
+  "non trova prodotti": ["scope_violation", "content_incorrect"]
+  "troppi prodotti": ["scope_violation"]
+  "filtro ignorato": ["priority_conflict"]
+  "colore sbagliato": ["priority_conflict"]
+  "taglia sbagliata": ["priority_conflict"]
+
+
+# =============================================================================
+# E-COMMERCE SPECIFIC PATTERNS
+# =============================================================================
+# Additional patterns for product catalog chatbots
+
+ecommerce_patterns:
+
+  product_search_failure:
+    description: "Bot returns wrong products or no results"
+    symptoms:
+      - "Returns products not matching query"
+      - "Empty results when products exist"
+      - "Wrong category products"
+      - "Ignores search filters"
+
+    hypotheses:
+      - id: "ECM-01"
+        cause: "No product matching criteria in prompt"
+        confidence: 0.80
+        check: "Verify prompt includes product matching rules"
+        source: "ecommerce-patterns"
+
+      - id: "ECM-02"
+        cause: "Filter priority not specified"
+        confidence: 0.75
+        check: "Check if color/size/price filters have priority order"
+        source: "ecommerce-patterns"
+
+      - id: "ECM-03"
+        cause: "Retrieval tool not configured correctly"
+        confidence: 0.65
+        check: "Verify RAG/retrieval tool usage instructions"
+        source: "ecommerce-patterns"
+
+  price_display_failure:
+    description: "Wrong price format or missing price info"
+    symptoms:
+      - "Price in wrong currency"
+      - "Missing price label"
+      - "Price without VAT specification"
+      - "Wrong number format"
+
+    hypotheses:
+      - id: "ECM-04"
+        cause: "Price format not specified in prompt"
+        confidence: 0.85
+        check: "Search for price/currency format instructions"
+        source: "ecommerce-patterns"
+
+      - id: "ECM-05"
+        cause: "Multiple price fields without priority"
+        confidence: 0.70
+        check: "Check if retail/wholesale/public price priority defined"
+        source: "ecommerce-patterns"
+
+  availability_failure:
+    description: "Wrong or missing availability information"
+    symptoms:
+      - "Shows unavailable products"
+      - "Wrong stock count"
+      - "Missing availability status"
+
+    hypotheses:
+      - id: "ECM-06"
+        cause: "Availability check not in prompt"
+        confidence: 0.80
+        check: "Verify instructions to check stock/availability"
+        source: "ecommerce-patterns"
+
+      - id: "ECM-07"
+        cause: "Out-of-stock handling not defined"
+        confidence: 0.70
+        check: "Check for instructions on unavailable products"
+        source: "ecommerce-patterns"
+
+
+# E-commerce verification strategies
+ecommerce_verifications:
+
+  "ECM-01":
+    automated:
+      - pattern: "(prodott|articol|catalog|match|trova|cerca)"
+        expect: "present"
+    manual:
+      - "Check if product selection criteria are explicit"
+
+  "ECM-04":
+    automated:
+      - pattern: "(EUR|euro|prezzo|price|\\d+[,.]\\d{2})"
+        expect: "present"
+    manual:
+      - "Verify price format is specified"
+
+
+# E-commerce fix templates
+ecommerce_fixes:
+
+  "ECM-01":
+    generic: |
+      Add explicit product matching rules:
+      "When searching for products:
+      1. Match ALL user criteria (color, size, price range)
+      2. Prioritize exact matches over partial
+      3. If no exact match, explain what's different"
+
+  "ECM-04":
+    generic: |
+      Add price display format:
+      "Always display prices as: {amount}€ al pubblico
+      Include availability: {count} disponibili"
+
+  "ECM-06":
+    generic: |
+      Add availability check:
+      "Before showing products, verify availability > 0.
+      Never suggest out-of-stock items unless user asks."

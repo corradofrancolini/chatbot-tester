@@ -1,0 +1,14 @@
+[
+  {
+    "id": "DEMO_001",
+    "question": "Hello, how are you?",
+    "category": "greeting",
+    "expected_topics": ["hello", "greeting"]
+  },
+  {
+    "id": "DEMO_002",
+    "question": "What can you help me with?",
+    "category": "capabilities",
+    "expected_topics": ["help", "assistance", "capabilities"]
+  }
+]

@@ -1,0 +1,55 @@
+# EFG Intranet Chatbot - Configurazione Progetto
+# Migrato da ~/efg-chatbot-tests/
+
+project:
+  name: "efg-intranet"
+  description: "Chatbot assistente intranet EFG"
+  created: "2025-12-02"
+  language: "it"
+
+chatbot:
+  url: "https://ai-chatbots-dev.efg-tech.gg/api/llm/app-efg-intranet/en"
+  
+  selectors:
+    textarea: "#llm-prompt-textarea"
+    submit_button: "button.llm__prompt-submit"
+    bot_messages: ".llm__message--assistant .llm__text-body"
+    thread_container: ".llm__thread"
+  
+  screenshot_css: |
+    .header, .footer, .sidebar { display: none !important; }
+    .llm__thread { height: auto !important; }
+  
+  timeouts:
+    page_load: 30000
+    bot_response: 60000
+
+test_defaults:
+  email: "k.diederichsen@efg.gg"
+  countries:
+    - "Italy"
+    - "Germany"
+    - "Switzerland"
+  confirmations:
+    - "yes"
+    - "no"
+
+google_sheets:
+  credentials_path: "../../config/oauth_credentials.json"
+  enabled: true
+  spreadsheet_id: "1ITutQfRbfa457TYwJcUtpPUTCypULWHPc-VRMmyJjJw"
+  drive_folder_id: "1XIbEqPKE6Q_e_3IKNaTHPtD__RO08A9o"
+
+langsmith:
+  enabled: true
+  api_key_env: "LANGSMITH_API_KEY"
+  project_id: ""
+  org_id: ""
+  tool_names:
+    - "intranet_PCS"
+    - "intranet_IT"
+
+ollama:
+  enabled: true
+  model: "llama3.2:3b"
+  url: "http://localhost:11434/api/generate"

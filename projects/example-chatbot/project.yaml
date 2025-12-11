@@ -1,0 +1,34 @@
+# Example Chatbot Project Configuration
+# This is a demo project for testing GitHub Actions workflow
+
+project:
+  name: "example-chatbot"
+  description: "Example chatbot for testing automation"
+  created: "2025-12-11"
+  language: "en"
+
+chatbot:
+  url: "https://chat.example.com/demo"
+
+  selectors:
+    textarea: "#chat-input"
+    submit_button: "button.send-btn"
+    bot_messages: ".message.assistant"
+
+  timeouts:
+    page_load: 30000
+    bot_response: 60000
+
+# Test defaults
+test_defaults:
+  email: "test@example.com"
+
+# External services (optional)
+google_sheets:
+  enabled: false
+
+langsmith:
+  enabled: false
+
+ollama:
+  enabled: false

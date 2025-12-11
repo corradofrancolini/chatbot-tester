@@ -1,0 +1,144 @@
+# GitHub Action - Chatbot Tester
+# Usabile come: uses: corradofrancolini/chatbot-tester@v1
+
+name: 'Chatbot Tester'
+description: 'Test automatici per chatbot web con Playwright e AI'
+author: 'Corrado Francolini'
+
+branding:
+  icon: 'message-circle'
+  color: 'blue'
+
+inputs:
+  project:
+    description: 'Nome del progetto da testare'
+    required: true
+  mode:
+    description: 'Modalita di test (auto, assisted, train)'
+    required: false
+    default: 'auto'
+  tests:
+    description: 'Quali test eseguire (all, pending, failed)'
+    required: false
+    default: 'pending'
+  new-run:
+    description: 'Crea nuovo run su Google Sheets'
+    required: false
+    default: 'false'
+  single-test:
+    description: 'ID singolo test da eseguire'
+    required: false
+    default: ''
+  langsmith-api-key:
+    description: 'LangSmith API key per tracing'
+    required: false
+    default: ''
+  google-credentials:
+    description: 'Google Service Account credentials (JSON)'
+    required: false
+    default: ''
+  headless:
+    description: 'Esegui browser in modalita headless'
+    required: false
+    default: 'true'
+
+outputs:
+  report-path:
+    description: 'Path al report HTML generato'
+    value: ${{ steps.run-tests.outputs.report-path }}
+  passed:
+    description: 'Numero test passati'
+    value: ${{ steps.run-tests.outputs.passed }}
+  failed:
+    description: 'Numero test falliti'
+    value: ${{ steps.run-tests.outputs.failed }}
+  total:
+    description: 'Numero totale test eseguiti'
+    value: ${{ steps.run-tests.outputs.total }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r ${{ github.action_path }}/requirements.txt
+
+    - name: Install Playwright
+      shell: bash
+      run: |
+        playwright install chromium
+        playwright install-deps chromium
+
+    - name: Setup credentials
+      shell: bash
+      run: |
+        mkdir -p ${{ github.action_path }}/config
+
+        if [ -n "${{ inputs.langsmith-api-key }}" ]; then
+          echo "LANGSMITH_API_KEY=${{ inputs.langsmith-api-key }}" >> ${{ github.action_path }}/config/.env
+        fi
+
+        if [ -n "${{ inputs.google-credentials }}" ]; then
+          echo '${{ inputs.google-credentials }}' > ${{ github.action_path }}/config/credentials.json
+        fi
+
+    - name: Run tests
+      id: run-tests
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}
+
+        NEW_RUN=""
+        if [ "${{ inputs.new-run }}" == "true" ]; then
+          NEW_RUN="--new-run"
+        fi
+
+        SINGLE_TEST=""
+        if [ -n "${{ inputs.single-test }}" ]; then
+          SINGLE_TEST="-t ${{ inputs.single-test }}"
+        fi
+
+        HEADLESS=""
+        if [ "${{ inputs.headless }}" == "true" ]; then
+          HEADLESS="--headless"
+        fi
+
+        python run.py \
+          -p ${{ inputs.project }} \
+          -m ${{ inputs.mode }} \
+          --tests ${{ inputs.tests }} \
+          --no-interactive \
+          --skip-health-check \
+          $NEW_RUN \
+          $SINGLE_TEST \
+          $HEADLESS
+
+        # Parse results
+        REPORT_PATH=$(find reports -name "report.html" -type f | head -1)
+        echo "report-path=$REPORT_PATH" >> $GITHUB_OUTPUT
+
+        if [ -f "$REPORT_PATH" ]; then
+          PASSED=$(grep -o 'class="esito pass"' "$REPORT_PATH" | wc -l || echo "0")
+          FAILED=$(grep -o 'class="esito fail"' "$REPORT_PATH" | wc -l || echo "0")
+          TOTAL=$((PASSED + FAILED))
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: chatbot-test-results
+        path: |
+          ${{ github.action_path }}/reports/
+        retention-days: 30

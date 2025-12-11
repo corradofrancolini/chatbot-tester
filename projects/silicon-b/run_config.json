@@ -1,0 +1,15 @@
+{
+  "env": "DEV",
+  "prompt_version": "v8",
+  "model_version": "",
+  "active_run": 16,
+  "run_start": "2025-12-11T09:45:11.457013",
+  "tests_completed": 54,
+  "mode": "auto",
+  "last_test_id": "TEST_054",
+  "dry_run": false,
+  "use_langsmith": true,
+  "use_rag": false,
+  "use_ollama": true,
+  "single_turn": true
+}

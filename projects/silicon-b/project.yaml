@@ -1,0 +1,45 @@
+project:
+  name: silicon-b
+  description: Chatbot Silicon Search B
+  created: '2024-12-04'
+  language: it
+
+chatbot:
+  url: https://platform-ai-dev.ws-deploy-01.wslabs.it/api/llm/app-silicon-search-B/it
+  selectors:
+    textarea: '#llm-prompt-textarea'
+    submit_button: button.llm__prompt-submit
+    bot_messages: .llm__message--assistant
+    thread_container: .llm__scroller
+    loading_indicator: .llm__busyIndicator
+  screenshot_css: ''
+  timeouts:
+    page_load: 30000
+    bot_response: 60000
+
+test_defaults:
+  email: test@example.com
+  countries:
+    - Italy
+    - Germany
+    - France
+  confirmations:
+    - 'yes'
+    - 'no'
+
+google_sheets:
+  enabled: true
+  spreadsheet_id: '1nUQd_HPlbef-jZeZV_gjdZdxYVwxgWSUZb1PfnRQYOw'
+  drive_folder_id: '1cW66dNsxmIoctww5E7Wu03KoTp8b9k7L'
+
+langsmith:
+  enabled: true
+  api_key_env: LANGSMITH_API_KEY
+  project_id: d600c6c5-a3d5-41c1-b3ae-283c29041ef2
+  org_id: ''
+  tool_names: []
+
+ollama:
+  enabled: true
+  model: llama3.2:3b
+  url: http://localhost:11434/api/generate

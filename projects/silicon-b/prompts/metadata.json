@@ -1,0 +1,19 @@
+{
+  "project": "silicon-b",
+  "current_version": 1,
+  "versions": [
+    {
+      "version": 1,
+      "date": "2025-12-06",
+      "note": "imported from file",
+      "filename": "v001_2025-12-06_imported-from-file.md",
+      "hash": "781b36c257e1",
+      "tag": "",
+      "parent_version": null,
+      "source": "import",
+      "test_run": null
+    }
+  ],
+  "created": "2025-12-06T18:16:13.729723",
+  "updated": "2025-12-06T18:16:33.104053"
+}

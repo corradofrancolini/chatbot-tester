@@ -1,0 +1,197 @@
+{
+  "patterns": [
+    {
+      "id": "country",
+      "name": "country",
+      "bot_patterns": [
+        "which country",
+        "what country",
+        "country are you",
+        "where are you (based|located)",
+        "your (location|country)",
+        "select.{0,20}country"
+      ],
+      "responses": []
+    },
+    {
+      "id": "email",
+      "name": "email",
+      "bot_patterns": [
+        "(your )?(e-?mail|email address)",
+        "contact.{0,10}(address|info)",
+        "send.{0,10}(to|email)",
+        "provide.{0,10}email"
+      ],
+      "responses": []
+    },
+    {
+      "id": "confirmation",
+      "name": "yes/no",
+      "bot_patterns": [
+        "(yes|no)\\??$",
+        "would you like",
+        "do you want",
+        "shall i",
+        "confirm",
+        "proceed\\?",
+        "is (this|that) correct"
+      ],
+      "responses": []
+    },
+    {
+      "id": "date",
+      "name": "date",
+      "bot_patterns": [
+        "which date",
+        "what date",
+        "when (do|would|did)",
+        "(start|end|from|to) date",
+        "select.{0,10}date"
+      ],
+      "responses": []
+    },
+    {
+      "id": "name",
+      "name": "name",
+      "bot_patterns": [
+        "(your |the )?(full )?name",
+        "who (is|are)",
+        "employee.{0,10}name"
+      ],
+      "responses": []
+    }
+  ],
+  "conversations": [
+    {
+      "test_id": "TEST_001",
+      "question": "Puoi mostrarmi prima le novità e i bestsellers nei risultati di ricerca?",
+      "turns": [],
+      "timestamp": "2025-12-04T17:11:29.645887"
+    },
+    {
+      "test_id": "TEST_001",
+      "question": "Puoi mostrarmi prima le novità e i bestsellers nei risultati di ricerca?",
+      "turns": [],
+      "timestamp": "2025-12-04T17:20:44.372927"
+    },
+    {
+      "test_id": "TEST_001",
+      "question": "Puoi mostrarmi prima le novità e i bestsellers nei risultati di ricerca?",
+      "turns": [],
+      "timestamp": "2025-12-04T17:29:07.601329"
+    },
+    {
+      "test_id": "TEST_001",
+      "question": "Puoi mostrarmi prima le novità e i bestsellers nei risultati di ricerca?",
+      "turns": [],
+      "timestamp": "2025-12-04T17:32:47.277034"
+    },
+    {
+      "test_id": "TEST_002",
+      "question": "La mia azienda opera nel commercio di caffè; abbiamo un evento di presentazione di una nuova cialda. Che gadget posso proporre?",
+      "turns": [],
+      "timestamp": "2025-12-04T17:32:51.125682"
+    },
+    {
+      "test_id": "TEST_003",
+      "question": "Puoi mostrarmi prodotti a basso costo?",
+      "turns": [],
+      "timestamp": "2025-12-04T17:33:13.900327"
+    },
+    {
+      "test_id": "TEST_004",
+      "question": "Trova i dettagli del prodotto con il codice articolo K18040",
+      "turns": [],
+      "timestamp": "2025-12-04T17:33:42.060914"
+    },
+    {
+      "test_id": "TEST_005",
+      "question": "Quali penne avete a meno di 1 euro?",
+      "turns": [],
+      "timestamp": "2025-12-04T17:33:51.006306"
+    },
+    {
+      "test_id": "TEST_023",
+      "question": "Puoi elencarmi le tecniche disponibili per la customizzazione e la stampa?",
+      "turns": [
+        {
+          "bot": "Le principali tecniche di personalizzazione e stampa disponibili con Silicon sono:\nStampa digitaleStampa diretta dal file al supporto (anche con vernici UV), ideale per loghi e immagini a più colori, sfumature, piccoli dettagli, su molti materiali diversi.\n\nStampa sublimaticaSpecifica per tessuti in poliestere o materiali trattati poliestere/nylon. Perfetta per stampe a tutta superficie, full color, molto resistenti nel tempo (indelebili nel tessuto).\n\nSerigrafiaTecnica a tinte piatte, molto usata per grandi quantità. Garantisce colori coprenti e durevoli su tanti materiali (tessile, plastica, metallo, carta, ecc.).\n\nIncisione laserPersonalizzazione “a tono su tono” tramite raggio laser su metallo, legno, alcuni tipi di plastica, vetro, ecc. Molto elegante, precisa e indelebile.\n\nTampografiaStampa indiretta tramite tampone in silicone, ideale per superfici irregolari (curve, concave, convesse) e per loghi a tinte piatte su piccoli oggetti (penne, gadget, ecc.).\n\nTrasferimento termicoTrasferimento di inchiostro o film tramite calore su tessuti e altri supporti. Indicato per loghi con più colori e diverse tonalità, anche su quantità medio‑basse.\n\n\nPuoi approfondire tutte le tecniche di stampa direttamente qui:\n            https://www.siliconsrl.it/it/tecniche-di-stampa",
+          "user": "Puoi elencarmi le tecniche disponibili per la customizzazione e la stampa?",
+          "pattern_id": null
+        },
+        {
+          "bot": "Le tecniche di personalizzazione/stampa disponibili con Silicon sono:\nStampa digitale (anche con vernici UV)  \nStampa sublimatica  \nSerigrafia  \nIncisione laser  \nTampografia  \nTrasferimento termico\n\nPuoi vedere la scheda completa qui:\n            https://www.siliconsrl.it/it/tecniche-di-stampa",
+          "user": "e",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-04T19:05:54.263244"
+    },
+    {
+      "test_id": "TEST_024",
+      "question": "Quali attaccapanni avete a catalogo?",
+      "turns": [
+        {
+          "bot": "E14128GANCIO APPENDIBORSA DA TAVOLO IN METALLO2,59€ al pubblico10.402 disponibiliE14129GANCIO APPENDIBORSA DA TAVOLO IN METALLO2,59€ al pubblico3.309 disponibili",
+          "user": "Quali attaccapanni avete a catalogo?",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-04T19:07:47.546080"
+    },
+    {
+      "test_id": "TEST_025",
+      "question": "Quali categorie di prodotto offrite?",
+      "turns": [
+        {
+          "bot": "Scrittura: \n            https://www.siliconsrl.it/it/prodotti/scrittura\nUfficio: \n            https://www.siliconsrl.it/it/prodotti/ufficio\n          Tecnologia: \n            https://www.siliconsrl.it/it/prodotti/tecnologia\n          Mangiare e bere: \n            https://www.siliconsrl.it/it/prodotti/mangiare-e-bere\n          Borse: \n            https://www.siliconsrl.it/it/prodotti/borse\n          Cappelli: \n            https://www.siliconsrl.it/it/prodotti/cappelli\n          Articoli tessili ed ombrelli: \n            https://www.siliconsrl.it/it/prodotti/articoli-tessili-ed-ombrelli\n          Utensili e accessori: \n            https://www.siliconsrl.it/it/prodotti/utensili-e-accessori\n          Benessere e cura: \n            https://www.siliconsrl.it/it/prodotti/benessere-e-cura\n          Orologi: \n            https://www.siliconsrl.it/it/prodotti/orologi",
+          "user": "Quali categorie di prodotto offrite?",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-04T19:12:45.289564"
+    },
+    {
+      "test_id": "TEST_001",
+      "question": "Puoi mostrarmi prima le novità e i bestsellers nei risultati di ricerca?",
+      "turns": [
+        {
+          "bot": "0,0€ al pubblicoNon disponibile • Consulta arrivi",
+          "user": "Puoi mostrarmi prima le novità e i bestsellers nei risultati di ricerca?",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-04T21:27:31.380495"
+    },
+    {
+      "test_id": "TEST_002",
+      "question": "La mia azienda opera nel commercio di caffè; abbiamo un evento di presentazione di una nuova cialda. Che gadget posso proporre?",
+      "turns": [
+        {
+          "bot": "L19025TAZZA IN CERAMICA 320 ml (GRADO A)2,33€ al pubblico3.350 disponibiliL19033TAZZA IN CERAMICA COLORI FLUO 320 ML (GRADO A)3,92€ al pubblico17.177 disponibiliL19036TAZZA IN CERAMICA 320 ML (GRADO A)4,31€ al pubblico3.441 disponibiliL19039TAZZA 380 ML IN ALLUMINIO RICICLATO, BAMBÙ E ACCIAIO INOX3,27€ al pubblico9.949 disponibiliL19037TAZZA DA VIAGGIO IN PP 350 ML2,59€ al pubblico3.171 disponibiliL19027SOTTOBICCHIERE IN PLASTICA E METALLO0,76€ al pubblico3.718 disponibiliB11259PENNA A SFERA IN POLVERE DI FONDI DI CAFFÈ+ABS0,37€ al pubblico25.038 disponibiliB11118PENNA A SFERA IN POLVERE DI FONDI DI CAFFÈ+ABS0,37€ al pubblico20.094 disponibiliS26507BLOCCO PER APPUNTI IN CARTA KRAFT, POLVERE DI FONDI DI CAFFÈ+PLASTICA1,96€ al pubblico3.146 disponibiliS26508BLOCCO PER APPUNTI IN CARTA KRAFT, POLVERE DI FONDI DI CAFFÈ+PLASTICA2,88€ al pubblico2.309 disponibiliT27082BUSTINA PORTA PENNA IN CARTA RICICLATA (STAMPA SIMIL CAFFÈ)0,18€ al pubblico13.996 disponibiliB11836SET CANCELLERIA AL CAFFÈ1,70€ al pubblico19.819 disponibili",
+          "user": "La mia azienda opera nel commercio di caffè; abbiamo un evento di presentazione di una nuova cialda. Che gadget posso proporre?",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-04T21:29:25.496449"
+    },
+    {
+      "test_id": "TEST_003",
+      "question": "Puoi mostrarmi prodotti a basso costo?",
+      "turns": [
+        {
+          "bot": "OutletB11229* PENNA A SFERA IN PLASTICA0,11€ al pubblico33.516 disponibiliOutletE14109* ASTUCCIO APPENDIBILE DA COLLO IN COTONE0,13€ al pubblico3.535 disponibiliOutletB11134* PENNA A SFERA IN PLASTICA0,14€ al pubblico3.477 disponibiliOutletQ24032* PORTA TELEFONO UNIVERSALE IN PLASTICA0,58€ al pubblico10.533 disponibiliS26174FISCHIETTO IN PLASTICA0,52€ al pubblico32.443 disponibiliOutletS26024* LISCA AVVOLGICAVO IN SILICONE0,31€ al pubblico8.131 disponibiliOutletB11017* PENNA A SFERA IN PLASTICA0,16€ al pubblico78.251 disponibiliOutletQ24419* ASTUCCIO PORTA MASCHERINA ANTIBATTERICO IN PLASTICA0,73€ al pubblico3.380 disponibili",
+          "user": "Puoi mostrarmi prodotti a basso costo?",
+          "pattern_id": null
+        }
+      ],
+      "timestamp": "2025-12-04T21:31:11.647391"
+    }
+  ],
+  "meta": {
+    "version": "2.0",
+    "updated": "2025-12-11T09:56:32.384177",
+    "total_patterns": 5,
+    "total_conversations": 14
+  }
+}

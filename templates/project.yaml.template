@@ -1,0 +1,77 @@
+# =============================================================================
+# CHATBOT TESTER - Configurazione Progetto
+# =============================================================================
+# Generato dal wizard setup.
+# Puoi modificare manualmente, ma attenzione alla sintassi YAML.
+# =============================================================================
+
+project:
+  name: "{{PROJECT_NAME}}"
+  description: "{{PROJECT_DESCRIPTION}}"
+  created: "{{CREATED_DATE}}"
+  language: "it"  # it | en
+
+# -----------------------------------------------------------------------------
+# Configurazione Chatbot
+# -----------------------------------------------------------------------------
+chatbot:
+  url: "{{CHATBOT_URL}}"
+  
+  # Selettori CSS per interagire con il chatbot
+  # Rilevati automaticamente o specificati manualmente
+  selectors:
+    textarea: "{{SELECTOR_TEXTAREA}}"
+    submit_button: "{{SELECTOR_SUBMIT}}"
+    bot_messages: "{{SELECTOR_BOT_MESSAGES}}"
+    thread_container: "{{SELECTOR_THREAD}}"  # opzionale, per screenshot
+  
+  # CSS da iniettare per screenshot puliti (opzionale)
+  # Utile per nascondere header, footer, sidebar
+  screenshot_css: |
+    /* Esempio: nascondere elementi non necessari */
+    /* .header, .footer { display: none !important; } */
+    /* .chat-container { height: auto !important; } */
+
+  # Timeout in millisecondi
+  timeouts:
+    page_load: 30000      # Timeout caricamento pagina
+    bot_response: 60000   # Timeout risposta chatbot
+
+# -----------------------------------------------------------------------------
+# Dati di Default per i Test
+# -----------------------------------------------------------------------------
+# Valori usati quando il test richiede dati specifici
+test_defaults:
+  email: "test@example.com"
+  countries: ["Italy", "Germany", "France"]
+  confirmations: ["yes", "no", "sì", "no"]
+
+# -----------------------------------------------------------------------------
+# Google Sheets (opzionale)
+# -----------------------------------------------------------------------------
+# Per salvare i report anche su Google Sheets
+google_sheets:
+  enabled: false
+  spreadsheet_id: ""      # ID dello spreadsheet (dalla URL)
+  drive_folder_id: ""     # ID cartella Drive per screenshot
+
+# -----------------------------------------------------------------------------
+# LangSmith (opzionale)
+# -----------------------------------------------------------------------------
+# Per debugging avanzato e analisi delle risposte
+langsmith:
+  enabled: false
+  api_key_env: "LANGSMITH_API_KEY"  # Nome variabile in .env
+  project_id: ""
+  org_id: ""
+  tool_names: []  # Es: ["search_documents", "get_user_info"]
+
+# -----------------------------------------------------------------------------
+# Ollama/LLM (opzionale)
+# -----------------------------------------------------------------------------
+# Per modalità Assisted e Auto
+ollama:
+  enabled: false
+  model: "mistral"
+  url: "http://localhost:11434/api/generate"
+  temperature: 0.3

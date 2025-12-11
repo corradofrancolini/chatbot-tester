@@ -1,0 +1,65 @@
+app:
+  version: 1.0.0
+  language: it
+browser:
+  headless: false
+  slow_mo: 0
+  viewport:
+    width: 1280
+    height: 720
+  device_scale_factor: 2
+test:
+  max_turns: 15
+  screenshot_on_complete: true
+  default_wait_after_send: 1000
+reports:
+  local:
+    enabled: true
+    formats:
+    - html
+    - csv
+    keep_last_n: 50
+ui:
+  colors: true
+  progress_bar: true
+  clear_screen: true
+parallel:
+  enabled: false
+  max_workers: 3
+  retry_strategy: exponential
+  max_retries: 2
+  base_delay_ms: 1000
+  rate_limit_per_minute: 60
+cache:
+  enabled: true
+  memory:
+    max_entries: 1000
+    default_ttl_seconds: 300
+  langsmith:
+    trace_ttl_seconds: 300
+    report_ttl_seconds: 600
+notifications:
+  email:
+    enabled: false
+    smtp_host: smtp.gmail.com
+    smtp_port: 587
+    smtp_user: ''
+    smtp_password_env: SMTP_PASSWORD
+    from: ''
+    recipients: []
+  desktop:
+    enabled: true
+    sound: true
+  teams:
+    enabled: true
+    webhook_url_env: TEAMS_WEBHOOK_URL
+  triggers:
+    on_complete: true
+    on_failure: true
+    on_regression: false
+    on_flaky: true
+logging:
+  level: INFO
+  file: chatbot-tester.log
+  max_size_mb: 10
+  backup_count: 3
