@@ -1,33 +1,124 @@
 # Deployment Guide
 
-This guide explains how to run Chatbot Tester without having Chromium running on your Mac.
+This guide explains different execution options for Chatbot Tester, from cloud automation to local execution.
 
 ---
 
 ## Table of Contents
 
-1. [GitHub Actions (Recommended)](#1-github-actions-recommended)
-2. [Docker](#2-docker)
-3. [PyPI Package](#3-pypi-package)
-4. [Standalone Binary](#4-standalone-binary)
-5. [GitHub Action Marketplace](#5-github-action-marketplace)
+1. [Deployment Patterns](#execution-patterns)
+2. [GitHub Actions (Recommended)](#2-github-actions-recommended)
+3. [Docker](#3-docker)
+4. [PyPI Package](#4-pypi-package)
+5. [Standalone Binary](#5-standalone-binary)
+6. [GitHub Action Marketplace](#6-github-action-marketplace)
 
 ---
 
-## 1. GitHub Actions (Recommended)
+## Deployment Patterns
+
+### Public Framework + Private Projects (Recommended)
+
+This is the industry-standard pattern for automation tools:
+
+**Public Repository** (`chatbot-tester`)
+- Contains the framework code
+- Generic documentation and examples
+- Safe for open source distribution
+- No sensitive project data
+
+**Private Fork** (`chatbot-tester-private`)
+- Contains your real projects and configurations
+- Client-specific test suites
+- Authentication credentials as secrets
+- Production workflows
+
+```
+chatbot-tester (public)           chatbot-tester-private (private)
+├── src/                          ├── src/                  ← synced
+├── docs/                         ├── docs/                 ← synced
+├── projects/                     ├── projects/
+│   └── example-chatbot/          │   ├── client-a/         ← your projects
+└── .github/workflows/            │   ├── client-b/
+    └── chatbot-test.yml          │   └── internal/
+                                  └── .github/workflows/
+                                      └── chatbot-test.yml  ← with secrets
+```
+
+#### Setup Process
+
+1. **Use the public repository** for development and updates
+2. **Create a private fork** for your projects:
+   ```bash
+   gh repo fork --private --clone --fork-name chatbot-tester-private
+   ```
+3. **Add your projects** to the private fork
+4. **Configure secrets** in the private repository
+5. **Sync updates** from public to private as needed
+
+#### Benefits
+- ✅ Zero data leakage risk
+- ✅ Framework stays reusable and open
+- ✅ Easy updates from public repo
+- ✅ Production-ready CI/CD
+- ✅ Follows industry best practices
+
+---
+
+## 2. GitHub Actions (Recommended)
 
 Run tests directly on GitHub servers, without any local software.
 
 ### Setup (one-time)
 
-#### Step 1: Configure Secrets
+#### For Private Fork
 
-Go to **GitHub > Settings > Secrets and variables > Actions** and add:
+If you're using the private fork pattern, configure these secrets in your **private repository**:
+
+| Secret | Value | Required | How to get |
+|--------|-------|----------|------------|
+| `BROWSER_AUTH_STATE` | Base64 encoded browser session | **Yes** | See [Authentication Setup](#authentication-setup) |
+| `LANGSMITH_API_KEY` | Your LangSmith API key | No | From LangSmith dashboard |
+| `GOOGLE_OAUTH_CREDENTIALS` | Google OAuth credentials JSON | No | From Google Cloud Console |
+| `GOOGLE_TOKEN_JSON` | Google OAuth token with refresh | No | Generated after first auth |
+
+#### For Public Repository Testing
+
+The public repository only needs these for testing with `example-chatbot`:
 
 | Secret | Value | Required |
 |--------|-------|----------|
 | `LANGSMITH_API_KEY` | Your LangSmith API key | No |
-| `GOOGLE_CREDENTIALS` | Google credentials JSON | No |
+
+#### Authentication Setup
+
+To enable automated login for your chatbots:
+
+1. **Generate auth state** (run locally):
+   ```bash
+   python -c "
+   from playwright.sync_api import sync_playwright
+
+   with sync_playwright() as p:
+       browser = p.chromium.launch(headless=False)
+       context = browser.new_context()
+       page = context.new_page()
+       page.goto('https://your-chatbot-url.com')
+
+       input('Login manually, then press ENTER...')
+
+       context.storage_state(path='auth_state.json')
+       print('Auth state saved!')
+       browser.close()
+   "
+   ```
+
+2. **Convert to base64 and upload**:
+   ```bash
+   base64 -i auth_state.json | pbcopy
+   gh secret set BROWSER_AUTH_STATE
+   # Paste the base64 content
+   ```
 
 #### Step 2: Push the workflow
 
@@ -46,7 +137,7 @@ git push
 1. Go to **GitHub > Actions > Chatbot Test Suite**
 2. Click **Run workflow**
 3. Fill in the parameters:
-   - `project`: project name (e.g., `my-chatbot`)
+   - `project`: project name (e.g., `example-chatbot`)
    - `mode`: `auto`, `assisted`, or `train`
    - `tests`: `all`, `pending`, or `failed`
    - `new_run`: check to create new run
@@ -62,7 +153,7 @@ gh auth login
 
 # Launch tests
 gh workflow run chatbot-test.yml \
-  -f project=my-chatbot \
+  -f project=example-chatbot \
   -f mode=auto \
   -f tests=pending
 
@@ -80,7 +171,7 @@ gh run download <run-id>
 
 ---
 
-## 2. Docker
+## 3. Docker
 
 Run tests in an isolated container, locally or on a server.
 
@@ -102,14 +193,14 @@ docker run \
   -v $(pwd)/projects:/app/projects \
   -v $(pwd)/reports:/app/reports \
   chatbot-tester \
-  -p my-chatbot -m auto --no-interactive
+  -p example-chatbot -m auto --no-interactive
 
 # With environment variables
 docker run \
   -e LANGSMITH_API_KEY=your_key \
   -v $(pwd)/projects:/app/projects \
   chatbot-tester \
-  -p my-chatbot -m auto --no-interactive
+  -p example-chatbot -m auto --no-interactive
 ```
 
 ### Remote Server Execution
@@ -125,7 +216,7 @@ scp -r projects/ user@server:~/chatbot-tester/
 ssh user@server "docker run \
   -v ~/chatbot-tester/projects:/app/projects \
   chatbot-tester \
-  -p my-chatbot -m auto --no-interactive"
+  -p example-chatbot -m auto --no-interactive"
 ```
 
 ### Docker Compose (optional)
@@ -143,7 +234,7 @@ services:
       - ./config:/app/config
     environment:
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
-    command: ["-p", "my-chatbot", "-m", "auto", "--no-interactive"]
+    command: ["-p", "example-chatbot", "-m", "auto", "--no-interactive"]
 ```
 
 Run:
@@ -153,7 +244,7 @@ docker-compose run chatbot-tester
 
 ---
 
-## 3. PyPI Package
+## 4. PyPI Package
 
 Install as a standard Python package.
 
@@ -179,10 +270,10 @@ pip install chatbot-tester[all]
 
 ```bash
 # Direct command
-chatbot-tester -p my-chatbot -m auto --no-interactive
+chatbot-tester -p example-chatbot -m auto --no-interactive
 
 # Health check
-chatbot-tester --health-check -p my-chatbot
+chatbot-tester --health-check -p example-chatbot
 ```
 
 ### Publishing to PyPI (for maintainers)
@@ -201,7 +292,7 @@ twine upload dist/*
 
 ---
 
-## 4. Standalone Binary
+## 5. Standalone Binary
 
 Single executable without Python dependencies.
 
@@ -227,7 +318,7 @@ pyinstaller chatbot-tester.spec
 chmod +x dist/chatbot-tester
 
 # Run
-./dist/chatbot-tester -p my-chatbot -m auto --no-interactive
+./dist/chatbot-tester -p example-chatbot -m auto --no-interactive
 ```
 
 ### Notes
@@ -238,7 +329,7 @@ chmod +x dist/chatbot-tester
 
 ---
 
-## 5. GitHub Action Marketplace
+## 6. GitHub Action Marketplace
 
 Use Chatbot Tester as an action in other repositories.
 
@@ -257,7 +348,7 @@ jobs:
       - name: Run Chatbot Tests
         uses: corradofrancolini/chatbot-tester@v1
         with:
-          project: my-chatbot
+          project: example-chatbot
           mode: auto
           tests: pending
           langsmith-api-key: ${{ secrets.LANGSMITH_API_KEY }}
@@ -306,6 +397,36 @@ jobs:
 
 ---
 
+## Recommended Deployment Strategy
+
+### For Individual Use
+1. **Start local** - Clone the public repo and run locally
+2. **Add your projects** - Create projects in the `projects/` directory
+3. **Use Train mode** - Build your test suite and training data
+4. **Move to private fork** - When ready for automation
+
+### For Team Use
+1. **Private fork** - Set up `yourcompany-chatbot-testing`
+2. **Shared secrets** - Configure team authentication
+3. **Scheduled runs** - Use GitHub Actions for continuous testing
+4. **Branch protection** - Require tests to pass before merging
+
+### For Enterprise
+1. **Self-hosted runners** - For sensitive environments
+2. **Docker containers** - Consistent execution environments
+3. **Multiple projects** - Separate by team/product/environment
+4. **Integration** - Connect to existing CI/CD pipelines
+
+### Security Best Practices
+- ✅ **Never commit** authentication credentials
+- ✅ **Use secrets** for all sensitive data
+- ✅ **Rotate credentials** regularly
+- ✅ **Limit secret access** to necessary personnel
+- ✅ **Monitor usage** through GitHub Actions logs
+- ✅ **Keep fork private** when containing real projects
+
+---
+
 ## Troubleshooting
 
 ### GitHub Actions fails
@@ -325,8 +446,8 @@ docker run -v $(pwd)/projects:/app/projects chatbot-tester ls /app/projects
 
 ```bash
 # Verify services
-python run.py --health-check -p my-chatbot
+python run.py --health-check -p example-chatbot
 
 # Skip health check to force
-python run.py -p my-chatbot -m auto --skip-health-check
+python run.py -p example-chatbot -m auto --skip-health-check
 ```
