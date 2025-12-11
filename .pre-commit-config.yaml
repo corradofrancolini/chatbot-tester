@@ -11,6 +11,24 @@ repos:
       - id: end-of-file-fixer
       - id: check-merge-conflict
 
+  # Secrets detection
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package-lock.json
+
+  # Custom sensitive data detection
+  - repo: local
+    hooks:
+      - id: detect-sensitive-patterns
+        name: Detect sensitive data patterns
+        entry: scripts/check-sensitive-patterns.sh
+        language: script
+        types: [text]
+        exclude: scripts/check-sensitive-patterns.sh
+
   # Python syntax
   - repo: https://github.com/pycqa/flake8
     rev: 7.0.0

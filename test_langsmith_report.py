@@ -26,7 +26,7 @@ from src.langsmith_client import LangSmithClient, LangSmithReport
 def main():
     # Configura client
     api_key = os.getenv("LANGSMITH_API_KEY")
-    project_id = "YOUR_LANGSMITH_PROJECT_ID"  # my-chatbot
+    project_id = os.getenv("LANGSMITH_PROJECT_ID", "your-project-id")  # Set via environment
 
     if not api_key:
         print("✗ LANGSMITH_API_KEY non trovata in config/.env")

@@ -89,9 +89,9 @@ def parse_args():
         epilog="""
 Esempi:
   %(prog)s                                   Menu interattivo
-  %(prog)s -p my-chatbot -m auto              Esegui test in modalita auto
-  %(prog)s -p my-chatbot --compare            Confronta ultime 2 run
-  %(prog)s -p my-chatbot --export html        Esporta report HTML
+  %(prog)s -p my-chatbot -m auto             Esegui test in modalita auto
+  %(prog)s -p my-chatbot --compare           Confronta ultime 2 run
+  %(prog)s -p my-chatbot --export html       Esporta report HTML
   %(prog)s --new-project                     Wizard nuovo progetto
 
 Variabili ambiente:

@@ -26,7 +26,8 @@ on:
           - regression
 
 env:
-  # Progetti da testare (comma-separated)
+  # Projects to test (comma-separated)
+  # Customize this with your project names
   PROJECTS: 'my-chatbot'
   # Modalita default
   DEFAULT_MODE: 'auto'
@@ -114,90 +115,16 @@ jobs:
             echo "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" >> config/.env
           fi
 
-      - name: Create my-chatbot project
-        if: ${{ matrix.project == 'my-chatbot' }}
+      # NOTE: Projects should be created locally and committed to the repo
+      # This step verifies the project exists
+      - name: Verify project exists
         run: |
-          mkdir -p projects/my-chatbot
-
-          # Crea project.yaml
-          cat > projects/my-chatbot/project.yaml << 'EOF'
-          project:
-            name: my-chatbot
-            description: Chatbot Silicon Search B
-            created: '2024-12-04'
-            language: it
-
-          chatbot:
-            url: https://platform-dev.server-01.example.com/api/llm/app-silicon-search-B/it
-            selectors:
-              textarea: '#llm-prompt-textarea'
-              submit_button: button.llm__prompt-submit
-              bot_messages: .llm__message--assistant
-              thread_container: .llm__scroller
-              loading_indicator: .llm__busyIndicator
-            screenshot_css: ''
-            timeouts:
-              page_load: 30000
-              bot_response: 60000
-
-          test_defaults:
-            email: test@example.com
-            countries:
-              - Italy
-            confirmations:
-              - 'yes'
-              - 'no'
-
-          google_sheets:
-            enabled: true
-            spreadsheet_id: 'YOUR_SPREADSHEET_ID'
-            drive_folder_id: 'YOUR_DRIVE_FOLDER_ID'
-            credentials_path: 'config/oauth_credentials.json'
-
-          langsmith:
-            enabled: ${{ secrets.LANGSMITH_API_KEY != '' }}
-            api_key_env: LANGSMITH_API_KEY
-            project_id: YOUR_LANGSMITH_PROJECT_ID
-            org_id: ''
-            tool_names: []
-
-          ollama:
-            enabled: false
-            model: llama3.2:3b
-            url: http://localhost:11434/api/generate
-          EOF
-
-          # Crea tests.json
-          cat > projects/my-chatbot/tests.json << 'EOF'
-          [
-            {"id": "TEST_001", "question": "Puoi mostrarmi prima le novità e i bestsellers nei risultati di ricerca?", "followups": []},
-            {"id": "TEST_002", "question": "La mia azienda opera nel commercio di caffè; abbiamo un evento di presentazione di una nuova cialda. Che gadget posso proporre?", "followups": []},
-            {"id": "TEST_003", "question": "Puoi mostrarmi prodotti a basso costo?", "followups": []},
-            {"id": "TEST_004", "question": "Trova i dettagli del prodotto con il codice articolo K18040", "followups": []},
-            {"id": "TEST_005", "question": "Quali penne avete a meno di 1 euro?", "followups": []}
-          ]
-          EOF
-
-          # Crea run_config.json
-          cat > projects/my-chatbot/run_config.json << 'EOF'
-          {
-            "env": "DEV",
-            "prompt_version": "",
-            "model_version": "",
-            "active_run": null,
-            "run_start": null,
-            "tests_completed": 0,
-            "mode": "auto",
-            "last_test_id": null,
-            "dry_run": true,
-            "use_langsmith": true,
-            "use_rag": false,
-            "use_ollama": false,
-            "single_turn": true
-          }
-          EOF
-
-          echo "✓ Progetto my-chatbot creato"
+          if [ ! -d "projects/${{ matrix.project }}" ]; then
+            echo "ERROR: Project ${{ matrix.project }} not found"
+            echo "Create the project locally with: python run.py --new-project"
+            exit 1
+          fi
+          echo "✓ Project ${{ matrix.project }} found"
 
       - name: Determine test parameters
         id: params
@@ -297,8 +224,8 @@ jobs:
           echo "| Project | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
 
-          # Nota: in un workflow reale, questi dati verrebbero da outputs dei job
-          echo "| my-chatbot | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          # Note: in a real workflow, this data would come from job outputs
+          echo "| ${{ env.PROJECTS }} | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
 
   # Notifiche (opzionale)
   notify:

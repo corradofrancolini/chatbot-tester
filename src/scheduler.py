@@ -106,7 +106,7 @@ class LocalScheduler:
 
         # Aggiungi schedule
         scheduler.add_schedule(ScheduleConfig(
-            name="daily-silicon",
+            name="daily-tests",
             project="my-chatbot",
             schedule_type=ScheduleType.DAILY,
             cron_hour=6

@@ -547,8 +547,7 @@ pyinstaller chatbot-tester.spec
 
 ## Configured Projects
 
-- `my-chatbot` → Silicon search chatbot (DEV)
-- `example-bot` → EFG chatbot
+- `my-chatbot` → Example chatbot project (customize in projects/ directory)
 
 ---
 

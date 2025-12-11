@@ -338,7 +338,7 @@ python -c "from playwright.sync_api import sync_playwright; print('✅ Playwrigh
 curl -s http://localhost:11434/api/tags | python -c "import sys,json; print('✅ Ollama OK' if json.load(sys.stdin) else '❌')"
 
 # 5. Dry run
-./chatbot-tester --project=example-bot --dry-run
+./chatbot-tester --project=my-chatbot --dry-run
 ```
 
 ### Checklist finale
