@@ -446,6 +446,48 @@ Documentazione: https://github.com/user/chatbot-tester
     )
 
     # ═══════════════════════════════════════════════════════════════════
+    # Performance Metrics
+    # ═══════════════════════════════════════════════════════════════════
+    perf_group = parser.add_argument_group('Performance Metrics')
+    perf_group.add_argument(
+        '--perf-report',
+        type=int,
+        nargs='?',
+        const=0,
+        metavar='RUN',
+        help='Mostra report performance (default: ultimo run)'
+    )
+    perf_group.add_argument(
+        '--perf-dashboard',
+        type=int,
+        nargs='?',
+        const=10,
+        metavar='N',
+        help='Dashboard storica performance (ultimi N run, default: 10)'
+    )
+    perf_group.add_argument(
+        '--perf-compare',
+        type=str,
+        metavar='LOCAL:CLOUD',
+        help='Confronta performance local vs cloud (es: --perf-compare 15:16)'
+    )
+    perf_group.add_argument(
+        '--perf-export',
+        type=str,
+        choices=['json', 'html'],
+        metavar='FMT',
+        help='Esporta metriche performance: json, html'
+    )
+    perf_group.add_argument(
+        '--list-runs',
+        type=int,
+        nargs='?',
+        const=10,
+        metavar='N',
+        help='Lista ultimi N run di TUTTI i progetti (default: 10)'
+    )
+
+    # ═══════════════════════════════════════════════════════════════════
     # Health Check
     # ═══════════════════════════════════════════════════════════════════
     diag_group = parser.add_argument_group('Health Check')
@@ -462,7 +504,7 @@ Documentazione: https://github.com/user/chatbot-tester
     diag_group.add_argument(
         '-v', '--version',
         action='version',
-        version='%(prog)s v1.5.0'
+        version='%(prog)s v1.6.0'
     )
 
     args = parser.parse_args()
@@ -564,8 +606,9 @@ def show_main_menu(ui: ConsoleUI, loader: ConfigLoader) -> str:
         MenuItem('3', t('main_menu.finetuning'), t('main_menu.finetuning_desc')),
         MenuItem('4', "Esegui nel cloud", cloud_desc, disabled=not cloud_available),
         MenuItem('5', "Analisi Testing", "Confronta run, regressioni, test flaky"),
-        MenuItem('6', t('main_menu.settings'), t('main_menu.settings_desc')),
-        MenuItem('7', t('main_menu.help'), t('main_menu.help_desc')),
+        MenuItem('6', "Lista Run", "Tutti i run recenti di tutti i progetti"),
+        MenuItem('7', t('main_menu.settings'), t('main_menu.settings_desc')),
+        MenuItem('8', t('main_menu.help'), t('main_menu.help_desc')),
         MenuItem('quit', t('main_menu.exit'), '')
     ]
 
@@ -1614,6 +1657,7 @@ def show_analysis_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
             MenuItem('3', 'Test Flaky', 'Test con risultati inconsistenti'),
             MenuItem('4', 'Coverage', 'Analisi copertura test'),
             MenuItem('5', 'Report Stabilita', 'Overview stabilita test suite'),
+            MenuItem('6', 'Performance', 'Metriche e trend di performance'),
         ]
 
         choice = ui.menu(items, "Azione", allow_back=True)
@@ -1635,6 +1679,9 @@ def show_analysis_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
 
         elif choice == '5':
             _analysis_stability(ui, flaky_detector)
+
+        elif choice == '6':
+            _analysis_performance(ui, project_name, loader)
 
 
 def _analysis_compare_runs(ui: ConsoleUI, comparator) -> None:
@@ -1828,6 +1875,139 @@ def _analysis_stability(ui: ConsoleUI, detector) -> None:
 
     ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
     input()
+
+
+def _analysis_performance(ui: ConsoleUI, project_name: str, loader: ConfigLoader) -> None:
+    """Sottomenu metriche di performance"""
+    from src.performance import (
+        PerformanceHistory, PerformanceReporter, PerformanceAlerter,
+        compare_environments, format_comparison_report
+    )
+
+    ui.section("Performance Metrics")
+
+    # Carica storico
+    history = PerformanceHistory(project_name, Path("reports"))
+
+    while True:
+        items = [
+            MenuItem('1', 'Report ultimo run', 'Mostra metriche dell\'ultimo run'),
+            MenuItem('2', 'Dashboard storica', 'Trend ultimi N run'),
+            MenuItem('3', 'Confronta run', 'Compara due run specifici'),
+            MenuItem('4', 'Esporta HTML', 'Genera report HTML interattivo'),
+        ]
+
+        choice = ui.menu(items, "Performance", allow_back=True)
+
+        if choice is None:
+            return
+
+        elif choice == '1':
+            # Report ultimo run
+            metrics_list = history.load_history(last_n=1)
+            if not metrics_list:
+                ui.warning("Nessuna metrica trovata")
+                ui.print("Esegui test per generare metriche")
+                continue
+
+            reporter = PerformanceReporter(metrics_list[0])
+            ui.print(reporter.generate_summary())
+
+            # Check alerting
+            alerter = PerformanceAlerter()
+            alerts = alerter.check(metrics_list[0])
+            if alerts:
+                ui.print(alerter.format_alerts())
+
+        elif choice == '2':
+            # Dashboard storica
+            n_runs = input("  Ultimi N run (default 10): ").strip()
+            n_runs = int(n_runs) if n_runs.isdigit() else 10
+
+            trends = history.get_trends(n_runs)
+
+            if "message" in trends:
+                ui.warning(trends["message"])
+                continue
+
+            ui.print(f"\n{'='*60}")
+            ui.print(f"  PERFORMANCE DASHBOARD - {project_name}")
+            ui.print(f"  Ultimi {n_runs} run")
+            ui.print(f"{'='*60}\n")
+
+            for metric_name, trend_data in trends.items():
+                trend_icon = "📈" if trend_data["trend"] == "increasing" else "📉" if trend_data["trend"] == "decreasing" else "➡️"
+                change_sign = "+" if trend_data["change_percent"] > 0 else ""
+
+                good_decreasing = metric_name in ["duration", "error_rate", "chatbot_latency", "sheets_latency"]
+                if good_decreasing:
+                    color = "green" if trend_data["trend"] == "decreasing" else "red" if trend_data["trend"] == "increasing" else "dim"
+                else:
+                    color = "green" if trend_data["trend"] == "increasing" else "red" if trend_data["trend"] == "decreasing" else "dim"
+
+                ui.print(f"  {trend_icon} {metric_name.replace('_', ' ').title()}")
+                ui.print(f"     Attuale: {trend_data['current']}")
+                ui.print(f"     Media: {trend_data['average']}")
+                ui.print(f"     Trend: [{color}]{change_sign}{trend_data['change_percent']:.1f}%[/{color}]")
+                ui.print("")
+
+        elif choice == '3':
+            # Confronta run
+            try:
+                run_a = input("  RUN A (baseline): ").strip()
+                run_b = input("  RUN B (nuova): ").strip()
+
+                metrics_list = history.load_history(last_n=50)
+
+                metrics_a = None
+                metrics_b = None
+                for m in metrics_list:
+                    if str(m.run_id) == run_a:
+                        metrics_a = m
+                    if str(m.run_id) == run_b:
+                        metrics_b = m
+
+                if not metrics_a:
+                    ui.error(f"Run {run_a} non trovato")
+                    continue
+                if not metrics_b:
+                    ui.error(f"Run {run_b} non trovato")
+                    continue
+
+                comparison = compare_environments(metrics_a, metrics_b)
+                ui.print(format_comparison_report(comparison))
+
+            except ValueError as e:
+                ui.error(f"Errore: {e}")
+
+        elif choice == '4':
+            # Esporta HTML
+            metrics_list = history.load_history(last_n=1)
+            if not metrics_list:
+                ui.warning("Nessuna metrica trovata")
+                continue
+
+            metrics = metrics_list[0]
+            report_dir = loader.get_report_dir(project_name)
+            export_dir = report_dir / "exports"
+            export_dir.mkdir(parents=True, exist_ok=True)
+
+            output_file = export_dir / f"performance_{metrics.run_id}.html"
+
+            reporter = PerformanceReporter(metrics)
+            html = reporter.generate_html_report()
+
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(html)
+
+            ui.success(f"Esportato: {output_file}")
+
+            # Apri nel browser
+            import webbrowser
+            webbrowser.open(f"file://{output_file}")
+
+        ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+        input()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2708,10 +2888,15 @@ async def main_interactive(args):
             show_analysis_menu(ui, loader)
 
         elif choice == '6':
+            # Lista Run (tutti i progetti)
+            list_all_runs(ui, loader, last_n=15)
+            input("\n  Premi INVIO per continuare...")
+
+        elif choice == '7':
             # Impostazioni
             show_settings_menu(ui, loader)
 
-        elif choice == '7':
+        elif choice == '8':
             # Aiuto
             ui.help_text(t('help_guide'))
 
@@ -2938,6 +3123,303 @@ def run_cli_cloud_monitor(args):
             ui.print(f"\n  📊 Google Sheets: RUN {progress.sheets_run}")
 
         return
+
+
+def run_cli_performance(args):
+    """
+    Gestisce comandi di performance metrics.
+
+    Opzioni:
+    - --perf-report [RUN]: Mostra report performance
+    - --perf-dashboard [N]: Dashboard storica (ultimi N run)
+    - --perf-compare A:B: Confronta due run
+    - --perf-export FMT: Esporta metriche
+    """
+    from src.performance import (
+        PerformanceHistory, PerformanceReporter, RunMetrics,
+        compare_environments, format_comparison_report, PerformanceAlerter
+    )
+    import json as json_module
+
+    ui = get_ui()
+    loader = ConfigLoader()
+
+    if not args.project:
+        ui.error("Specifica un progetto con --project=NOME")
+        return
+
+    try:
+        project = loader.load_project(args.project)
+    except FileNotFoundError:
+        ui.error(f"Progetto '{args.project}' non trovato")
+        return
+
+    # Carica storico performance
+    history = PerformanceHistory(args.project, Path("reports"))
+
+    # --perf-report: mostra report performance
+    if args.perf_report is not None:
+        run_number = args.perf_report if args.perf_report > 0 else None
+
+        # Carica metriche
+        metrics_list = history.load_history(last_n=20)
+
+        if not metrics_list:
+            ui.warning("Nessuna metrica di performance trovata")
+            ui.print("Esegui test con 'python run.py -p PROJECT -m auto' per generare metriche")
+            return
+
+        # Se specificato run, cerca quello
+        metrics = None
+        if run_number:
+            for m in metrics_list:
+                if str(m.run_id) == str(run_number):
+                    metrics = m
+                    break
+            if not metrics:
+                ui.error(f"Run {run_number} non trovato")
+                return
+        else:
+            # Ultimo run
+            metrics = metrics_list[0]
+
+        # Genera e mostra report
+        reporter = PerformanceReporter(metrics)
+        ui.print(reporter.generate_summary())
+
+        # Check alerting
+        alerter = PerformanceAlerter()
+        alerts = alerter.check(metrics)
+        if alerts:
+            ui.print(alerter.format_alerts())
+
+        return
+
+    # --perf-dashboard: dashboard storica
+    if args.perf_dashboard is not None:
+        last_n = args.perf_dashboard if args.perf_dashboard > 0 else 10
+
+        # Calcola trend
+        trends = history.get_trends(last_n)
+
+        if "message" in trends:
+            ui.warning(trends["message"])
+            return
+
+        ui.print(f"\n{'='*60}")
+        ui.print(f"  PERFORMANCE DASHBOARD - {args.project}")
+        ui.print(f"  Ultimi {last_n} run")
+        ui.print(f"{'='*60}\n")
+
+        # Mostra trend per ogni metrica
+        for metric_name, trend_data in trends.items():
+            trend_icon = "📈" if trend_data["trend"] == "increasing" else "📉" if trend_data["trend"] == "decreasing" else "➡️"
+            change_sign = "+" if trend_data["change_percent"] > 0 else ""
+
+            # Colore in base alla metrica (per alcune, decreasing è buono)
+            good_decreasing = metric_name in ["duration", "error_rate", "chatbot_latency", "sheets_latency"]
+            if good_decreasing:
+                color = "green" if trend_data["trend"] == "decreasing" else "red" if trend_data["trend"] == "increasing" else "dim"
+            else:
+                color = "green" if trend_data["trend"] == "increasing" else "red" if trend_data["trend"] == "decreasing" else "dim"
+
+            ui.print(f"  {trend_icon} {metric_name.replace('_', ' ').title()}")
+            ui.print(f"     Attuale: {trend_data['current']}")
+            ui.print(f"     Media: {trend_data['average']}")
+            ui.print(f"     Trend: [{color}]{change_sign}{trend_data['change_percent']:.1f}%[/{color}]")
+            ui.print("")
+
+        ui.print(f"{'='*60}")
+        return
+
+    # --perf-compare: confronta due run
+    if args.perf_compare:
+        try:
+            parts = args.perf_compare.split(":")
+            if len(parts) != 2:
+                raise ValueError("Formato: A:B")
+            run_a, run_b = parts[0], parts[1]
+        except ValueError as e:
+            ui.error(f"Formato non valido: {e}")
+            ui.print("Usa: --perf-compare 15:16")
+            return
+
+        # Carica metriche
+        metrics_list = history.load_history(last_n=50)
+
+        metrics_a = None
+        metrics_b = None
+        for m in metrics_list:
+            if str(m.run_id) == run_a:
+                metrics_a = m
+            if str(m.run_id) == run_b:
+                metrics_b = m
+
+        if not metrics_a:
+            ui.error(f"Run {run_a} non trovato")
+            return
+        if not metrics_b:
+            ui.error(f"Run {run_b} non trovato")
+            return
+
+        # Confronta
+        comparison = compare_environments(metrics_a, metrics_b)
+        ui.print(format_comparison_report(comparison))
+        return
+
+    # --perf-export: esporta metriche
+    if args.perf_export:
+        metrics_list = history.load_history(last_n=1)
+
+        if not metrics_list:
+            ui.warning("Nessuna metrica di performance trovata")
+            return
+
+        metrics = metrics_list[0]
+        report_dir = loader.get_report_dir(args.project)
+        export_dir = report_dir / "exports"
+        export_dir.mkdir(parents=True, exist_ok=True)
+
+        if args.perf_export == "json":
+            output_file = export_dir / f"performance_{metrics.run_id}.json"
+
+            # Converti a dict
+            data = {
+                "run_id": metrics.run_id,
+                "project": metrics.project,
+                "environment": metrics.environment,
+                "start_time": metrics.start_time.isoformat() if metrics.start_time else None,
+                "end_time": metrics.end_time.isoformat() if metrics.end_time else None,
+                "total_tests": metrics.total_tests,
+                "passed_tests": metrics.passed_tests,
+                "failed_tests": metrics.failed_tests,
+                "total_duration_ms": metrics.total_duration_ms,
+                "avg_test_duration_ms": metrics.avg_test_duration_ms,
+                "tests_per_minute": metrics.tests_per_minute,
+                "error_rate": metrics.error_rate,
+                "chatbot_avg_latency_ms": metrics.chatbot_avg_latency_ms,
+                "sheets_avg_latency_ms": metrics.sheets_avg_latency_ms,
+                "langsmith_avg_latency_ms": metrics.langsmith_avg_latency_ms
+            }
+
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json_module.dump(data, f, indent=2, ensure_ascii=False)
+
+            ui.success(f"Esportato: {output_file}")
+
+        elif args.perf_export == "html":
+            output_file = export_dir / f"performance_{metrics.run_id}.html"
+
+            reporter = PerformanceReporter(metrics)
+            html = reporter.generate_html_report()
+
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(html)
+
+            ui.success(f"Esportato: {output_file}")
+
+            # Apri nel browser
+            import webbrowser
+            webbrowser.open(f"file://{output_file}")
+
+        return
+
+    # --list-runs: lista run di tutti i progetti
+    if args.list_runs is not None:
+        last_n = args.list_runs if args.list_runs > 0 else 10
+        list_all_runs(ui, loader, last_n)
+        return
+
+
+def list_all_runs(ui: ConsoleUI, loader: ConfigLoader, last_n: int = 10):
+    """
+    Lista ultimi run di TUTTI i progetti.
+
+    Mostra una tabella aggregata con:
+    - Progetto, Run ID, Data, Test, Pass Rate, Durata
+    """
+    from src.performance import PerformanceHistory
+
+    projects_dir = Path("projects")
+    if not projects_dir.exists():
+        ui.error("Directory projects/ non trovata")
+        return
+
+    # Raccogli run da tutti i progetti
+    all_runs = []
+
+    for project_dir in projects_dir.iterdir():
+        if not project_dir.is_dir():
+            continue
+        if not (project_dir / "project.yaml").exists():
+            continue
+
+        project_name = project_dir.name
+        history = PerformanceHistory(project_name, Path("reports"))
+        metrics_list = history.load_history(last_n=last_n)
+
+        for metrics in metrics_list:
+            pass_rate = (metrics.passed_tests / metrics.total_tests * 100) if metrics.total_tests > 0 else 0
+
+            # Formatta durata
+            duration_ms = metrics.total_duration_ms
+            if duration_ms < 60000:
+                duration_str = f"{duration_ms/1000:.0f}s"
+            else:
+                minutes = int(duration_ms / 60000)
+                seconds = (duration_ms % 60000) / 1000
+                duration_str = f"{minutes}m {seconds:.0f}s"
+
+            all_runs.append({
+                "project": project_name,
+                "run_id": metrics.run_id,
+                "date": metrics.start_time,
+                "total_tests": metrics.total_tests,
+                "pass_rate": pass_rate,
+                "duration": duration_str,
+                "environment": metrics.environment
+            })
+
+    if not all_runs:
+        ui.warning("Nessun run trovato")
+        ui.print("Esegui test con 'python run.py -p PROJECT -m auto' per generare dati")
+        return
+
+    # Ordina per data (più recenti prima)
+    all_runs.sort(key=lambda x: x["date"] or "", reverse=True)
+
+    # Limita a last_n
+    all_runs = all_runs[:last_n]
+
+    # Stampa tabella
+    ui.print(f"\n[bold]Ultimi Run (tutti i progetti)[/bold]\n")
+    ui.print(f"  {'Progetto':<15} {'Run':<8} {'Data':<18} {'Test':<6} {'Pass':<7} {'Durata':<10} {'Env':<6}")
+    ui.print("  " + "─" * 75)
+
+    for run in all_runs:
+        date_str = run["date"].strftime("%Y-%m-%d %H:%M") if run["date"] else "-"
+
+        # Colore pass rate
+        if run["pass_rate"] >= 90:
+            pass_color = "green"
+        elif run["pass_rate"] >= 70:
+            pass_color = "yellow"
+        else:
+            pass_color = "red"
+
+        ui.print(
+            f"  {run['project']:<15} "
+            f"{run['run_id']:<8} "
+            f"{date_str:<18} "
+            f"{run['total_tests']:<6} "
+            f"[{pass_color}]{run['pass_rate']:.0f}%[/{pass_color}]    "
+            f"{run['duration']:<10} "
+            f"{run['environment']:<6}"
+        )
+
+    ui.print("")
+    ui.print(f"  Totale: {len(all_runs)} run")
+    ui.print("  Usa --perf-report -p PROJECT per dettagli")
 
 
 def run_cli_analysis(args):
@@ -3596,6 +4078,12 @@ def main():
     # Comandi cloud monitoring da CLI
     if args.watch_cloud or args.cloud_runs:
         run_cli_cloud_monitor(args)
+        sys.exit(ExitCode.SUCCESS)
+
+    # Comandi performance metrics da CLI
+    if any([args.perf_report is not None, args.perf_dashboard is not None,
+            args.perf_compare, args.perf_export, args.list_runs is not None]):
+        run_cli_performance(args)
         sys.exit(ExitCode.SUCCESS)
 
     # Comandi export da CLI

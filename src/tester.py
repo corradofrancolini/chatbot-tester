@@ -9,8 +9,7 @@ Gestisce:
 """
 
 import asyncio
-# import readchar  # Disabilitato
-# import readchar  # Disabilitato
+import time
 import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable
@@ -28,6 +27,7 @@ from .langsmith_client import LangSmithClient, LangSmithDebugger, LangSmithRepor
 from .sheets_client import GoogleSheetsClient, TestResult, ScreenshotUrls
 from .report_local import ReportGenerator, TestResultLocal
 from .training import TrainingData, TrainModeUI
+from .performance import PerformanceCollector, PerformanceReporter, PerformanceAlerter, PerformanceHistory
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
@@ -156,7 +156,11 @@ class ChatbotTester:
         # Training data - sistema di pattern learning
         self.training: Optional[TrainingData] = None
         self._quit_requested = False
-        self._console = Console()  # Per output colorato  # Per uscire dalla sessione
+        self._console = Console()  # Per output colorato
+
+        # Performance metrics
+        self.perf_collector: Optional[PerformanceCollector] = None
+        self._service_start_time: Optional[float] = None
 
     async def initialize(self) -> bool:
         """
@@ -632,6 +636,14 @@ class ChatbotTester:
         self.report = ReportGenerator(report_dir, self.project.name)
         self.report.mode = "AUTO"
 
+        # Setup performance collector
+        run_id = self.run_config.active_run if self.run_config else datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.perf_collector = PerformanceCollector(
+            run_id=str(run_id),
+            project=self.project.name,
+            environment="cloud" if self.settings.browser.headless else "local"
+        )
+
         results = []
 
         for i, test in enumerate(tests):
@@ -654,6 +666,28 @@ class ChatbotTester:
             # Pausa tra test
             await asyncio.sleep(1)
 
+        # Finalizza e salva metriche performance
+        if self.perf_collector:
+            run_metrics = self.perf_collector.finalize()
+
+            # Salva metriche
+            perf_dir = report_dir / "performance"
+            self.perf_collector.save(perf_dir)
+
+            # Genera e mostra report performance
+            reporter = PerformanceReporter(run_metrics)
+            self.on_status(reporter.generate_summary())
+
+            # Check alerting
+            alerter = PerformanceAlerter()
+            alerts = alerter.check(run_metrics)
+            if alerts:
+                self.on_status(alerter.format_alerts())
+
+            # Salva nello storico per dashboard
+            history = PerformanceHistory(self.project.name, Path("reports"))
+            history.save_run(run_metrics)
+
         # Genera report finale
         report_paths = self.report.generate()
         self.on_status(f"\nReport generato: {report_paths['html']}")
@@ -666,14 +700,30 @@ class ChatbotTester:
         start_time = datetime.utcnow()
         remaining_followups = test.followups.copy()
 
+        # Start performance tracking for this test
+        if self.perf_collector:
+            self.perf_collector.start_test(test.id)
+
         try:
-            # Ricarica la pagina per iniziare una nuova conversazione
+            # PHASE: Setup - navigate to chatbot
+            if self.perf_collector:
+                self.perf_collector.start_phase("setup")
+
             await self.browser.navigate(self.project.chatbot.url)
             await asyncio.sleep(0.5)
 
-            # Invia domanda iniziale
+            if self.perf_collector:
+                self.perf_collector.end_phase()
+
+            # PHASE: Send question
+            if self.perf_collector:
+                self.perf_collector.start_phase("send_question")
+
             self.on_status(f"{test.question[:60]}...")
             await self.browser.send_message(test.question)
+
+            if self.perf_collector:
+                self.perf_collector.end_phase()
 
             conversation.append(ConversationTurn(
                 role='user',
@@ -686,11 +736,28 @@ class ChatbotTester:
             while turn < max_turns:
                 turn += 1
 
-                # Attendi risposta bot
+                # PHASE: Wait for bot response
+                if self.perf_collector:
+                    self.perf_collector.start_phase("wait_response")
+
+                chatbot_start = time.perf_counter()
                 response = await self.browser.wait_for_response()
+                chatbot_duration_ms = (time.perf_counter() - chatbot_start) * 1000
+
+                if self.perf_collector:
+                    self.perf_collector.end_phase()
+                    # Record chatbot latency as external service
+                    self.perf_collector.record_service_call(
+                        service="chatbot",
+                        operation="response",
+                        duration_ms=chatbot_duration_ms,
+                        success=response is not None
+                    )
 
                 if not response:
                     self.on_status("! Nessuna risposta dal bot")
+                    if self.perf_collector:
+                        self.perf_collector.record_timeout()
                     break
 
                 conversation.append(ConversationTurn(
@@ -731,7 +798,10 @@ class ChatbotTester:
                     timestamp=datetime.utcnow().isoformat()
                 ))
 
-            # Screenshot finale COMPLETO (espande container e cattura tutto)
+            # PHASE: Screenshot finale COMPLETO
+            if self.perf_collector:
+                self.perf_collector.start_phase("screenshot")
+
             screenshot_path = ""
             if self.settings.screenshot_on_complete:
                 ss_path = self.report.get_screenshot_path(test.id)
@@ -753,6 +823,9 @@ class ChatbotTester:
                 if success:
                     screenshot_path = str(ss_path)
 
+            if self.perf_collector:
+                self.perf_collector.end_phase()
+
             # Valutazione LLM (solo se Ollama disponibile)
             final_response = conversation[-1].content if conversation else ""
             if self.ollama:
@@ -771,20 +844,44 @@ class ChatbotTester:
             model_version = ""
             if self.langsmith:
                 try:
+                    langsmith_start = time.perf_counter()
                     report = self.langsmith.get_report_for_question(test.question)
+                    langsmith_duration_ms = (time.perf_counter() - langsmith_start) * 1000
+
+                    if self.perf_collector:
+                        self.perf_collector.record_service_call(
+                            service="langsmith",
+                            operation="get_report",
+                            duration_ms=langsmith_duration_ms,
+                            success=report.trace_url is not None
+                        )
+
                     if report.trace_url:
                         langsmith_url = report.trace_url
                         langsmith_report = report.format_for_sheets()
                         model_version = report.get_model_version()
                 except Exception as e:
                     self.on_status(f"! Errore LangSmith: {e}")
+                    if self.perf_collector:
+                        self.perf_collector.record_service_call(
+                            service="langsmith",
+                            operation="get_report",
+                            duration_ms=0,
+                            success=False,
+                            error=str(e)
+                        )
 
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+
+            # Finalize test metrics
+            esito = "PASS" if evaluation.get('passed', False) else "FAIL"
+            if self.perf_collector:
+                self.perf_collector.end_test(esito)
 
             return TestExecution(
                 test_case=test,
                 conversation=conversation,
-                esito="PASS" if evaluation.get('passed', False) else "FAIL",
+                esito=esito,
                 duration_ms=duration_ms,
                 screenshot_path=screenshot_path,
                 langsmith_url=langsmith_url,
@@ -796,6 +893,11 @@ class ChatbotTester:
             )
 
         except Exception as e:
+            # Record error in performance metrics
+            if self.perf_collector:
+                self.perf_collector.record_error(str(e))
+                self.perf_collector.end_test("ERROR")
+
             return TestExecution(
                 test_case=test,
                 conversation=conversation,
@@ -902,8 +1004,11 @@ class ChatbotTester:
                 followups_count=len(result.test_case.followups)
             ))
 
-        # Google Sheets
+        # Google Sheets (con tracking performance)
         if self.sheets:
+            # Track Sheets performance - start
+            sheets_start = time.perf_counter()
+
             screenshot_urls = None
             if result.screenshot_path:
                 screenshot_urls = self.sheets.upload_screenshot(
@@ -926,6 +1031,18 @@ class ChatbotTester:
                 langsmith_report=result.langsmith_report,
                 langsmith_url=result.langsmith_url
             ))
+
+            # Track Sheets performance - end
+            sheets_duration_ms = (time.perf_counter() - sheets_start) * 1000
+            if self.perf_collector and self.perf_collector._current_test is None:
+                # Record in last test metrics if available
+                if self.perf_collector.run_metrics.test_metrics:
+                    self.perf_collector.run_metrics.test_metrics[-1].add_service_call(
+                        service="google_sheets",
+                        operation="save_result",
+                        duration_ms=sheets_duration_ms,
+                        success=True
+                    )
 
         # Aggiorna test completati
         self.completed_tests.add(result.test_case.id)

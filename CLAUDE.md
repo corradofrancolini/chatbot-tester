@@ -584,3 +584,105 @@ Dal menu principale: **[6] Impostazioni**
 ```
 
 Le modifiche vengono salvate direttamente in `config/settings.yaml`.
+
+---
+
+## Performance Metrics (v1.6.0)
+
+Sistema di metriche di performance per monitorare l'esecuzione dei test.
+
+### CLI
+
+```bash
+# Report performance ultimo run
+python run.py -p my-chatbot --perf-report
+
+# Report di un run specifico
+python run.py -p my-chatbot --perf-report 18
+
+# Dashboard storica (trend ultimi N run)
+python run.py -p my-chatbot --perf-dashboard
+python run.py -p my-chatbot --perf-dashboard 20  # ultimi 20 run
+
+# Confronta due run (es. local vs cloud)
+python run.py -p my-chatbot --perf-compare 15:16
+
+# Esporta report
+python run.py -p my-chatbot --perf-export json
+python run.py -p my-chatbot --perf-export html  # apre nel browser
+```
+
+### Menu Interattivo
+
+Da `python run.py` > **[5] Analisi Testing** > **[6] Performance**:
+- **Report ultimo run** - Metriche dettagliate
+- **Dashboard storica** - Trend su ultimi N run
+- **Confronta run** - A/B comparison
+- **Esporta HTML** - Report interattivo nel browser
+
+### Metriche Raccolte
+
+| Categoria | Metriche |
+|-----------|----------|
+| **Timing** | Durata totale, media per test, min/max, breakdown per fase |
+| **Throughput** | Test/minuto, confronto con run precedenti |
+| **Affidabilità** | Retry, timeout, error rate, flakiness |
+| **Servizi Esterni** | Latenza chatbot, Google Sheets, LangSmith |
+
+### Report Post-Run
+
+Al termine di ogni run in modalità AUTO, viene generato automaticamente:
+1. **Summary testuale** - Riepilogo metriche principali
+2. **Alerting** - Warning se metriche fuori soglia
+3. **File JSON** - Dati completi in `reports/{project}/performance/`
+
+### Alerting
+
+Soglie configurabili per warning automatici:
+
+| Soglia | Default |
+|--------|---------|
+| Aumento durata | >20% vs baseline |
+| Calo throughput | >15% |
+| Error rate | >10% |
+| Pass rate | <80% |
+| Latenza chatbot | >30s |
+| Latenza Sheets | >5s |
+
+### API
+
+```python
+from src.performance import (
+    PerformanceCollector, PerformanceReporter, PerformanceHistory,
+    PerformanceAlerter, compare_environments, format_comparison_report
+)
+
+# Raccolta metriche (automatica in tester.py)
+collector = PerformanceCollector("run_18", "my-chatbot", "local")
+collector.start_test("TEST_001")
+collector.start_phase("send_question")
+# ... esecuzione ...
+collector.end_phase()
+collector.record_service_call("chatbot", "response", 1500.0)
+collector.end_test("PASS")
+run_metrics = collector.finalize()
+
+# Report
+reporter = PerformanceReporter(run_metrics)
+print(reporter.generate_summary())
+html = reporter.generate_html_report()
+
+# Storico e trend
+history = PerformanceHistory("my-chatbot", Path("reports"))
+history.save_run(run_metrics)
+trends = history.get_trends(last_n=10)
+
+# Alerting
+alerter = PerformanceAlerter()
+alerts = alerter.check(run_metrics)
+print(alerter.format_alerts())
+
+# Confronto local vs cloud
+comparison = compare_environments(local_metrics, cloud_metrics)
+print(format_comparison_report(comparison))
+```
