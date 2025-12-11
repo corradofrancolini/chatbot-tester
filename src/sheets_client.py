@@ -43,6 +43,31 @@ SCOPES = [
 ]
 
 
+def escape_formula(value: Any) -> str:
+    """
+    Escape valori che potrebbero essere interpretati come formule da Google Sheets.
+
+    Se un valore inizia con =, +, -, @, aggiungi un apostrofo ' all'inizio
+    per forzare Google Sheets a trattarlo come testo.
+
+    Args:
+        value: Valore da escape (può essere str, int, None, etc.)
+
+    Returns:
+        Stringa escaped safe per Google Sheets
+    """
+    if value is None:
+        return ""
+
+    str_value = str(value)
+
+    # Se inizia con caratteri che potrebbero essere formule, aggiungi '
+    if str_value and str_value[0] in ('=', '+', '-', '@'):
+        return f"'{str_value}"
+
+    return str_value
+
+
 @dataclass
 class ScreenshotUrls:
     """URL screenshot per embedding e visualizzazione"""
@@ -528,15 +553,15 @@ class GoogleSheetsClient:
                 result.mode,
                 result.question,
                 result.conversation,
-                screenshot_formula,          # SCREENSHOT: immagine inline
-                screenshot_view_url,         # SCREENSHOT URL: link alta risoluzione
-                result.prompt_version,       # PROMPT VER: da run config
-                result.model_version,        # MODEL VER: provider/modello
-                result.environment or "DEV", # ENV: default DEV
-                "",                          # ESITO: vuoto (compilato dal reviewer)
-                "",                          # NOTES: vuoto (note del reviewer)
-                result.langsmith_report,     # LS REPORT: report LangSmith
-                result.langsmith_url         # LS TRACE LINK: link al trace
+                screenshot_formula,                     # SCREENSHOT: immagine inline
+                screenshot_view_url,                    # SCREENSHOT URL: link alta risoluzione
+                result.prompt_version,                  # PROMPT VER: da run config
+                result.model_version,                   # MODEL VER: provider/modello
+                result.environment or "DEV",            # ENV: default DEV
+                "",                                     # ESITO: vuoto (compilato dal reviewer)
+                "",                                     # NOTES: vuoto (note del reviewer)
+                escape_formula(result.langsmith_report), # LS REPORT: report LangSmith (escaped)
+                result.langsmith_url                    # LS TRACE LINK: link al trace
             ]
 
             self._worksheet.append_row(row, value_input_option='USER_ENTERED')
@@ -597,11 +622,11 @@ class GoogleSheetsClient:
                     r.test_id, r.date, r.mode, r.question, r.conversation,
                     screenshot_formula, screenshot_view_url,
                     r.prompt_version, r.model_version,
-                    r.environment or "DEV",  # ENV: default DEV
-                    "",                      # ESITO: vuoto (reviewer)
-                    "",                      # NOTES: vuoto (reviewer)
-                    r.langsmith_report,      # LS REPORT
-                    r.langsmith_url          # LS TRACE LINK
+                    r.environment or "DEV",           # ENV: default DEV
+                    "",                               # ESITO: vuoto (reviewer)
+                    "",                               # NOTES: vuoto (reviewer)
+                    escape_formula(r.langsmith_report), # LS REPORT (escaped)
+                    r.langsmith_url                   # LS TRACE LINK
                 ])
 
             self._worksheet.append_rows(rows, value_input_option='USER_ENTERED')
