@@ -1,0 +1,192 @@
+# Chatbot Tester - GitHub Actions Workflow
+# Esegue test automatici su chatbot web
+
+name: Chatbot Test Suite
+
+on:
+  # Trigger manuale con parametri
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Nome progetto'
+        required: true
+        type: string
+      mode:
+        description: 'Modalita test'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - assisted
+          - train
+      tests:
+        description: 'Quali test eseguire'
+        required: true
+        default: 'pending'
+        type: choice
+        options:
+          - all
+          - pending
+          - failed
+      new_run:
+        description: 'Crea nuovo run'
+        required: false
+        default: false
+        type: boolean
+
+  # Scheduled run (opzionale - decommentare per abilitare)
+  # schedule:
+  #   - cron: '0 2 * * *'  # Ogni notte alle 2:00
+
+jobs:
+  test:
+    name: Run Chatbot Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: |
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Setup project configuration
+        run: |
+          # Crea directory config se non esiste
+          mkdir -p config
+
+          # Se ci sono secrets, crea .env
+          if [ -n "${{ secrets.LANGSMITH_API_KEY }}" ]; then
+            echo "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" >> config/.env
+          fi
+
+          # Google OAuth credentials per Sheets/Drive
+          if [ -n "${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}" ]; then
+            echo '${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}' > config/oauth_credentials.json
+          fi
+
+          # Google OAuth token (con refresh token per accesso non interattivo)
+          if [ -n "${{ secrets.GOOGLE_TOKEN_JSON }}" ]; then
+            echo '${{ secrets.GOOGLE_TOKEN_JSON }}' > config/token.json
+          fi
+
+      - name: Setup browser authentication state
+        if: ${{ secrets.BROWSER_AUTH_STATE != '' }}
+        run: |
+          # Decode base64 auth state and save to project
+          mkdir -p projects/${{ inputs.project }}/browser-data
+          echo '${{ secrets.BROWSER_AUTH_STATE }}' | base64 -d > projects/${{ inputs.project }}/browser-data/state.json
+          echo "✓ Browser auth state loaded"
+
+      # NOTE: Create your project directory locally and commit it to the repo
+      # This step is a placeholder showing the expected structure
+      - name: Verify project exists
+        run: |
+          if [ ! -d "projects/${{ inputs.project }}" ]; then
+            echo "ERROR: Project ${{ inputs.project }} not found"
+            echo "Create the project locally with: python run.py --new-project"
+            exit 1
+          fi
+          echo "✓ Project ${{ inputs.project }} found"
+          ls -la projects/${{ inputs.project }}/
+
+      - name: Run health check
+        run: |
+          python run.py --health-check -p ${{ inputs.project || 'default' }} || true
+
+      - name: Execute tests
+        id: tests
+        run: |
+          NEW_RUN_FLAG=""
+          if [ "${{ inputs.new_run }}" == "true" ]; then
+            NEW_RUN_FLAG="--new-run"
+          fi
+
+          python run.py \
+            -p ${{ inputs.project || 'default' }} \
+            -m ${{ inputs.mode || 'auto' }} \
+            --tests ${{ inputs.tests || 'pending' }} \
+            --no-interactive \
+            --headless \
+            --skip-health-check \
+            $NEW_RUN_FLAG
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports-${{ github.run_number }}
+          path: |
+            reports/
+          retention-days: 30
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-${{ github.run_number }}
+          path: |
+            reports/**/screenshots/
+          retention-days: 14
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Project**: ${{ inputs.project || 'default' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mode**: ${{ inputs.mode || 'auto' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tests**: ${{ inputs.tests || 'pending' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Conta risultati se il report esiste
+          if [ -d "reports" ]; then
+            PASS=$(grep -r "PASS" reports/*.html 2>/dev/null | wc -l || echo "0")
+            FAIL=$(grep -r "FAIL" reports/*.html 2>/dev/null | wc -l || echo "0")
+            echo "- **Passed**: $PASS" >> $GITHUB_STEP_SUMMARY
+            echo "- **Failed**: $FAIL" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Job opzionale per notifiche (decommentare per abilitare)
+  # notify:
+  #   name: Send Notification
+  #   needs: test
+  #   runs-on: ubuntu-latest
+  #   if: always()
+  #   steps:
+  #     - name: Notify Slack
+  #       if: ${{ secrets.SLACK_WEBHOOK_URL }}
+  #       uses: slackapi/slack-github-action@v1
+  #       with:
+  #         payload: |
+  #           {
+  #             "text": "Chatbot Test completed: ${{ needs.test.result }}",
+  #             "blocks": [
+  #               {
+  #                 "type": "section",
+  #                 "text": {
+  #                   "type": "mrkdwn",
+  #                   "text": "*Chatbot Test Results*\nProject: ${{ inputs.project }}\nStatus: ${{ needs.test.result }}"
+  #                 }
+  #               }
+  #             ]
+  #           }
+  #       env:
+  #         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
