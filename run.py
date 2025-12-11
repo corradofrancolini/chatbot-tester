@@ -537,7 +537,11 @@ def run_health_check(project: ProjectConfig = None, settings = None) -> bool:
 
     if settings:
         langsmith_key = getattr(settings, 'langsmith_api_key', '') or ''
-        google_creds = str(getattr(settings, 'google_credentials_file', '') or '')
+        # Leggi credentials path da google_sheets config o da project config
+        if hasattr(settings, 'google_sheets') and hasattr(settings.google_sheets, 'credentials_path'):
+            google_creds = str(settings.google_sheets.credentials_path or '')
+        elif hasattr(project, 'google_sheets') and hasattr(project.google_sheets, 'credentials_path'):
+            google_creds = str(project.google_sheets.credentials_path or '')
 
     checker = HealthChecker(
         chatbot_url=chatbot_url,

@@ -38,6 +38,18 @@ cache:
   langsmith:
     trace_ttl_seconds: 300
     report_ttl_seconds: 600
+google_sheets:
+  enabled: true
+  credentials_path: /Users/corradofrancolini/chatbot-tester-private/config/oauth_credentials.json
+  token_path: /Users/corradofrancolini/chatbot-tester-private/config/token.json
+langsmith:
+  enabled: true
+  api_key_env: LANGSMITH_API_KEY
+ollama:
+  enabled: true
+  base_url: http://localhost:11434
+  model: llama3.2:3b
+  timeout_seconds: 30
 notifications:
   email:
     enabled: false
