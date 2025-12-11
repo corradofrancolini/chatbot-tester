@@ -101,13 +101,13 @@ class ProjectConfig:
     description: str = ""
     language: str = "it"
     created: str = ""
-    
+
     chatbot: ChatbotConfig = field(default_factory=ChatbotConfig)
     test_defaults: TestDefaultsConfig = field(default_factory=TestDefaultsConfig)
     google_sheets: GoogleSheetsConfig = field(default_factory=GoogleSheetsConfig)
     langsmith: LangSmithConfig = field(default_factory=LangSmithConfig)
     ollama: OllamaConfig = field(default_factory=OllamaConfig)
-    
+
     # Paths derivati
     project_dir: Path = field(default_factory=Path)
     tests_file: Path = field(default_factory=Path)
@@ -146,7 +146,7 @@ class RunConfig:
     use_rag: bool = False          # Se True, usa RAG locale
     use_ollama: bool = True        # Se False, disabilita Ollama (solo Train mode)
     single_turn: bool = False      # Se True, modalità AUTO esegue solo domanda iniziale (no followup)
-    
+
     @classmethod
     def load(cls, file_path: Path) -> 'RunConfig':
         """Carica RunConfig da file JSON con gestione errori"""
@@ -173,7 +173,7 @@ class RunConfig:
         except (json.JSONDecodeError, IOError) as e:
             print(f"! Errore caricamento run_config: {e}")
             return cls()
-    
+
     def save(self, file_path: Path) -> bool:
         """Salva RunConfig su file JSON"""
         try:
@@ -198,7 +198,7 @@ class RunConfig:
         except IOError as e:
             print(f"✗ Errore salvataggio run_config: {e}")
             return False
-    
+
     def reset(self) -> None:
         """Reset della RUN attiva (mantiene toggle)"""
         self.active_run = None
@@ -210,17 +210,17 @@ class RunConfig:
 class ConfigLoader:
     """
     Loader centralizzato per tutte le configurazioni.
-    
+
     Usage:
         loader = ConfigLoader(base_dir="/path/to/chatbot-tester")
         settings = loader.load_global_settings()
         project = loader.load_project("my-project")
     """
-    
+
     def __init__(self, base_dir: Optional[str] = None):
         """
         Inizializza il loader.
-        
+
         Args:
             base_dir: Directory base dell'installazione. Se None, usa la directory corrente.
         """
@@ -229,33 +229,33 @@ class ConfigLoader:
         else:
             # Risale dalla directory src/ alla root
             self.base_dir = Path(__file__).parent.parent
-        
+
         self.config_dir = self.base_dir / "config"
         self.projects_dir = self.base_dir / "projects"
         self.reports_dir = self.base_dir / "reports"
-        
+
         # Carica .env se esiste
         env_file = self.config_dir / ".env"
         if env_file.exists():
             load_dotenv(env_file)
-    
+
     def load_global_settings(self) -> GlobalSettings:
         """Carica settings globali da settings.yaml"""
         settings_file = self.config_dir / "settings.yaml"
-        
+
         if not settings_file.exists():
             return GlobalSettings()
-        
+
         with open(settings_file, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f) or {}
-        
+
         settings = GlobalSettings()
-        
+
         # App settings
         app = data.get('app', {})
         settings.version = app.get('version', settings.version)
         settings.language = app.get('language', settings.language)
-        
+
         # Browser settings
         browser = data.get('browser', {})
         settings.browser.headless = browser.get('headless', False)
@@ -263,61 +263,61 @@ class ConfigLoader:
         settings.browser.viewport_width = viewport.get('width', 1280)
         settings.browser.viewport_height = viewport.get('height', 720)
         settings.browser.device_scale_factor = browser.get('device_scale_factor', 2)
-        
+
         # Test settings
         test = data.get('test', {})
         settings.max_turns = test.get('max_turns', 15)
         settings.screenshot_on_complete = test.get('screenshot_on_complete', True)
-        
+
         # Report settings
         reports = data.get('reports', {})
         local = reports.get('local', {})
         settings.report.local_enabled = local.get('enabled', True)
         settings.report.formats = local.get('format', ['html', 'csv'])
-        
+
         # UI settings
         ui = data.get('ui', {})
         settings.colors = ui.get('colors', True)
         settings.progress_bar = ui.get('progress_bar', True)
-        
+
         return settings
-    
+
     def load_project(self, project_name: str) -> ProjectConfig:
         """
         Carica configurazione di un progetto specifico.
-        
+
         Args:
             project_name: Nome del progetto
-            
+
         Returns:
             ProjectConfig con tutte le impostazioni
-            
+
         Raises:
             FileNotFoundError: Se il progetto non esiste
             ValueError: Se la configurazione è invalida
         """
         project_dir = self.projects_dir / project_name
         config_file = project_dir / "project.yaml"
-        
+
         if not config_file.exists():
             raise FileNotFoundError(f"Progetto '{project_name}' non trovato in {project_dir}")
-        
+
         with open(config_file, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f) or {}
-        
+
         config = ProjectConfig()
-        
+
         # Info progetto
         project = data.get('project', {})
         config.name = project.get('name', project_name)
         config.description = project.get('description', '')
         config.language = project.get('language', 'it')
         config.created = project.get('created', '')
-        
+
         # Chatbot config
         chatbot = data.get('chatbot', {})
         config.chatbot.url = chatbot.get('url', '')
-        
+
         selectors = chatbot.get('selectors', {})
         config.chatbot.selectors = SelectorsConfig(
             textarea=selectors.get('textarea', ''),
@@ -326,15 +326,15 @@ class ConfigLoader:
             thread_container=selectors.get('thread_container', ''),
             loading_indicator=selectors.get('loading_indicator', '')
         )
-        
+
         timeouts = chatbot.get('timeouts', {})
         config.chatbot.timeouts = TimeoutsConfig(
             page_load=timeouts.get('page_load', 30000),
             bot_response=timeouts.get('bot_response', 60000)
         )
-        
+
         config.chatbot.screenshot_css = chatbot.get('screenshot_css', '')
-        
+
         # Test defaults
         defaults = data.get('test_defaults', {})
         config.test_defaults = TestDefaultsConfig(
@@ -342,16 +342,18 @@ class ConfigLoader:
             countries=defaults.get('countries', []),
             confirmations=defaults.get('confirmations', ['yes', 'no'])
         )
-        
+
         # Google Sheets
         sheets = data.get('google_sheets', {})
+        # credentials_path: usa valore yaml, poi env var, poi default vuoto
+        creds_path = sheets.get('credentials_path', '') or os.getenv('GOOGLE_OAUTH_CREDENTIALS', '')
         config.google_sheets = GoogleSheetsConfig(
             enabled=sheets.get('enabled', False),
             spreadsheet_id=sheets.get('spreadsheet_id', ''),
             drive_folder_id=sheets.get('drive_folder_id', ''),
-            credentials_path=os.getenv('GOOGLE_OAUTH_CREDENTIALS', '')
+            credentials_path=creds_path
         )
-        
+
         # LangSmith
         ls = data.get('langsmith', {})
         api_key_env = ls.get('api_key_env', 'LANGSMITH_API_KEY')
@@ -362,7 +364,7 @@ class ConfigLoader:
             org_id=ls.get('org_id', ''),
             tool_names=ls.get('tool_names', [])
         )
-        
+
         # Ollama
         ollama = data.get('ollama', {})
         config.ollama = OllamaConfig(
@@ -370,45 +372,45 @@ class ConfigLoader:
             model=ollama.get('model', 'mistral'),
             url=ollama.get('url', 'http://localhost:11434/api/generate')
         )
-        
+
         # Paths derivati
         config.project_dir = project_dir
         config.tests_file = project_dir / "tests.json"
         config.training_file = project_dir / "training_data.json"
         config.run_config_file = project_dir / "run_config.json"
         config.browser_data_dir = project_dir / "browser-data"
-        
+
         return config
-    
+
     def list_projects(self) -> list[str]:
         """Ritorna lista dei progetti disponibili"""
         if not self.projects_dir.exists():
             return []
-        
+
         projects = []
         for item in self.projects_dir.iterdir():
             if item.is_dir() and (item / "project.yaml").exists():
                 projects.append(item.name)
-        
+
         return sorted(projects)
-    
+
     def project_exists(self, project_name: str) -> bool:
         """Verifica se un progetto esiste"""
         return (self.projects_dir / project_name / "project.yaml").exists()
-    
+
     def save_project(self, config: ProjectConfig) -> None:
         """
         Salva la configurazione di un progetto.
-        
+
         Args:
             config: ProjectConfig da salvare
         """
         project_dir = self.projects_dir / config.name
         project_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Crea browser-data directory
         (project_dir / "browser-data").mkdir(exist_ok=True)
-        
+
         # Costruisci il dizionario YAML
         data = {
             'project': {
@@ -454,25 +456,25 @@ class ConfigLoader:
                 'url': config.ollama.url
             }
         }
-        
+
         config_file = project_dir / "project.yaml"
         with open(config_file, 'w', encoding='utf-8') as f:
             yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-    
+
     def get_report_dir(self, project_name: str, run_number: Optional[int] = None) -> Path:
         """
         Ottiene la directory per i report di un progetto.
-        
+
         Args:
             project_name: Nome del progetto
             run_number: Numero run (opzionale, se None crea nuovo)
-            
+
         Returns:
             Path alla directory del report
         """
         project_reports = self.reports_dir / project_name
         project_reports.mkdir(parents=True, exist_ok=True)
-        
+
         if run_number is None:
             # Trova il prossimo numero run
             existing = [d for d in project_reports.iterdir() if d.is_dir() and d.name.startswith('run_')]
@@ -481,29 +483,29 @@ class ConfigLoader:
                 run_number = max(numbers) + 1
             else:
                 run_number = 1
-        
+
         run_dir = project_reports / f"run_{run_number:03d}"
         run_dir.mkdir(exist_ok=True)
         (run_dir / "screenshots").mkdir(exist_ok=True)
-        
+
         return run_dir
 
 
 def load_tests(tests_file: Path) -> list[dict]:
     """
     Carica i test cases da file JSON.
-    
+
     Args:
         tests_file: Path al file tests.json
-        
+
     Returns:
         Lista di test cases
     """
     import json
-    
+
     if not tests_file.exists():
         return []
-    
+
     with open(tests_file, 'r', encoding='utf-8') as f:
         return json.load(f)
 
@@ -511,13 +513,13 @@ def load_tests(tests_file: Path) -> list[dict]:
 def save_tests(tests_file: Path, tests: list[dict]) -> None:
     """
     Salva i test cases su file JSON.
-    
+
     Args:
         tests_file: Path al file tests.json
         tests: Lista di test cases
     """
     import json
-    
+
     with open(tests_file, 'w', encoding='utf-8') as f:
         json.dump(tests, f, indent=2, ensure_ascii=False)
 
@@ -525,18 +527,18 @@ def save_tests(tests_file: Path, tests: list[dict]) -> None:
 def load_training_data(training_file: Path) -> dict:
     """
     Carica i dati di training.
-    
+
     Args:
         training_file: Path al file training_data.json
-        
+
     Returns:
         Dizionario con dati training
     """
     import json
-    
+
     if not training_file.exists():
         return {"patterns": [], "examples": []}
-    
+
     with open(training_file, 'r', encoding='utf-8') as f:
         return json.load(f)
 
@@ -544,12 +546,12 @@ def load_training_data(training_file: Path) -> dict:
 def save_training_data(training_file: Path, data: dict) -> None:
     """
     Salva i dati di training.
-    
+
     Args:
         training_file: Path al file training_data.json
         data: Dizionario con dati training
     """
     import json
-    
+
     with open(training_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
