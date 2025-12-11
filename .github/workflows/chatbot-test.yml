@@ -85,6 +85,14 @@ jobs:
             echo '${{ secrets.GOOGLE_TOKEN_JSON }}' > config/token.json
           fi
 
+      - name: Setup browser authentication state
+        if: ${{ secrets.BROWSER_AUTH_STATE != '' }}
+        run: |
+          # Decode base64 auth state and save to project
+          mkdir -p projects/${{ inputs.project }}/browser-data
+          echo '${{ secrets.BROWSER_AUTH_STATE }}' | base64 -d > projects/${{ inputs.project }}/browser-data/state.json
+          echo "✓ Browser auth state loaded"
+
       # NOTE: Create your project directory locally and commit it to the repo
       # This step is a placeholder showing the expected structure
       - name: Verify project exists

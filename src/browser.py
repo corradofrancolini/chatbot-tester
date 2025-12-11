@@ -110,12 +110,21 @@ class BrowserManager:
             self._browser = await self._playwright.chromium.launch(
                 headless=self.settings.headless
             )
+
+            # Cerca state.json per auth precaricata (per GitHub Actions)
+            state_file = None
+            if self.settings.user_data_dir:
+                state_file = self.settings.user_data_dir / "state.json"
+
+            storage_state = str(state_file) if state_file and state_file.exists() else None
+
             self._context = await self._browser.new_context(
                 viewport={
                     'width': self.settings.viewport_width,
                     'height': self.settings.viewport_height
                 },
-                device_scale_factor=self.settings.device_scale_factor
+                device_scale_factor=self.settings.device_scale_factor,
+                storage_state=storage_state
             )
             self._page = await self._context.new_page()
 
