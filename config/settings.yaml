@@ -1,111 +1,65 @@
-# =============================================================================
-# CHATBOT TESTER - Settings Globali
-# =============================================================================
-# Configurazioni che si applicano a tutti i progetti.
-# Modificare con cautela.
-# =============================================================================
-
 app:
-  version: "1.0.0"
-  language: "it"  # Lingua default (it | en), override con --lang=en
-
-# -----------------------------------------------------------------------------
-# Configurazione Browser
-# -----------------------------------------------------------------------------
+  version: 1.0.0
+  language: it
 browser:
-  headless: false           # true = browser nascosto, false = visibile
-  slow_mo: 0                # Millisecondi di pausa tra azioni (debug)
+  headless: false
+  slow_mo: 0
   viewport:
     width: 1280
     height: 720
-  device_scale_factor: 2    # Per screenshot retina
-
-# -----------------------------------------------------------------------------
-# Configurazione Test
-# -----------------------------------------------------------------------------
+  device_scale_factor: 2
 test:
-  max_turns: 15             # Massimo turni per conversazione
+  max_turns: 15
   screenshot_on_complete: true
-  default_wait_after_send: 1000  # ms di attesa dopo invio messaggio
-
-# -----------------------------------------------------------------------------
-# Report
-# -----------------------------------------------------------------------------
+  default_wait_after_send: 1000
 reports:
   local:
     enabled: true
     formats:
-      - html
-      - csv
-    keep_last_n: 50         # Mantieni ultimi N run (0 = tutti)
-  
-# -----------------------------------------------------------------------------
-# UI Terminal
-# -----------------------------------------------------------------------------
+    - html
+    - csv
+    keep_last_n: 50
 ui:
-  colors: true              # Colori nel terminale
-  progress_bar: true        # Mostra progress bar
-  clear_screen: true        # Pulisce schermo tra step wizard
-
-# -----------------------------------------------------------------------------
-# Esecuzione Parallela
-# -----------------------------------------------------------------------------
+  colors: true
+  progress_bar: true
+  clear_screen: true
 parallel:
-  enabled: false            # true = abilita esecuzione parallela
-  max_workers: 3            # Numero browser in parallelo (1-5)
-  retry_strategy: "exponential"  # none | linear | exponential
-  max_retries: 2            # Tentativi per test fallito
-  base_delay_ms: 1000       # Delay base tra retry
-  rate_limit_per_minute: 60 # Limite richieste al chatbot
-
-# -----------------------------------------------------------------------------
-# Cache
-# -----------------------------------------------------------------------------
+  enabled: false
+  max_workers: 3
+  retry_strategy: exponential
+  max_retries: 2
+  base_delay_ms: 1000
+  rate_limit_per_minute: 60
 cache:
-  enabled: true             # Abilita caching risposte
+  enabled: true
   memory:
-    max_entries: 1000       # Max entry in memoria
-    default_ttl_seconds: 300  # TTL default (5 minuti)
+    max_entries: 1000
+    default_ttl_seconds: 300
   langsmith:
-    trace_ttl_seconds: 300  # Cache trace (5 minuti)
-    report_ttl_seconds: 600 # Cache report (10 minuti)
-
-# -----------------------------------------------------------------------------
-# Notifiche
-# -----------------------------------------------------------------------------
+    trace_ttl_seconds: 300
+    report_ttl_seconds: 600
 notifications:
-  # Email SMTP
   email:
     enabled: false
-    smtp_host: "smtp.gmail.com"
+    smtp_host: smtp.gmail.com
     smtp_port: 587
-    smtp_user: ""             # Il tuo indirizzo email
-    smtp_password_env: "SMTP_PASSWORD"  # Nome variabile ambiente con password
-    from: ""                  # Mittente (default: smtp_user)
-    recipients: []            # Lista destinatari
-
-  # Desktop (macOS)
+    smtp_user: ''
+    smtp_password_env: SMTP_PASSWORD
+    from: ''
+    recipients: []
   desktop:
     enabled: true
-    sound: true               # Suono notifica
-
-  # Microsoft Teams
+    sound: true
   teams:
-    enabled: false
-    webhook_url_env: "TEAMS_WEBHOOK_URL"  # Nome variabile ambiente
-
-  # Quando notificare
+    enabled: true
+    webhook_url_env: TEAMS_WEBHOOK_URL
   triggers:
-    on_complete: false        # Ogni run completato
-    on_failure: true          # Solo se ci sono fallimenti
-    on_regression: true       # Se rilevate regressioni
-    on_flaky: false           # Se rilevati test flaky
-
-# -----------------------------------------------------------------------------
-# Logging
-# -----------------------------------------------------------------------------
+    on_complete: true
+    on_failure: true
+    on_regression: false
+    on_flaky: true
 logging:
-  level: "INFO"             # DEBUG | INFO | WARNING | ERROR
-  file: "chatbot-tester.log"
+  level: INFO
+  file: chatbot-tester.log
   max_size_mb: 10
   backup_count: 3
