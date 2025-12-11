@@ -87,3 +87,4 @@ htmlcov/
 # -----------------------------------------------------------------------------
 projects/*/
 !projects/.gitkeep
+!projects/example-chatbot/
