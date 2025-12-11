@@ -1,13 +1,13 @@
 """
-Google Sheets Client - Integrazione report su Google Sheets
+Google Sheets Client - Google Sheets report integration
 
-Gestisce:
-- Autenticazione OAuth
-- Creazione/gestione fogli per RUN
-- Creazione/aggiornamento report
-- Upload screenshot su Drive
-- Skip test già completati nella RUN corrente
-- Thread-safe per esecuzione parallela
+Handles:
+- OAuth authentication
+- Creating/managing RUN sheets
+- Creating/updating reports
+- Uploading screenshots to Drive
+- Skipping already completed tests in current RUN
+- Thread-safe for parallel execution
 """
 
 import os

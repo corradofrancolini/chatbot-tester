@@ -1,177 +1,186 @@
-# Chatbot Tester - Note Progetto
+# Chatbot Tester - Project Notes
 
-**Mantra: Se si puo fare, deve essere visibile, spiegato, e configurabile.**
+**Mantra: If it can be done, it must be visible, explained, and configurable.**
 
-## Documentazione
+## Documentation
 
-| Guida | Contenuto |
-|-------|-----------|
-| [README.md](README.md) | Panoramica e quick start |
-| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Guida completa configurazione |
+| Guide | Content |
+|-------|---------|
+| [README.md](README.md) | Overview and quick start |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Complete configuration guide |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, GitHub Actions, PyPI |
 
 ---
 
-## Comandi Principali
+## Main Commands
 
-### Eseguire test
+### Running tests
 ```bash
-# Nuovo run completo
+# New full run
 python run.py -p my-chatbot -m auto --no-interactive --new-run
 
-# Continuare run esistente (solo pending)
+# Continue existing run (pending only)
 python run.py -p my-chatbot -m auto --no-interactive
 
-# Singolo test (sovrascrive)
+# Single test (overwrite)
 python run.py -p my-chatbot -m auto --no-interactive -t TEST_050 --tests all
 
-# Solo test falliti
+# Failed tests only
 python run.py -p my-chatbot -m auto --no-interactive --tests failed
 ```
 
 ### Health Check
 ```bash
-# Verifica servizi prima di eseguire
+# Verify services before execution
 python run.py --health-check -p my-chatbot
 
-# Esegui test saltando health check
+# Run tests skipping health check
 python run.py -p my-chatbot -m auto --no-interactive --skip-health-check
 ```
 
 ---
 
-## Configurazione run_config.json
+## run_config.json Configuration
 
-| Opzione | Descrizione | Menu |
-|---------|-------------|------|
-| `env` | Ambiente: DEV, STAGING, PROD | Configura |
-| `dry_run` | Simula senza eseguire | Toggle [1] |
-| `use_langsmith` | Abilita tracing LangSmith | Toggle [2] |
-| `use_rag` | Abilita recupero RAG | Toggle [3] |
-| `use_ollama` | Abilita valutazione Ollama | Toggle [4] |
-| `single_turn` | Solo domanda iniziale | Toggle [5] |
-| `active_run` | Numero run su Google Sheets | Auto |
+| Option | Description | Menu |
+|--------|-------------|------|
+| `env` | Environment: DEV, STAGING, PROD | Configure |
+| `dry_run` | Simulate without executing | Toggle [1] |
+| `use_langsmith` | Enable LangSmith tracing | Toggle [2] |
+| `use_rag` | Enable RAG retrieval | Toggle [3] |
+| `use_ollama` | Enable Ollama evaluation | Toggle [4] |
+| `single_turn` | Initial question only | Toggle [5] |
+| `active_run` | Run number on Google Sheets | Auto |
 
-### Opzioni CLI Complete
+### Complete CLI Options
 
 ```bash
-python run.py [OPZIONI]
+python run.py [OPTIONS]
 
-# Progetto e modalita
--p, --project       Nome progetto
+# Project and mode
+-p, --project       Project name
 -m, --mode          train | assisted | auto
--t, --test          ID singolo test
+-t, --test          Single test ID
 --tests             all | pending | failed
---new-run           Forza nuova RUN
+--new-run           Force new RUN
 
-# Comportamento
---no-interactive    Senza prompt utente
---dry-run           Simula
---headless          Browser nascosto
+# Behavior
+--no-interactive    No user prompts
+--dry-run           Simulate
+--headless          Hidden browser
 
-# Servizi
---health-check      Verifica servizi e esci
---skip-health-check Salta verifica
+# Services
+--health-check      Verify services and exit
+--skip-health-check Skip verification
 
 # Debug
---debug             Output dettagliato
+--debug             Detailed output
 --lang              it | en
--v, --version       Mostra versione
+-v, --version       Show version
 
 # Export
 --export            pdf | excel | html | csv | all
---export-run        Numero run da esportare
+--export-run        Run number to export
 
-# Notifiche
+# Notifications
 --notify            desktop | email | teams | all
---test-notify       Testa configurazione notifiche
+--test-notify       Test notification configuration
+
+# Performance
+--perf-report       Show performance report
+--perf-dashboard    Historical performance dashboard
+--perf-compare      Compare two runs (e.g., 15:16)
+--list-runs         List all runs from all projects
 ```
 
 ---
 
-## Screenshot
+## Screenshots
 
-Gli screenshot devono catturare l'INTERA conversazione con TUTTI i prodotti visibili.
+Screenshots must capture the ENTIRE conversation with ALL products visible.
 
-**File chiave:** `src/browser.py` metodo `take_conversation_screenshot()`
-- Usa CSS injection per nascondere input bar, footer, scroll indicators
-- Espande container per mostrare tutto il contenuto
-- Cattura `section.llm__thread`
+**Key file:** `src/browser.py` method `take_conversation_screenshot()`
+- Uses CSS injection to hide input bar, footer, scroll indicators
+- Expands containers to show all content
+- Captures `section.llm__thread`
 
 ---
 
-## Struttura Report
+## Report Structure
 
 ```
 reports/{project}/run_{N}/
-├── report.html       # Report HTML interattivo
-└── screenshots/      # Screenshot conversazioni
-    ├── TEST_001.png
-    └── ...
+├── report.html       # Interactive HTML report
+├── screenshots/      # Conversation screenshots
+│   ├── TEST_001.png
+│   └── ...
+└── performance/      # Performance metrics
+    └── performance_run_{N}.json
 ```
 
 ---
 
-## Moduli Principali
+## Main Modules
 
-| Modulo | Descrizione |
+| Module | Description |
 |--------|-------------|
-| `run.py` | Entry point, CLI, menu interattivo |
-| `src/tester.py` | Engine principale test |
-| `src/browser.py` | Automazione Playwright |
+| `run.py` | Entry point, CLI, interactive menu |
+| `src/tester.py` | Main test engine |
+| `src/browser.py` | Playwright automation |
 | `src/health.py` | Health checks, circuit breaker, retry |
-| `src/sheets_client.py` | Integrazione Google Sheets |
-| `src/langsmith_client.py` | Tracing LangSmith |
-| `src/ollama_client.py` | Valutazione AI locale |
-| `src/config_loader.py` | Caricamento configurazioni |
-| `src/i18n.py` | Traduzioni IT/EN |
+| `src/sheets_client.py` | Google Sheets integration |
+| `src/langsmith_client.py` | LangSmith tracing |
+| `src/ollama_client.py` | Local AI evaluation |
+| `src/config_loader.py` | Configuration loading |
+| `src/i18n.py` | IT/EN translations |
 | `src/ui.py` | Console UI (Rich) |
-| `src/finetuning.py` | Pipeline fine-tuning |
-| `src/parallel.py` | Esecuzione parallela, browser pool |
-| `src/cache.py` | Caching in-memory e disk |
-| `src/comparison.py` | A/B comparison, regressioni, flaky tests |
-| `src/scheduler.py` | Scheduled runs, esecuzione distribuita |
-| `src/notifications.py` | Notifiche Email, Desktop, Teams |
+| `src/finetuning.py` | Fine-tuning pipeline |
+| `src/parallel.py` | Parallel execution, browser pool |
+| `src/cache.py` | In-memory and disk caching |
+| `src/comparison.py` | A/B comparison, regressions, flaky tests |
+| `src/scheduler.py` | Scheduled runs, distributed execution |
+| `src/notifications.py` | Email, Desktop, Teams notifications |
 | `src/export.py` | Export PDF, Excel, HTML, CSV |
-| `src/github_actions.py` | Integrazione GitHub Actions |
-| `wizard/main.py` | Wizard nuovo progetto |
+| `src/github_actions.py` | GitHub Actions integration |
+| `src/performance.py` | Performance metrics collection |
+| `wizard/main.py` | New project wizard |
 
 ---
 
-## Esecuzione Parallela (v1.2.0)
+## Parallel Execution (v1.2.0)
 
 ### CLI
 ```bash
-# 3 browser in parallelo
+# 3 browsers in parallel
 python run.py -p my-chatbot -m auto --parallel --no-interactive
 
-# 5 browser
+# 5 browsers
 python run.py -p my-chatbot -m auto --parallel --workers 5 --no-interactive
 ```
 
-### Come funziona
-1. `BrowserPool` crea N browser Chromium isolati
-2. I test vengono distribuiti ai worker
-3. Ogni worker accumula risultati in `ThreadSafeSheetsClient`
-4. Alla fine, `flush()` scrive tutto in batch su Google Sheets
+### How it works
+1. `BrowserPool` creates N isolated Chromium browsers
+2. Tests are distributed to workers
+3. Each worker accumulates results in `ThreadSafeSheetsClient`
+4. At the end, `flush()` writes everything in batch to Google Sheets
 
-### API per sviluppatori
+### Developer API
 ```python
 from src.sheets_client import ThreadSafeSheetsClient, ParallelResultsCollector
 
-# Wrapper thread-safe per Sheets
+# Thread-safe wrapper for Sheets
 safe_client = ThreadSafeSheetsClient(sheets_client)
 safe_client.queue_result(result)    # Thread-safe
 safe_client.queue_screenshot(path, test_id)
-safe_client.flush()                 # Scrivi batch
+safe_client.flush()                 # Write batch
 
-# Oppure: collector in memoria
+# Or: in-memory collector
 collector = ParallelResultsCollector()
 collector.add(result)
 all_results = collector.get_all()
 ```
 
-### Configurazione (settings.yaml)
+### Configuration (settings.yaml)
 ```yaml
 parallel:
   enabled: false
@@ -189,38 +198,39 @@ cache:
 
 ---
 
-## Analisi Testing (v1.2.0)
+## Testing Analysis (v1.2.0)
 
 ### CLI
 ```bash
-# Confronta ultimi 2 run
+# Compare last 2 runs
 python run.py -p my-chatbot --compare
 
-# Confronta run specifici
+# Compare specific runs
 python run.py -p my-chatbot --compare 15:16
 
-# Mostra regressioni nell'ultima run
+# Show regressions in last run
 python run.py -p my-chatbot --regressions
 
-# Regressioni in una run specifica
+# Regressions in specific run
 python run.py -p my-chatbot --regressions 16
 
-# Test flaky su ultimi 10 run
+# Flaky tests over last 10 runs
 python run.py -p my-chatbot --flaky
 
-# Test flaky su ultimi 20 run
+# Flaky tests over last 20 runs
 python run.py -p my-chatbot --flaky 20
 ```
 
-### Menu Interattivo
-Da `python run.py` > **[5] Analisi Testing**:
-- **Confronta RUN** - A/B comparison tra due run
-- **Rileva Regressioni** - Test PASS->FAIL
-- **Test Flaky** - Risultati inconsistenti
-- **Coverage** - Distribuzione test per categoria
-- **Report Stabilita** - Overview qualita test suite
+### Interactive Menu
+From `python run.py` > **[5] Testing Analysis**:
+- **Compare RUN** - A/B comparison between two runs
+- **Detect Regressions** - PASS->FAIL tests
+- **Flaky Tests** - Inconsistent results
+- **Coverage** - Test distribution by category
+- **Stability Report** - Test suite quality overview
+- **Performance** - Metrics and trends
 
-### Moduli (`src/comparison.py`)
+### Modules (`src/comparison.py`)
 
 ```python
 from src.comparison import (
@@ -228,17 +238,17 @@ from src.comparison import (
     CoverageAnalyzer, FlakyTestDetector
 )
 
-# Confronto A/B
+# A/B comparison
 comparator = RunComparator(project)
 result = comparator.compare(15, 16)  # RUN 15 vs 16
-result = comparator.compare_latest() # Ultimi 2
+result = comparator.compare_latest() # Last 2
 
-# Regressioni
+# Regressions
 detector = RegressionDetector(project)
 regressions = detector.check_for_regressions(16)
 # TestChange(test_id, old_status, new_status, change_type)
 
-# Test flaky
+# Flaky tests
 flaky = FlakyTestDetector(project)
 flaky_tests = flaky.detect_flaky_tests(last_n_runs=10, threshold=0.3)
 # FlakyTestReport(test_id, flaky_score, pass_count, fail_count)
@@ -249,56 +259,57 @@ report = coverage.analyze(tests)
 # CoverageReport(total_tests, categories_covered, gaps)
 ```
 
-### Concetti chiave
+### Key Concepts
 
-| Termine | Definizione |
-|---------|-------------|
-| **Regressione** | Test che passava e ora fallisce (PASS->FAIL) |
-| **Miglioramento** | Test che falliva e ora passa (FAIL->PASS) |
-| **Flaky Score** | 0 = stabile, 1 = risultati casuali |
-| **Coverage Gap** | Categorie con pochi test |
+| Term | Definition |
+|------|------------|
+| **Regression** | Test that passed and now fails (PASS->FAIL) |
+| **Improvement** | Test that failed and now passes (FAIL->PASS) |
+| **Flaky Score** | 0 = stable, 1 = random results |
+| **Coverage Gap** | Categories with few tests |
 
 ---
 
-## Automazione (v1.2.0)
+## Automation (v1.2.0)
 
-### Scheduled Runs (Locale)
+### Scheduled Runs (Local)
 
 ```bash
-# Aggiungi schedule giornaliero
+# Add daily schedule
 python run.py --add-schedule my-chatbot:daily
 
-# Aggiungi schedule settimanale
+# Add weekly schedule
 python run.py --add-schedule my-chatbot:weekly
 
-# Lista schedule configurati
+# List configured schedules
 python run.py --list-schedules
 
-# Avvia scheduler locale (cron-like, Ctrl+C per fermare)
+# Start local scheduler (cron-like, Ctrl+C to stop)
 python run.py --scheduler
 ```
 
 ### Scheduled Runs (GitHub Actions)
 
-Il workflow `.github/workflows/scheduled-tests.yml` esegue automaticamente:
-- **Daily** (6:00 UTC): Test pending su tutti i progetti
-- **Weekly** (Lun 2:00 UTC): Full run con nuovo RUN
+The workflow `.github/workflows/scheduled-tests.yml` runs automatically:
+- **Daily** (6:00 UTC): Pending tests on all projects
+- **Weekly** (Mon 2:00 UTC): Full run with new RUN
 
 ```yaml
-# Per abilitare, i secrets richiesti sono:
+# To enable, required secrets are:
 # - LANGSMITH_API_KEY
-# - GOOGLE_CREDENTIALS_JSON
-# - SLACK_WEBHOOK_URL (opzionale, per notifiche)
+# - GOOGLE_OAUTH_CREDENTIALS
+# - GOOGLE_TOKEN_JSON
+# - SLACK_WEBHOOK_URL (optional, for notifications)
 ```
 
-### API Scheduler
+### Scheduler API
 
 ```python
 from src.scheduler import LocalScheduler, ScheduleConfig, ScheduleType
 
 scheduler = LocalScheduler()
 
-# Aggiungi schedule personalizzato
+# Add custom schedule
 scheduler.add_schedule(ScheduleConfig(
     name="my-schedule",
     project="my-chatbot",
@@ -309,21 +320,21 @@ scheduler.add_schedule(ScheduleConfig(
     cron_minute=0
 ))
 
-# Avvia (blocca il processo)
+# Start (blocks process)
 scheduler.start()
 
-# Oppure in background
+# Or in background
 scheduler.start_background()
 ```
 
-### Esecuzione Distribuita
+### Distributed Execution
 
 ```python
 from src.scheduler import DistributedCoordinator, WorkerConfig
 
 coordinator = DistributedCoordinator()
 
-# Registra worker
+# Register worker
 coordinator.register_worker(WorkerConfig(
     worker_id="worker-1",
     host="192.168.1.10",
@@ -331,43 +342,43 @@ coordinator.register_worker(WorkerConfig(
     projects=["my-chatbot"]
 ))
 
-# Distribuisci test
+# Distribute tests
 distribution = coordinator.distribute_tests(tests, project="my-chatbot")
 # {"worker-1": [test1, test3], "worker-2": [test2, test4]}
 ```
 
 ---
 
-## Export Report (v1.2.0)
+## Report Export (v1.2.0)
 
 ### CLI
 
 ```bash
-# Export PDF ultimo run
+# Export last run to PDF
 python run.py -p my-chatbot --export pdf
 
-# Export Excel di una run specifica
+# Export specific run to Excel
 python run.py -p my-chatbot --export excel --export-run 15
 
-# Export tutti i formati
+# Export all formats
 python run.py -p my-chatbot --export all
 
-# Formati disponibili: pdf, excel, html, csv, all
+# Available formats: pdf, excel, html, csv, all
 ```
 
-### Dipendenze opzionali
+### Optional Dependencies
 
 ```bash
-# Per PDF
+# For PDF
 pip install reportlab pillow
 
-# Per Excel
+# For Excel
 pip install openpyxl
 ```
 
 ### Output
 
-I file esportati vengono salvati in:
+Exported files are saved in:
 ```
 reports/{project}/run_{N}/exports/
 ├── project_runN.pdf
@@ -381,7 +392,7 @@ reports/{project}/run_{N}/exports/
 ```python
 from src.export import RunReport, ReportExporter
 
-# Carica report
+# Load report
 report = RunReport.from_local_report(Path("reports/my-chatbot/run_15/report.json"))
 
 # Export
@@ -391,34 +402,34 @@ exporter.to_excel(Path("output.xlsx"))
 exporter.to_html(Path("output.html"))
 exporter.to_csv(Path("output.csv"))
 
-# Export multiplo
+# Multiple export
 results = exporter.export_all(Path("exports/"))
 ```
 
 ---
 
-## Notifiche (v1.2.0)
+## Notifications (v1.2.0)
 
 ### CLI
 
 ```bash
-# Test configurazione notifiche
+# Test notification configuration
 python run.py --test-notify
 
-# Invia notifica desktop (ultimo run)
+# Send desktop notification (last run)
 python run.py -p my-chatbot --notify desktop
 
-# Invia email
+# Send email
 python run.py -p my-chatbot --notify email
 
-# Invia a Teams
+# Send to Teams
 python run.py -p my-chatbot --notify teams
 
-# Invia su tutti i canali configurati
+# Send on all configured channels
 python run.py -p my-chatbot --notify all
 ```
 
-### Configurazione (settings.yaml)
+### Configuration (settings.yaml)
 
 ```yaml
 notifications:
@@ -440,16 +451,17 @@ notifications:
     webhook_url_env: "TEAMS_WEBHOOK_URL"  # export TEAMS_WEBHOOK_URL=https://...
 
   triggers:
-    on_complete: false    # Ogni run completato
-    on_failure: true      # Solo fallimenti
-    on_regression: true   # Regressioni rilevate
+    on_complete: true     # Every completed run
+    on_failure: true      # Failures only
+    on_regression: false  # Regressions detected
+    on_flaky: true        # Flaky tests detected
 ```
 
 ### Teams Webhook
 
-Per configurare Teams:
-1. Vai nel canale Teams > Connettori > Incoming Webhook
-2. Crea webhook e copia URL
+To configure Teams:
+1. Go to Teams channel > Connectors > Incoming Webhook
+2. Create webhook and copy URL
 3. `export TEAMS_WEBHOOK_URL="https://..."`
 
 ### API
@@ -466,7 +478,7 @@ config = NotificationConfig(
 
 manager = NotificationManager(config)
 
-# Summary risultati
+# Results summary
 summary = TestRunSummary(
     project="my-chatbot",
     run_number=15,
@@ -476,13 +488,13 @@ summary = TestRunSummary(
     pass_rate=90.0
 )
 
-# Notifica su tutti i canali
+# Notify on all channels
 manager.notify_run_complete(summary)
 
-# Notifica singolo canale
-manager.send_desktop("Titolo", "Messaggio")
+# Single channel notification
+manager.send_desktop("Title", "Message")
 manager.send_email("Subject", "Body")
-manager.send_teams("Titolo", "Messaggio")
+manager.send_teams("Title", "Message")
 ```
 
 ---
@@ -497,17 +509,20 @@ docker run -v ./projects:/app/projects chatbot-tester -p my-chatbot -m auto
 
 ### GitHub Actions
 ```bash
-# Esegui test nel cloud
+# Run tests in cloud
 gh workflow run chatbot-test.yml -f project=my-chatbot -f mode=auto
+
+# Monitor with progress bar
+python run.py --watch-cloud
 ```
 
-### PyPI (dopo pubblicazione)
+### PyPI (after publishing)
 ```bash
 pip install chatbot-tester
 chatbot-tester -p my-chatbot -m auto
 ```
 
-### Binary standalone
+### Standalone binary
 ```bash
 pip install pyinstaller
 pyinstaller chatbot-tester.spec
@@ -516,20 +531,21 @@ pyinstaller chatbot-tester.spec
 
 ---
 
-## File di Deployment
+## Deployment Files
 
-| File | Scopo |
-|------|-------|
-| `Dockerfile` | Build immagine Docker |
-| `.github/workflows/chatbot-test.yml` | Esecuzione test nel cloud |
-| `.github/workflows/build-release.yml` | Build automatici per release |
-| `action.yml` | GitHub Action per marketplace |
-| `pyproject.toml` | Configurazione PyPI |
-| `chatbot-tester.spec` | Configurazione PyInstaller |
+| File | Purpose |
+|------|---------|
+| `Dockerfile` | Docker image build |
+| `.github/workflows/chatbot-test.yml` | Cloud test execution |
+| `.github/workflows/scheduled-tests.yml` | Scheduled test runs |
+| `.github/workflows/build-release.yml` | Automatic release builds |
+| `action.yml` | GitHub Action for marketplace |
+| `pyproject.toml` | PyPI configuration |
+| `chatbot-tester.spec` | PyInstaller configuration |
 
 ---
 
-## Progetti Configurati
+## Configured Projects
 
 - `my-chatbot` → Silicon search chatbot (DEV)
 - `example-bot` → EFG chatbot
@@ -539,115 +555,118 @@ pyinstaller chatbot-tester.spec
 ## TODO / Backlog
 
 ### UX
-- [ ] **Progress bar migliorata**: ETA stimato, velocita test/minuto, indicatore dettagliato
-- [ ] **Dashboard web locale**: Server Flask, vista real-time, storico run con grafici
+- [ ] **Improved progress bar**: Estimated ETA, tests/minute speed, detailed indicator
+- [ ] **Local web dashboard**: Flask server, real-time view, run history with charts
 
-### Automazione
-- [ ] **Notifiche remote**: Aggiungere notifiche (Email/Teams) al workflow GitHub Actions usando secrets
-- [ ] **Esecuzione parallela**: Implementare multi-browser (config in settings.yaml esiste)
+### Automation
+- [ ] **Remote notifications**: Add notifications (Email/Teams) to GitHub Actions workflow using secrets
+- [ ] **Parallel execution**: Implement multi-browser (config in settings.yaml exists)
 
-### Internazionalizzazione
-- [ ] **i18n completo**: Integrare src/i18n.py in tutti i moduli
+### Internationalization
+- [ ] **Complete i18n**: Integrate src/i18n.py in all modules
 
 ---
 
-## Menu Settings (v1.2.0)
+## Settings Menu (v1.2.0)
 
-Dal menu principale: **[6] Impostazioni**
+From main menu: **[7] Settings**
 
-### Sottomenu disponibili
+### Available submenus
 
-| Voce | Descrizione |
+| Item | Description |
 |------|-------------|
-| **Lingua** | Cambia IT/EN |
-| **Notifiche** | Configura Desktop, Email, Teams + Trigger |
+| **Language** | Switch IT/EN |
+| **Notifications** | Configure Desktop, Email, Teams + Triggers |
 | **Browser** | Headless, viewport, slow_mo |
-| **Logging** | Livello log (DEBUG/INFO/WARNING/ERROR) |
-| **Test Notifiche** | Invia notifica di test |
+| **Logging** | Log level (DEBUG/INFO/WARNING/ERROR) |
+| **Test Notifications** | Send test notification |
 
-### Notifiche - Sottomenu
-
-```
-[1] Desktop: ON/OFF     — Notifiche macOS native
-[2] Email: ON/OFF       — Notifiche via SMTP
-[3] Teams: ON/OFF       — Notifiche Microsoft Teams
-[4] Trigger             — Quando inviare notifiche
-```
-
-### Trigger Notifiche
+### Notifications - Submenu
 
 ```
-[1] On Complete: ON/OFF  — Ogni run completato
-[2] On Failure: ON/OFF   — Solo se fallimenti
-[3] On Regression: ON/OFF — Se rilevate regressioni
-[4] On Flaky: ON/OFF     — Se test flaky rilevati
+[1] Desktop: ON/OFF     — macOS native notifications
+[2] Email: ON/OFF       — SMTP notifications
+[3] Teams: ON/OFF       — Microsoft Teams notifications
+[4] Triggers            — When to send notifications
 ```
 
-Le modifiche vengono salvate direttamente in `config/settings.yaml`.
+### Notification Triggers
+
+```
+[1] On Complete: ON/OFF  — Every completed run
+[2] On Failure: ON/OFF   — Failures only
+[3] On Regression: ON/OFF — If regressions detected
+[4] On Flaky: ON/OFF     — If flaky tests detected
+```
+
+Changes are saved directly to `config/settings.yaml`.
 
 ---
 
 ## Performance Metrics (v1.6.0)
 
-Sistema di metriche di performance per monitorare l'esecuzione dei test.
+Performance metrics system for monitoring test execution.
 
 ### CLI
 
 ```bash
-# Report performance ultimo run
+# Performance report for last run
 python run.py -p my-chatbot --perf-report
 
-# Report di un run specifico
+# Report for specific run
 python run.py -p my-chatbot --perf-report 18
 
-# Dashboard storica (trend ultimi N run)
+# Historical dashboard (last N runs trend)
 python run.py -p my-chatbot --perf-dashboard
-python run.py -p my-chatbot --perf-dashboard 20  # ultimi 20 run
+python run.py -p my-chatbot --perf-dashboard 20  # last 20 runs
 
-# Confronta due run (es. local vs cloud)
+# Compare two runs (e.g., local vs cloud)
 python run.py -p my-chatbot --perf-compare 15:16
 
-# Esporta report
+# Export report
 python run.py -p my-chatbot --perf-export json
-python run.py -p my-chatbot --perf-export html  # apre nel browser
+python run.py -p my-chatbot --perf-export html  # opens in browser
+
+# List all runs from all projects
+python run.py --list-runs
 ```
 
-### Menu Interattivo
+### Interactive Menu
 
-Da `python run.py` > **[5] Analisi Testing** > **[6] Performance**:
-- **Report ultimo run** - Metriche dettagliate
-- **Dashboard storica** - Trend su ultimi N run
-- **Confronta run** - A/B comparison
-- **Esporta HTML** - Report interattivo nel browser
+From `python run.py` > **[5] Testing Analysis** > **[6] Performance**:
+- **Last run report** - Detailed metrics
+- **Historical dashboard** - Trends over last N runs
+- **Compare runs** - A/B comparison
+- **Export HTML** - Interactive browser report
 
-### Metriche Raccolte
+### Collected Metrics
 
-| Categoria | Metriche |
-|-----------|----------|
-| **Timing** | Durata totale, media per test, min/max, breakdown per fase |
-| **Throughput** | Test/minuto, confronto con run precedenti |
-| **Affidabilità** | Retry, timeout, error rate, flakiness |
-| **Servizi Esterni** | Latenza chatbot, Google Sheets, LangSmith |
+| Category | Metrics |
+|----------|---------|
+| **Timing** | Total duration, average per test, min/max, per-phase breakdown |
+| **Throughput** | Tests/minute, comparison with previous runs |
+| **Reliability** | Retries, timeouts, error rate, flakiness |
+| **External Services** | Chatbot latency, Google Sheets, LangSmith |
 
-### Report Post-Run
+### Post-Run Report
 
-Al termine di ogni run in modalità AUTO, viene generato automaticamente:
-1. **Summary testuale** - Riepilogo metriche principali
-2. **Alerting** - Warning se metriche fuori soglia
-3. **File JSON** - Dati completi in `reports/{project}/performance/`
+At the end of each AUTO mode run, automatically generated:
+1. **Text summary** - Main metrics recap
+2. **Alerting** - Warnings if metrics out of threshold
+3. **JSON file** - Complete data in `reports/{project}/performance/`
 
 ### Alerting
 
-Soglie configurabili per warning automatici:
+Configurable thresholds for automatic warnings:
 
-| Soglia | Default |
-|--------|---------|
-| Aumento durata | >20% vs baseline |
-| Calo throughput | >15% |
+| Threshold | Default |
+|-----------|---------|
+| Duration increase | >20% vs baseline |
+| Throughput decrease | >15% |
 | Error rate | >10% |
 | Pass rate | <80% |
-| Latenza chatbot | >30s |
-| Latenza Sheets | >5s |
+| Chatbot latency | >30s |
+| Sheets latency | >5s |
 
 ### API
 
@@ -657,11 +676,11 @@ from src.performance import (
     PerformanceAlerter, compare_environments, format_comparison_report
 )
 
-# Raccolta metriche (automatica in tester.py)
+# Metrics collection (automatic in tester.py)
 collector = PerformanceCollector("run_18", "my-chatbot", "local")
 collector.start_test("TEST_001")
 collector.start_phase("send_question")
-# ... esecuzione ...
+# ... execution ...
 collector.end_phase()
 collector.record_service_call("chatbot", "response", 1500.0)
 collector.end_test("PASS")
@@ -672,7 +691,7 @@ reporter = PerformanceReporter(run_metrics)
 print(reporter.generate_summary())
 html = reporter.generate_html_report()
 
-# Storico e trend
+# History and trends
 history = PerformanceHistory("my-chatbot", Path("reports"))
 history.save_run(run_metrics)
 trends = history.get_trends(last_n=10)
@@ -682,7 +701,7 @@ alerter = PerformanceAlerter()
 alerts = alerter.check(run_metrics)
 print(alerter.format_alerts())
 
-# Confronto local vs cloud
+# Local vs cloud comparison
 comparison = compare_environments(local_metrics, cloud_metrics)
 print(format_comparison_report(comparison))
 ```

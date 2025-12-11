@@ -1,11 +1,11 @@
 """
-Core Tester - Engine principale per testing chatbot
+Core Tester - Main chatbot testing engine
 
-Gestisce:
-- Modalità Train, Assisted, Auto
-- Esecuzione test con followups
-- Integrazione con tutti i client (browser, LLM, report)
-- Orchestrazione completa del flusso di test
+Handles:
+- Train, Assisted, Auto modes
+- Test execution with followups
+- Integration with all clients (browser, LLM, report)
+- Complete test flow orchestration
 """
 
 import asyncio

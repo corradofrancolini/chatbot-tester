@@ -1,11 +1,11 @@
 """
-Config Loader - Caricamento configurazioni YAML e .env
+Config Loader - YAML and .env configuration loading
 
-Gestisce:
-- Settings globali (settings.yaml)
-- Configurazioni progetto (project.yaml)
-- Variabili ambiente (.env)
-- Validazione e default values
+Handles:
+- Global settings (settings.yaml)
+- Project configurations (project.yaml)
+- Environment variables (.env)
+- Validation and default values
 """
 
 import os

@@ -1,12 +1,12 @@
 """
-Ollama Client - Integrazione con LLM locale
+Ollama Client - Local LLM integration
 
-Gestisce:
-- Comunicazione con Ollama API
-- Generazione risposte per modalità Assisted/Auto
-- Analisi conversazioni e decisioni followup
-- Valutazione qualità risposte
-- Utilizzo training data per in-context learning
+Handles:
+- Ollama API communication
+- Response generation for Assisted/Auto modes
+- Conversation analysis and followup decisions
+- Response quality evaluation
+- Training data usage for in-context learning
 """
 
 import json
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class OllamaResponse:
-    """Risposta da Ollama"""
+    """Response from Ollama"""
     text: str
     model: str
     done: bool
@@ -30,24 +30,24 @@ class OllamaResponse:
 
 class OllamaClient:
     """
-    Client per comunicazione con Ollama.
+    Client for Ollama communication.
 
     Features:
-    - Generazione risposte streaming
-    - Prompt specializzati per testing chatbot
-    - Valutazione automatica risposte
-    - Decisione followup intelligente
-    - In-context learning da training data
+    - Streaming response generation
+    - Specialized prompts for chatbot testing
+    - Automatic response evaluation
+    - Intelligent followup decision
+    - In-context learning from training data
 
     Usage:
         client = OllamaClient(model="mistral")
 
-        # Verifica disponibilità
+        # Check availability
         if client.is_available():
-            # Imposta training context
+            # Set training context
             client.set_training_context(training_data)
-            
-            # Decidi risposta basata su training
+
+            # Decide response based on training
             response = client.decide_response(bot_message, conversation)
     """
 
@@ -56,36 +56,36 @@ class OllamaClient:
                  url: str = "http://localhost:11434/api/generate",
                  timeout: int = 120):
         """
-        Inizializza il client Ollama.
+        Initialize the Ollama client.
 
         Args:
-            model: Nome modello (default: mistral)
-            url: URL endpoint Ollama
-            timeout: Timeout richieste in secondi
+            model: Model name (default: mistral)
+            url: Ollama endpoint URL
+            timeout: Request timeout in seconds
         """
         self.model = model
         self.url = url
         self.timeout = timeout
         self.base_url = url.replace("/api/generate", "")
-        
-        # Training context per in-context learning
+
+        # Training context for in-context learning
         self._training: Optional['TrainingData'] = None
 
     def set_training_context(self, training: 'TrainingData') -> None:
         """
-        Imposta il training data per in-context learning.
-        
+        Set training data for in-context learning.
+
         Args:
-            training: TrainingData con pattern e risposte apprese
+            training: TrainingData with learned patterns and responses
         """
         self._training = training
 
     def is_available(self) -> bool:
         """
-        Verifica se Ollama è raggiungibile e il modello è disponibile.
+        Check if Ollama is reachable and the model is available.
 
         Returns:
-            True se Ollama è pronto
+            True if Ollama is ready
         """
         try:
             # Check server
@@ -93,7 +93,7 @@ class OllamaClient:
             if response.status_code != 200:
                 return False
 
-            # Check modello
+            # Check model
             models = response.json().get('models', [])
             model_names = [m.get('name', '') for m in models]
 
@@ -102,7 +102,7 @@ class OllamaClient:
             return False
 
     def get_available_models(self) -> list[str]:
-        """Ritorna lista modelli disponibili in Ollama"""
+        """Return list of available models in Ollama"""
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=5)
             if response.status_code == 200:
@@ -118,16 +118,16 @@ class OllamaClient:
                  temperature: float = 0.7,
                  max_tokens: int = 1000) -> Optional[str]:
         """
-        Genera una risposta.
+        Generate a response.
 
         Args:
-            prompt: Prompt utente
-            system: System prompt opzionale
-            temperature: Creatività (0-1)
-            max_tokens: Lunghezza massima risposta
+            prompt: User prompt
+            system: Optional system prompt
+            temperature: Creativity (0-1)
+            max_tokens: Maximum response length
 
         Returns:
-            Testo generato o None se errore
+            Generated text or None if error
         """
         payload = {
             "model": self.model,
@@ -153,10 +153,10 @@ class OllamaClient:
                 data = response.json()
                 return data.get('response', '')
             else:
-                print(f"Errore Ollama: {response.status_code}")
+                print(f"Ollama error: {response.status_code}")
                 return None
         except Exception as e:
-            print(f"Errore connessione Ollama: {e}")
+            print(f"Ollama connection error: {e}")
             return None
 
     def generate_stream(self,
@@ -164,15 +164,15 @@ class OllamaClient:
                         system: Optional[str] = None,
                         temperature: float = 0.7) -> Generator[str, None, None]:
         """
-        Genera risposta in streaming.
+        Generate response in streaming mode.
 
         Args:
-            prompt: Prompt utente
-            system: System prompt opzionale
-            temperature: Creatività (0-1)
+            prompt: User prompt
+            system: Optional system prompt
+            temperature: Creativity (0-1)
 
         Yields:
-            Chunks di testo
+            Text chunks
         """
         payload = {
             "model": self.model,
@@ -202,55 +202,55 @@ class OllamaClient:
                     if data.get('done', False):
                         break
         except Exception as e:
-            print(f"Errore streaming Ollama: {e}")
+            print(f"Ollama streaming error: {e}")
 
-    # ========== IN-CONTEXT LEARNING DA TRAINING ==========
+    # ========== IN-CONTEXT LEARNING FROM TRAINING ==========
 
     def _build_training_context(self) -> str:
         """
-        Costruisce il contesto di training per il prompt.
-        
+        Build training context for the prompt.
+
         Returns:
-            Stringa con esempi appresi formattati
+            String with formatted learned examples
         """
         if not self._training:
             return ""
-        
-        lines = ["RISPOSTE APPRESE DA TRAINING:"]
-        
+
+        lines = ["LEARNED RESPONSES FROM TRAINING:"]
+
         for pattern in self._training.patterns:
             if pattern.responses:
-                # Prendi le top 3 risposte più usate
+                # Get top 3 most used responses
                 top_responses = sorted(
-                    pattern.responses, 
-                    key=lambda r: r.count, 
+                    pattern.responses,
+                    key=lambda r: r.count,
                     reverse=True
                 )[:3]
-                
+
                 responses_str = ", ".join([
-                    f'"{r.text}" (usato {r.count}x)' 
+                    f'"{r.text}" (used {r.count}x)'
                     for r in top_responses
                 ])
-                
-                lines.append(f"- Quando il bot chiede '{pattern.name}' → rispondi con: {responses_str}")
-        
+
+                lines.append(f"- When the bot asks '{pattern.name}' → respond with: {responses_str}")
+
         if len(lines) == 1:
-            return ""  # Nessun pattern con risposte
-        
+            return ""  # No patterns with responses
+
         return "\n".join(lines)
 
     def _is_final_response(self, bot_message: str) -> bool:
         """
-        Euristica per capire se il bot ha dato una risposta finale.
-        
+        Heuristic to determine if the bot gave a final response.
+
         Indicators:
-        - Contiene "Source:" (citazione)
-        - Messaggio lungo (>300 chars)
-        - Contiene URL
-        - Frasi di chiusura tipiche
+        - Contains "Source:" (citation)
+        - Long message (>300 chars)
+        - Contains URL
+        - Typical closing phrases
         """
         msg_lower = bot_message.lower()
-        
+
         indicators = [
             "source:" in msg_lower,
             len(bot_message) > 300,
@@ -261,12 +261,12 @@ class OllamaClient:
             "feel free to ask" in msg_lower,
             "let me know if you" in msg_lower,
         ]
-        
-        # Se contiene source + è lungo, è sicuramente finale
+
+        # If contains source + is long, it's definitely final
         if "source:" in msg_lower and len(bot_message) > 200:
             return True
-        
-        # Altrimenti se almeno 2 indicatori
+
+        # Otherwise if at least 2 indicators
         return sum(indicators) >= 2
 
     def decide_response(self,
@@ -275,34 +275,34 @@ class OllamaClient:
                         followups: Optional[List[str]] = None,
                         test_context: Optional[str] = None) -> Optional[str]:
         """
-        Decide la risposta da dare al bot usando training context.
-        
-        Questo è il metodo principale per Auto/Assisted mode.
-        Usa in-context learning con gli esempi dal training.
-        
+        Decide the response to give to the bot using training context.
+
+        This is the main method for Auto/Assisted mode.
+        Uses in-context learning with examples from training.
+
         Args:
-            bot_message: Ultimo messaggio del bot
-            conversation: Conversazione finora [{role, content}, ...]
-            followups: Followup predefiniti disponibili (opzionale)
-            test_context: Contesto/categoria del test (opzionale)
-            
+            bot_message: Last bot message
+            conversation: Conversation so far [{role, content}, ...]
+            followups: Available predefined followups (optional)
+            test_context: Test context/category (optional)
+
         Returns:
-            Risposta da inviare, o None se conversazione completata
+            Response to send, or None if conversation completed
         """
-        # Check se il bot ha dato una risposta finale
+        # Check if the bot gave a final response
         if self._is_final_response(bot_message):
             return None
-        
-        # Prima controlla se c'è un pattern match nel training
+
+        # First check if there's a pattern match in training
         if self._training:
             suggestions = self._training.get_suggestions(bot_message, limit=1)
             if suggestions:
-                # Pattern riconosciuto - usa la risposta più comune
+                # Pattern recognized - use most common response
                 return suggestions[0]['text']
-        
-        # Altrimenti usa LLM con training context
+
+        # Otherwise use LLM with training context
         training_context = self._build_training_context()
-        
+
         system = """Sei un tester automatico di chatbot. Il tuo compito è rispondere alle domande del bot per completare il test.
 
 REGOLE:
@@ -313,62 +313,62 @@ REGOLE:
 
 Rispondi SOLO con il testo da inviare, oppure "DONE" se il test è completato."""
 
-        # Formatta conversazione recente
+        # Format recent conversation
         conv_text = "\n".join([
             f"{'USER' if m['role'] == 'user' else 'BOT'}: {m['content'][:200]}"
             for m in conversation[-6:]
         ])
-        
-        # Costruisci prompt
+
+        # Build prompt
         prompt_parts = []
-        
+
         if training_context:
             prompt_parts.append(training_context)
             prompt_parts.append("")
-        
+
         if test_context:
             prompt_parts.append(f"CONTESTO TEST: {test_context}")
             prompt_parts.append("")
-        
+
         prompt_parts.append("CONVERSAZIONE FINORA:")
         prompt_parts.append(conv_text)
         prompt_parts.append("")
         prompt_parts.append(f"ULTIMO MESSAGGIO BOT:\n{bot_message[:500]}")
         prompt_parts.append("")
-        
+
         if followups:
             prompt_parts.append("FOLLOWUP DISPONIBILI:")
             for i, f in enumerate(followups, 1):
                 prompt_parts.append(f"  {i}. {f}")
             prompt_parts.append("")
-        
+
         prompt_parts.append("Cosa rispondo? (testo o DONE)")
-        
+
         prompt = "\n".join(prompt_parts)
-        
+
         response = self.generate(prompt, system=system, temperature=0.3, max_tokens=150)
-        
+
         if response:
             response = response.strip()
-            
-            # Check se conversazione completata
+
+            # Check if conversation completed
             if response.upper() == "DONE":
                 return None
-            
-            # Rimuovi virgolette se presenti
+
+            # Remove quotes if present
             if response.startswith('"') and response.endswith('"'):
                 response = response[1:-1]
-            
-            # Impara la risposta se c'è un pattern match
+
+            # Learn the response if there's a pattern match
             if self._training:
                 self._training.learn(bot_message, response)
-            
+
             return response
-        
-        # Fallback: usa primo followup se disponibile
+
+        # Fallback: use first followup if available
         if followups:
             return followups[0]
-        
+
         return None
 
     def should_continue(self,
@@ -377,55 +377,55 @@ Rispondi SOLO con il testo da inviare, oppure "DONE" se il test è completato.""
                         turn: int,
                         max_turns: int = 15) -> bool:
         """
-        Decide se continuare la conversazione o terminare.
-        
+        Decide whether to continue the conversation or terminate.
+
         Args:
-            bot_message: Ultimo messaggio del bot
-            conversation: Conversazione finora
-            turn: Turno corrente
-            max_turns: Massimo turni
-            
+            bot_message: Last bot message
+            conversation: Conversation so far
+            turn: Current turn
+            max_turns: Maximum turns
+
         Returns:
-            True se continuare, False se terminare
+            True to continue, False to terminate
         """
-        # Limiti hard
+        # Hard limits
         if turn >= max_turns:
             return False
-        
+
         if not bot_message:
             return False
-        
-        # Euristica: se il bot ha dato una risposta lunga e informativa, probabilmente è finito
+
+        # Heuristic: if the bot gave a long informative response, it's probably done
         if len(bot_message) > 500 and turn > 2:
-            # Chiedi a LLM
-            prompt = f"""Il bot ha risposto:
+            # Ask LLM
+            prompt = f"""The bot responded:
 "{bot_message[:300]}..."
 
-La conversazione ha {turn} turni. Sembra una risposta finale o serve continuare?
-Rispondi SOLO con "CONTINUE" o "DONE"."""
-            
+The conversation has {turn} turns. Does this look like a final response or should we continue?
+Reply ONLY with "CONTINUE" or "DONE"."""
+
             response = self.generate(prompt, temperature=0.2, max_tokens=10)
             if response and "DONE" in response.upper():
                 return False
-        
+
         return True
 
-    # ========== PROMPT SPECIALIZZATI PER TESTING ==========
+    # ========== SPECIALIZED PROMPTS FOR TESTING ==========
 
     def analyze_response(self,
                          question: str,
                          bot_response: str,
                          expected_behavior: Optional[str] = None) -> dict:
         """
-        Analizza la risposta del chatbot.
+        Analyze the chatbot response.
 
         Args:
-            question: Domanda posta
-            bot_response: Risposta del chatbot
-            expected_behavior: Comportamento atteso (opzionale)
+            question: Question asked
+            bot_response: Chatbot response
+            expected_behavior: Expected behavior (optional)
 
         Returns:
-            Dict con analisi: {quality, issues, suggestions}
+            Dict with analysis: {quality, issues, suggestions}
         """
         system = """Sei un analista QA esperto. Analizza le risposte dei chatbot in modo conciso.
 Rispondi SOLO in formato JSON valido, senza markdown o altro testo."""
@@ -452,7 +452,7 @@ Rispondi con questo JSON:
 
         if response:
             try:
-                # Pulisci eventuale markdown
+                # Clean possible markdown
                 clean = response.strip()
                 if clean.startswith("```"):
                     clean = clean.split("```")[1]
@@ -470,22 +470,22 @@ Rispondi con questo JSON:
                     "raw_response": response
                 }
 
-        return {"quality": "error", "issues": ["Errore analisi LLM"]}
+        return {"quality": "error", "issues": ["LLM analysis error"]}
 
     def decide_followup(self,
                         conversation: list[dict],
                         available_followups: list[str],
                         test_context: Optional[str] = None) -> Optional[str]:
         """
-        Decide quale followup inviare basandosi sulla conversazione.
+        Decide which followup to send based on the conversation.
 
         Args:
-            conversation: Lista messaggi [{role, content}, ...]
-            available_followups: Lista possibili followup
-            test_context: Contesto del test (opzionale)
+            conversation: Message list [{role, content}, ...]
+            available_followups: List of possible followups
+            test_context: Test context (optional)
 
         Returns:
-            Followup da inviare o None se conversazione completata
+            Followup to send or None if conversation completed
         """
         if not available_followups:
             return None
@@ -493,13 +493,13 @@ Rispondi con questo JSON:
         system = """Sei un tester di chatbot. Decidi il prossimo messaggio da inviare per testare il bot.
 Rispondi SOLO con il numero del followup scelto, o "DONE" se la conversazione è completa."""
 
-        # Formatta conversazione
+        # Format conversation
         conv_text = "\n".join([
             f"{'USER' if m['role'] == 'user' else 'BOT'}: {m['content']}"
-            for m in conversation[-6:]  # Ultimi 6 messaggi
+            for m in conversation[-6:]  # Last 6 messages
         ])
 
-        # Formatta followups
+        # Format followups
         followups_text = "\n".join([
             f"{i+1}. {f}" for i, f in enumerate(available_followups)
         ])
@@ -529,7 +529,7 @@ Quale followup è più appropriato ora? Rispondi SOLO con il numero (1-{len(avai
             except:
                 pass
 
-        # Default: primo followup non ancora usato
+        # Default: first unused followup
         return available_followups[0] if available_followups else None
 
     def generate_test_input(self,
@@ -537,25 +537,25 @@ Quale followup è più appropriato ora? Rispondi SOLO con il numero (1-{len(avai
                             input_type: str = "text",
                             constraints: Optional[dict] = None) -> str:
         """
-        Genera input realistico per test.
+        Generate realistic input for tests.
 
         Args:
-            context: Contesto (es. "Il bot chiede l'email")
-            input_type: Tipo input (text, email, date, number, etc.)
-            constraints: Vincoli opzionali (min, max, pattern, etc.)
+            context: Context (e.g., "The bot asks for email")
+            input_type: Input type (text, email, date, number, etc.)
+            constraints: Optional constraints (min, max, pattern, etc.)
 
         Returns:
-            Input generato
+            Generated input
         """
-        # Prima controlla se c'è un pattern nel training
+        # First check if there's a pattern in training
         if self._training and input_type in ['country', 'email', 'confirmation', 'name']:
             for pattern in self._training.patterns:
                 if pattern.id == input_type or pattern.name == input_type:
                     if pattern.responses:
-                        # Usa la risposta più comune
+                        # Use most common response
                         top = max(pattern.responses, key=lambda r: r.count)
                         return top.text
-        
+
         system = "Genera dati di test realistici. Rispondi SOLO con il valore, senza spiegazioni."
 
         type_hints = {
@@ -586,15 +586,15 @@ Rispondi SOLO con il valore:"""
                              conversation: list[dict],
                              final_response: str) -> dict:
         """
-        Valuta il risultato complessivo di un test.
+        Evaluate the overall result of a test.
 
         Args:
-            test_case: Definizione del test
-            conversation: Conversazione completa
-            final_response: Ultima risposta del bot
+            test_case: Test definition
+            conversation: Complete conversation
+            final_response: Last bot response
 
         Returns:
-            Dict con: {passed, score, reason, details}
+            Dict with: {passed, score, reason, details}
         """
         system = """Sei un QA tester. Valuta se il test è passato basandoti su:
 - Completezza delle risposte
@@ -644,11 +644,11 @@ Valuta e rispondi con:
             except:
                 pass
 
-        # Default: passato se c'è una risposta
+        # Default: passed if there's a response
         return {
             "passed": bool(final_response),
             "score": 50 if final_response else 0,
-            "reason": "Valutazione automatica fallita",
+            "reason": "Automatic evaluation failed",
             "details": {}
         }
 
@@ -658,16 +658,16 @@ Valuta e rispondi con:
                           category: Optional[str] = None,
                           count: int = 3) -> list[str]:
         """
-        Suggerisce possibili followup per un test.
+        Suggest possible followups for a test.
 
         Args:
-            question: Domanda originale
-            bot_response: Risposta del bot
-            category: Categoria test (opzionale)
-            count: Numero followup da generare
+            question: Original question
+            bot_response: Bot response
+            category: Test category (optional)
+            count: Number of followups to generate
 
         Returns:
-            Lista di followup suggeriti
+            List of suggested followups
         """
         system = """Sei un tester. Genera domande di followup per testare un chatbot.
 Le domande devono:
@@ -688,7 +688,7 @@ Genera {count} domande di followup per testare ulteriormente il bot:"""
 
         if response:
             lines = [l.strip() for l in response.strip().split('\n') if l.strip()]
-            # Rimuovi numerazione se presente
+            # Remove numbering if present
             cleaned = []
             for line in lines:
                 if line[0].isdigit() and (line[1] == '.' or line[1] == ')'):
@@ -700,11 +700,11 @@ Genera {count} domande di followup per testare ulteriormente il bot:"""
 
 
 class OllamaInstaller:
-    """Helper per installazione Ollama su macOS"""
+    """Helper for Ollama installation on macOS"""
 
     @staticmethod
     def check_homebrew() -> bool:
-        """Verifica se Homebrew è installato"""
+        """Check if Homebrew is installed"""
         import subprocess
         try:
             result = subprocess.run(['which', 'brew'], capture_output=True)
@@ -714,7 +714,7 @@ class OllamaInstaller:
 
     @staticmethod
     def check_ollama_installed() -> bool:
-        """Verifica se Ollama è installato"""
+        """Check if Ollama is installed"""
         import subprocess
         try:
             result = subprocess.run(['which', 'ollama'], capture_output=True)
@@ -724,7 +724,7 @@ class OllamaInstaller:
 
     @staticmethod
     def check_ollama_running() -> bool:
-        """Verifica se Ollama server è in esecuzione"""
+        """Check if Ollama server is running"""
         try:
             response = requests.get("http://localhost:11434/api/tags", timeout=2)
             return response.status_code == 200
@@ -733,15 +733,15 @@ class OllamaInstaller:
 
     @staticmethod
     def get_install_command() -> str:
-        """Comando per installare Ollama"""
+        """Command to install Ollama"""
         return "brew install ollama"
 
     @staticmethod
     def get_start_command() -> str:
-        """Comando per avviare Ollama"""
+        """Command to start Ollama"""
         return "ollama serve"
 
     @staticmethod
     def get_pull_model_command(model: str = "mistral") -> str:
-        """Comando per scaricare un modello"""
+        """Command to download a model"""
         return f"ollama pull {model}"

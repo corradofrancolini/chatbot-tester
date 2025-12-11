@@ -1,12 +1,12 @@
 """
-Notifications Module - Sistema di Notifiche
+Notifications Module - Notification System
 
-Supporta:
+Supports:
 - Email (SMTP)
 - Desktop (macOS native)
 - Microsoft Teams (webhook)
 
-Configurabile via settings.yaml
+Configurable via settings.yaml
 """
 
 from dataclasses import dataclass, field
@@ -26,7 +26,7 @@ import urllib.error
 
 
 class NotificationType(Enum):
-    """Tipi di notifica"""
+    """Notification types"""
     RUN_COMPLETE = "run_complete"
     REGRESSION = "regression"
     FLAKY_TESTS = "flaky_tests"
@@ -34,7 +34,7 @@ class NotificationType(Enum):
 
 
 class NotificationPriority(Enum):
-    """Priorita notifica"""
+    """Notification priority"""
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
@@ -43,13 +43,13 @@ class NotificationPriority(Enum):
 
 @dataclass
 class NotificationConfig:
-    """Configurazione notifiche"""
+    """Notification configuration"""
     # Email
     email_enabled: bool = False
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_user: str = ""
-    smtp_password_env: str = "SMTP_PASSWORD"  # Nome variabile ambiente
+    smtp_password_env: str = "SMTP_PASSWORD"  # Environment variable name
     email_from: str = ""
     email_recipients: List[str] = field(default_factory=list)
 
@@ -90,7 +90,7 @@ class NotificationConfig:
 
 @dataclass
 class TestRunSummary:
-    """Riepilogo di un test run per notifiche"""
+    """Test run summary for notifications"""
     project: str
     run_number: int
     total_tests: int
@@ -126,7 +126,7 @@ class TestRunSummary:
 
 
 class EmailNotifier:
-    """Notifiche via Email SMTP"""
+    """Email notifications via SMTP"""
 
     def __init__(self, config: NotificationConfig):
         self.config = config
@@ -136,17 +136,17 @@ class EmailNotifier:
              body: str,
              html_body: Optional[str] = None,
              attachments: List[Path] = None) -> bool:
-        """Invia email"""
+        """Send email"""
         if not self.config.email_enabled:
             return False
 
         if not self.config.email_recipients:
-            print("! Email: nessun destinatario configurato")
+            print("! Email: no recipients configured")
             return False
 
         password = os.environ.get(self.config.smtp_password_env, '')
         if not password:
-            print(f"! Email: variabile {self.config.smtp_password_env} non configurata")
+            print(f"! Email: variable {self.config.smtp_password_env} not configured")
             return False
 
         try:
@@ -155,14 +155,14 @@ class EmailNotifier:
             msg['From'] = self.config.email_from or self.config.smtp_user
             msg['To'] = ', '.join(self.config.email_recipients)
 
-            # Corpo testo
+            # Text body
             msg.attach(MIMEText(body, 'plain'))
 
-            # Corpo HTML (opzionale)
+            # HTML body (optional)
             if html_body:
                 msg.attach(MIMEText(html_body, 'html'))
 
-            # Allegati
+            # Attachments
             if attachments:
                 for file_path in attachments:
                     if file_path.exists():
@@ -176,7 +176,7 @@ class EmailNotifier:
                             )
                             msg.attach(part)
 
-            # Invio
+            # Send
             with smtplib.SMTP(self.config.smtp_host, self.config.smtp_port) as server:
                 server.starttls()
                 server.login(self.config.smtp_user, password)
@@ -186,7 +186,7 @@ class EmailNotifier:
                     msg.as_string()
                 )
 
-            print(f"+ Email inviata a {len(self.config.email_recipients)} destinatari")
+            print(f"+ Email sent to {len(self.config.email_recipients)} recipients")
             return True
 
         except Exception as e:
@@ -194,7 +194,7 @@ class EmailNotifier:
             return False
 
     def send_run_summary(self, summary: TestRunSummary) -> bool:
-        """Invia riepilogo run"""
+        """Send run summary"""
         subject = f"[{summary.status}] Chatbot Test - {summary.project} RUN {summary.run_number}"
 
         body = f"""
@@ -254,7 +254,7 @@ Risultati:
 
 
 class DesktopNotifier:
-    """Notifiche Desktop native (macOS)"""
+    """Native Desktop notifications (macOS)"""
 
     def __init__(self, config: NotificationConfig):
         self.config = config
@@ -264,11 +264,11 @@ class DesktopNotifier:
              message: str,
              subtitle: Optional[str] = None,
              sound: bool = None) -> bool:
-        """Invia notifica desktop macOS"""
+        """Send macOS desktop notification"""
         if not self.config.desktop_enabled:
             return False
 
-        # Usa osascript per notifiche native macOS
+        # Use osascript for native macOS notifications
         script_parts = [
             f'display notification "{self._escape(message)}"',
             f'with title "{self._escape(title)}"'
@@ -293,28 +293,28 @@ class DesktopNotifier:
             print(f"! Desktop notification error: {e}")
             return False
         except FileNotFoundError:
-            # Non siamo su macOS
-            print("! Desktop notifications disponibili solo su macOS")
+            # Not on macOS
+            print("! Desktop notifications only available on macOS")
             return False
 
     def _escape(self, text: str) -> str:
-        """Escape per AppleScript"""
+        """Escape for AppleScript"""
         return text.replace('"', '\\"').replace('\n', ' ')
 
     def send_run_summary(self, summary: TestRunSummary) -> bool:
-        """Invia riepilogo run come notifica desktop"""
+        """Send run summary as desktop notification"""
         title = f"{summary.status_emoji} {summary.project}"
         subtitle = f"RUN {summary.run_number} - {summary.status}"
         message = f"{summary.passed}/{summary.total_tests} test passati ({summary.pass_rate:.0f}%)"
 
         if summary.regressions > 0:
-            message += f" - {summary.regressions} regressioni!"
+            message += f" - {summary.regressions} regressions!"
 
         return self.send(title, message, subtitle)
 
 
 class TeamsNotifier:
-    """Notifiche Microsoft Teams via Webhook"""
+    """Microsoft Teams notifications via Webhook"""
 
     def __init__(self, config: NotificationConfig):
         self.config = config
@@ -324,16 +324,16 @@ class TeamsNotifier:
              message: str,
              color: str = "0078D7",
              facts: List[Dict[str, str]] = None) -> bool:
-        """Invia messaggio a Teams via webhook"""
+        """Send message to Teams via webhook"""
         if not self.config.teams_enabled:
             return False
 
         webhook_url = os.environ.get(self.config.teams_webhook_url_env, '')
         if not webhook_url:
-            print(f"! Teams: variabile {self.config.teams_webhook_url_env} non configurata")
+            print(f"! Teams: variable {self.config.teams_webhook_url_env} not configured")
             return False
 
-        # Formato Adaptive Card per Teams
+        # Adaptive Card format for Teams
         payload = {
             "@type": "MessageCard",
             "@context": "http://schema.org/extensions",
@@ -357,7 +357,7 @@ class TeamsNotifier:
 
             with urllib.request.urlopen(req, timeout=10) as response:
                 if response.status == 200:
-                    print("+ Teams notification inviata")
+                    print("+ Teams notification sent")
                     return True
                 else:
                     print(f"! Teams error: HTTP {response.status}")
@@ -371,14 +371,14 @@ class TeamsNotifier:
             return False
 
     def send_run_summary(self, summary: TestRunSummary) -> bool:
-        """Invia riepilogo run a Teams"""
-        # Colore basato su stato
+        """Send run summary to Teams"""
+        # Color based on status
         if summary.status == "PASSED":
-            color = "28a745"  # Verde
+            color = "28a745"  # Green
         elif summary.status == "FAILED":
-            color = "dc3545"  # Rosso
+            color = "dc3545"  # Red
         else:
-            color = "ffc107"  # Giallo
+            color = "ffc107"  # Yellow
 
         title = f"{summary.status_emoji} Chatbot Test - {summary.project} RUN {summary.run_number}"
 
@@ -404,17 +404,17 @@ class TeamsNotifier:
 
 class NotificationManager:
     """
-    Gestore centralizzato notifiche.
+    Centralized notification manager.
 
     Usage:
         config = NotificationConfig.from_dict(settings['notifications'])
         notifier = NotificationManager(config)
 
-        # Invia a tutti i canali configurati
+        # Send to all configured channels
         notifier.notify_run_complete(summary)
 
-        # Oppure canale specifico
-        notifier.send_desktop("Titolo", "Messaggio")
+        # Or specific channel
+        notifier.send_desktop("Title", "Message")
     """
 
     def __init__(self, config: NotificationConfig):
@@ -424,10 +424,10 @@ class NotificationManager:
         self.teams = TeamsNotifier(config)
 
     def notify_run_complete(self, summary: TestRunSummary) -> Dict[str, bool]:
-        """Notifica completamento run su tutti i canali"""
+        """Notify run completion on all channels"""
         results = {}
 
-        # Determina se notificare
+        # Determine if notification should be sent
         should_notify = self.config.on_complete
         if summary.status == "FAILED" and self.config.on_failure:
             should_notify = True
@@ -437,7 +437,7 @@ class NotificationManager:
         if not should_notify:
             return results
 
-        # Invia su tutti i canali abilitati
+        # Send on all enabled channels
         if self.config.email_enabled:
             results['email'] = self.email.send_run_summary(summary)
 
@@ -453,16 +453,16 @@ class NotificationManager:
                           project: str,
                           run_number: int,
                           regressions: List[str]) -> Dict[str, bool]:
-        """Notifica regressioni rilevate"""
+        """Notify detected regressions"""
         if not self.config.on_regression:
             return {}
 
         results = {}
-        title = f"! Regressioni in {project} RUN {run_number}"
-        message = f"Rilevate {len(regressions)} regressioni:\n" + "\n".join(f"- {r}" for r in regressions[:10])
+        title = f"! Regressions in {project} RUN {run_number}"
+        message = f"Detected {len(regressions)} regressions:\n" + "\n".join(f"- {r}" for r in regressions[:10])
 
         if len(regressions) > 10:
-            message += f"\n... e altre {len(regressions) - 10}"
+            message += f"\n... and {len(regressions) - 10} more"
 
         if self.config.desktop_enabled:
             results['desktop'] = self.desktop.send(title, message[:200])
@@ -486,9 +486,9 @@ class NotificationManager:
     def notify_error(self,
                      project: str,
                      error: str) -> Dict[str, bool]:
-        """Notifica errore critico"""
+        """Notify critical error"""
         results = {}
-        title = f"X Errore in {project}"
+        title = f"X Error in {project}"
 
         if self.config.desktop_enabled:
             results['desktop'] = self.desktop.send(title, error[:200], sound=True)
@@ -501,22 +501,22 @@ class NotificationManager:
 
         return results
 
-    # Metodi di convenienza per canali singoli
+    # Convenience methods for single channels
     def send_desktop(self, title: str, message: str, subtitle: str = None) -> bool:
-        """Invia solo notifica desktop"""
+        """Send only desktop notification"""
         return self.desktop.send(title, message, subtitle)
 
     def send_email(self, subject: str, body: str, html: str = None) -> bool:
-        """Invia solo email"""
+        """Send only email"""
         return self.email.send(subject, body, html)
 
     def send_teams(self, title: str, message: str) -> bool:
-        """Invia solo a Teams"""
+        """Send only to Teams"""
         return self.teams.send(title, message)
 
 
 def test_notifications():
-    """Test rapido delle notifiche"""
+    """Quick notification test"""
     config = NotificationConfig(
         desktop_enabled=True,
         desktop_sound=True

@@ -1,10 +1,10 @@
 """
-LangSmith Client - Integrazione per debug e analisi chatbot
+LangSmith Client - Integration for chatbot debugging and analysis
 
-Gestisce:
-- Recupero trace delle conversazioni
-- Analisi tool routing
-- Estrazione metriche performance
+Handles:
+- Conversation trace retrieval
+- Tool routing analysis
+- Performance metrics extraction
 - Context envelope inspection
 """
 
@@ -185,26 +185,26 @@ class LangSmithReport:
 class LangSmithClient:
     """
     Client per LangSmith API.
-    
+
     Features:
     - Recupero trace per analisi
     - Estrazione tool calls
     - Metriche performance
     - Link diretto al trace
-    
+
     Usage:
         client = LangSmithClient(
             api_key="lsv2_sk_...",
             project_id="xxx",
             org_id="yyy"
         )
-        
+
         trace = client.get_latest_trace()
         tools = client.extract_tool_calls(trace)
     """
-    
+
     BASE_URL = "https://api.smith.langchain.com/api/v1"
-    
+
     def __init__(self,
                  api_key: str,
                  project_id: str,
@@ -212,7 +212,7 @@ class LangSmithClient:
                  tool_names: Optional[List[str]] = None):
         """
         Inizializza il client.
-        
+
         Args:
             api_key: API key LangSmith
             project_id: ID progetto LangSmith
@@ -223,13 +223,13 @@ class LangSmithClient:
         self.project_id = project_id
         self.org_id = org_id
         self.tool_names = tool_names or []
-        
+
         self._session = requests.Session()
         self._session.headers.update({
             'x-api-key': api_key,
             'Content-Type': 'application/json'
         })
-    
+
     @property
     def project_url(self) -> str:
         """URL del progetto in LangSmith"""
@@ -237,11 +237,11 @@ class LangSmithClient:
         if self.org_id:
             return f"{base}/o/{self.org_id}/projects/p/{self.project_id}"
         return f"{base}/projects/p/{self.project_id}"
-    
+
     def is_available(self) -> bool:
         """
         Verifica se LangSmith è raggiungibile.
-        
+
         Returns:
             True se connessione OK
         """
@@ -253,7 +253,7 @@ class LangSmithClient:
             return response.status_code == 200
         except:
             return False
-    
+
     def get_traces(self,
                    limit: int = 10,
                    start_time: Optional[datetime] = None,
@@ -264,19 +264,19 @@ class LangSmithClient:
             'limit': limit,
             'is_root': True
         }
-        
+
         if start_time:
             payload['start_time'] = start_time.isoformat()
         if end_time:
             payload['end_time'] = end_time.isoformat()
-        
+
         try:
             response = self._session.post(
                 f"{self.BASE_URL}/runs/query",
                 json=payload,
                 timeout=30
             )
-            
+
             if response.status_code != 200:
                 print(f"! LangSmith API error: {response.status_code}")
                 return []
@@ -294,39 +294,39 @@ class LangSmithClient:
         except Exception as e:
             print(f"! Errore recupero traces: {e}")
             return []
-    
-    def get_latest_trace(self, 
+
+    def get_latest_trace(self,
                          after: Optional[datetime] = None,
                          input_contains: Optional[str] = None) -> Optional[TraceInfo]:
         """
         Ottiene il trace più recente.
-        
+
         Args:
             after: Solo trace dopo questa data
             input_contains: Filtra per contenuto input
-            
+
         Returns:
             TraceInfo o None
         """
         start_time = after or (datetime.utcnow() - timedelta(hours=1))
         traces = self.get_traces(limit=20, start_time=start_time)
-        
+
         for trace in traces:
             if input_contains:
                 if input_contains.lower() in trace.input.lower():
                     return trace
             else:
                 return trace
-        
+
         return None
-    
+
     def get_trace_by_id(self, trace_id: str) -> Optional[TraceInfo]:
         """
         Ottiene un trace specifico per ID.
-        
+
         Args:
             trace_id: ID del trace
-            
+
         Returns:
             TraceInfo o None
         """
@@ -335,22 +335,22 @@ class LangSmithClient:
                 f"{self.BASE_URL}/runs/{trace_id}",
                 timeout=30
             )
-            
+
             if response.status_code == 200:
                 return self._parse_run(response.json())
-            
+
         except:
             pass
-        
+
         return None
-    
+
     def get_child_runs(self, parent_id: str) -> List[Dict]:
         """
         Ottiene tutti i run nel trace (tool calls, LLM, chain steps).
-        
+
         Args:
             parent_id: ID del trace padre
-            
+
         Returns:
             Lista di run nel trace
         """
@@ -363,27 +363,27 @@ class LangSmithClient:
                 },
                 timeout=30
             )
-            
+
             if response.status_code == 200:
                 return response.json().get('runs', [])
-            
+
         except:
             pass
-        
+
         return []
-    
+
     def extract_tool_calls(self, trace: TraceInfo) -> List[ToolCall]:
         """
         Estrae le chiamate ai tool da un trace.
-        
+
         Args:
             trace: TraceInfo da analizzare
-            
+
         Returns:
             Lista ToolCall
         """
         child_runs = self.get_child_runs(trace.id)
-        
+
         tool_calls = []
         for run in child_runs:
             if run.get('run_type') == 'tool':
@@ -395,16 +395,16 @@ class LangSmithClient:
                     error=run.get('error')
                 )
                 tool_calls.append(tool)
-        
+
         return tool_calls
-    
+
     def get_trace_url(self, trace_id: str) -> str:
         """
         Costruisce URL diretto al trace.
-        
+
         Args:
             trace_id: ID del trace
-            
+
         Returns:
             URL completo
         """
@@ -412,39 +412,39 @@ class LangSmithClient:
         if self.org_id:
             return f"{base}/o/{self.org_id}/projects/p/{self.project_id}/r/{trace_id}"
         return f"{base}/projects/p/{self.project_id}/r/{trace_id}"
-    
+
     def auto_detect_tool_names(self, sample_size: int = 10) -> List[str]:
         """
         Auto-rileva i nomi dei tool usati nel progetto.
-        
+
         Args:
             sample_size: Numero trace da analizzare
-            
+
         Returns:
             Lista nomi tool unici
         """
         traces = self.get_traces(limit=sample_size)
-        
+
         tool_names = set()
         for trace in traces:
             tools = self.extract_tool_calls(trace)
             for tool in tools:
                 tool_names.add(tool.name)
-        
+
         return sorted(list(tool_names))
-    
+
     def analyze_trace(self, trace: TraceInfo) -> Dict[str, Any]:
         """
         Analisi completa di un trace.
-        
+
         Args:
             trace: TraceInfo da analizzare
-            
+
         Returns:
             Dict con analisi dettagliata
         """
         tool_calls = self.extract_tool_calls(trace)
-        
+
         analysis = {
             'trace_id': trace.id,
             'trace_url': self.get_trace_url(trace.id),
@@ -469,9 +469,9 @@ class LangSmithClient:
             'input_preview': trace.input[:500] if trace.input else '',
             'output_preview': trace.output[:500] if trace.output else ''
         }
-        
+
         return analysis
-    
+
     def get_report_for_question(self,
                                  question: str,
                                  search_window_minutes: int = 30) -> LangSmithReport:
@@ -526,11 +526,11 @@ class LangSmithClient:
             waterfall=waterfall,
             sources=sources
         )
-    
+
     def _extract_model_info(self, trace_id: str) -> Dict[str, Any]:
         """
         Estrae informazioni sul modello dai child runs.
-        
+
         Cerca run di tipo 'llm' o 'chat_model' per trovare:
         - Nome modello
         - Provider (OpenAI, Anthropic, etc.)
@@ -538,7 +538,7 @@ class LangSmithClient:
         - Time to first token
         """
         child_runs = self.get_child_runs(trace_id)
-        
+
         model_info = {
             'model': '',
             'provider': '',
@@ -547,17 +547,17 @@ class LangSmithClient:
             'tokens_total': 0,
             'first_token_ms': 0
         }
-        
+
         for run in child_runs:
             run_type = run.get('run_type', '')
-            
+
             # Cerca LLM runs
             if run_type in ['llm', 'chat_model']:
                 # Estrai modello
                 extra = run.get('extra', {})
                 invocation = extra.get('invocation_params', {})
                 metadata = extra.get('metadata', {})
-                
+
                 # Nome modello - cerca in vari posti
                 model_name = (
                     invocation.get('model') or
@@ -566,20 +566,20 @@ class LangSmithClient:
                     metadata.get('ls_model_name') or
                     run.get('name', '')
                 )
-                
+
                 if model_name and not model_info['model']:
                     model_info['model'] = model_name
-                
+
                 # Provider
                 provider = (
                     metadata.get('ls_provider') or
                     invocation.get('_type', '').replace('_chat', '').replace('_llm', '') or
                     self._guess_provider(model_name)
                 )
-                
+
                 if provider and not model_info['provider']:
                     model_info['provider'] = provider
-                
+
                 # Token usage
                 outputs = run.get('outputs', {})
                 usage = {}
@@ -587,15 +587,15 @@ class LangSmithClient:
                     llm_output = outputs.get('llm_output', {})
                     if isinstance(llm_output, dict):
                         usage = llm_output.get('token_usage', {})
-                
+
                 if not usage and isinstance(outputs, dict):
                     usage = outputs.get('usage', {}) or run.get('metrics', {})
-                
+
                 if usage and isinstance(usage, dict):
                     model_info['tokens_input'] += usage.get('prompt_tokens', 0) or usage.get('input_tokens', 0)
                     model_info['tokens_output'] += usage.get('completion_tokens', 0) or usage.get('output_tokens', 0)
                     model_info['tokens_total'] += usage.get('total_tokens', 0)
-                
+
                 # First token time
                 if run.get('first_token_time'):
                     start = run.get('start_time', '')
@@ -607,7 +607,7 @@ class LangSmithClient:
                             model_info['first_token_ms'] = int((first_dt - start_dt).total_seconds() * 1000)
                         except:
                             pass
-        
+
         # Se non trovato nei child, cerca nel run principale
         if not model_info['model']:
             try:
@@ -619,12 +619,12 @@ class LangSmithClient:
                     run_data = response.json()
                     extra = run_data.get('extra', {})
                     metadata = extra.get('metadata', {})
-                    
+
                     model_info['model'] = metadata.get('model', '') or metadata.get('ls_model_name', '')
                     model_info['provider'] = metadata.get('ls_provider', '')
             except:
                 pass
-        
+
         return model_info
 
     def _extract_waterfall(self, trace_id: str, trace_start: datetime) -> List[WaterfallStep]:
@@ -810,9 +810,9 @@ class LangSmithClient:
         """Indovina il provider dal nome del modello"""
         if not model_name:
             return ""
-        
+
         model_lower = model_name.lower()
-        
+
         if 'gpt' in model_lower or 'o1' in model_lower or 'davinci' in model_lower:
             return 'openai'
         elif 'claude' in model_lower:
@@ -825,9 +825,9 @@ class LangSmithClient:
             return 'meta'
         elif 'command' in model_lower:
             return 'cohere'
-        
+
         return ""
-    
+
     def _parse_run(self, run: Dict) -> Optional[TraceInfo]:
         """Converte un run API in TraceInfo"""
         try:
@@ -835,19 +835,19 @@ class LangSmithClient:
             end = None
             if run.get('end_time'):
                 end = datetime.fromisoformat(run['end_time'].replace('Z', '+00:00'))
-            
+
             # Estrai input/output
             inputs = run.get('inputs', {})
             outputs = run.get('outputs', {})
-            
+
             input_str = ""
             if isinstance(inputs, dict):
                 input_str = inputs.get('input', inputs.get('question', str(inputs)))
-            
+
             output_str = ""
             if isinstance(outputs, dict):
                 output_str = outputs.get('output', outputs.get('answer', str(outputs)))
-            
+
             return TraceInfo(
                 id=run.get('id', ''),
                 name=run.get('name', ''),
@@ -865,19 +865,19 @@ class LangSmithClient:
         except Exception as e:
             print(f"! Errore parsing run: {e}")
             return None
-    
+
     def _calculate_duration(self, run: Dict) -> int:
         """Calcola durata in millisecondi"""
         try:
             start = run.get('start_time', '')
             end = run.get('end_time', '')
-            
+
             if not start or not end:
                 return 0
-            
+
             start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
             end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
-            
+
             return int((end_dt - start_dt).total_seconds() * 1000)
         except:
             return 0
@@ -886,41 +886,41 @@ class LangSmithClient:
 class LangSmithDebugger:
     """
     Helper per debugging avanzato con LangSmith.
-    
+
     Fornisce report dettagliati per analisi problemi.
     """
-    
+
     def __init__(self, client: LangSmithClient):
         self.client = client
-    
-    def debug_conversation(self, 
+
+    def debug_conversation(self,
                            question: str,
                            search_window_minutes: int = 5) -> Dict[str, Any]:
         """
         Debug completo di una conversazione.
-        
+
         Args:
             question: Domanda inviata al chatbot
             search_window_minutes: Finestra temporale ricerca
-            
+
         Returns:
             Report debug dettagliato
         """
         start_time = datetime.utcnow() - timedelta(minutes=search_window_minutes)
-        
+
         trace = self.client.get_latest_trace(
             after=start_time,
             input_contains=question[:50]
         )
-        
+
         if not trace:
             return {
                 'found': False,
                 'message': f'Trace non trovato per: {question[:50]}...'
             }
-        
+
         analysis = self.client.analyze_trace(trace)
-        
+
         return {
             'found': True,
             'trace_url': analysis['trace_url'],
@@ -933,29 +933,29 @@ class LangSmithDebugger:
             'tokens': analysis['tokens_used'],
             'details': analysis
         }
-    
-    def get_performance_summary(self, 
+
+    def get_performance_summary(self,
                                  hours: int = 24,
                                  limit: int = 100) -> Dict[str, Any]:
         """
         Riassunto performance delle ultime ore.
-        
+
         Args:
             hours: Ore da analizzare
             limit: Numero massimo trace
-            
+
         Returns:
             Statistiche performance
         """
         start_time = datetime.utcnow() - timedelta(hours=hours)
         traces = self.client.get_traces(limit=limit, start_time=start_time)
-        
+
         if not traces:
             return {'error': 'Nessun trace trovato'}
-        
+
         durations = [t.duration_ms for t in traces if t.duration_ms > 0]
         statuses = [t.status for t in traces]
-        
+
         return {
             'total_traces': len(traces),
             'time_period_hours': hours,
@@ -965,25 +965,25 @@ class LangSmithDebugger:
             'success_rate': statuses.count('success') / len(statuses) if statuses else 0,
             'status_breakdown': {s: statuses.count(s) for s in set(statuses)}
         }
-    
-    def find_slow_traces(self, 
+
+    def find_slow_traces(self,
                           threshold_ms: int = 5000,
                           limit: int = 20) -> List[Dict]:
         """
         Trova trace lenti.
-        
+
         Args:
             threshold_ms: Soglia in millisecondi
             limit: Numero massimo risultati
-            
+
         Returns:
             Lista trace lenti con analisi
         """
         traces = self.client.get_traces(limit=100)
-        
+
         slow = [t for t in traces if t.duration_ms > threshold_ms]
         slow.sort(key=lambda x: x.duration_ms, reverse=True)
-        
+
         results = []
         for trace in slow[:limit]:
             analysis = self.client.analyze_trace(trace)
@@ -993,41 +993,41 @@ class LangSmithDebugger:
                 'input_preview': trace.input[:100],
                 'tools_used': analysis['tool_summary']['tools_used']
             })
-        
+
         return results
-    
+
     def find_failed_traces(self, limit: int = 20) -> List[Dict]:
         """
         Trova trace falliti.
-        
+
         Args:
             limit: Numero massimo risultati
-            
+
         Returns:
             Lista trace falliti con errori
         """
         traces = self.client.get_traces(limit=100)
-        
+
         failed = [t for t in traces if t.status != 'success']
-        
+
         results = []
         for trace in failed[:limit]:
             tool_calls = self.client.extract_tool_calls(trace)
             failed_tools = [t for t in tool_calls if t.error]
-            
+
             results.append({
                 'trace_url': trace.url,
                 'status': trace.status,
                 'input_preview': trace.input[:100],
                 'failed_tools': [{'name': t.name, 'error': t.error} for t in failed_tools]
             })
-        
+
         return results
 
 
 class LangSmithSetup:
     """Helper per setup LangSmith"""
-    
+
     @staticmethod
     def get_setup_instructions() -> str:
         """Istruzioni per setup LangSmith"""
@@ -1048,21 +1048,21 @@ SETUP LANGSMITH
 5. Inserisci i valori nel wizard o in .env:
    LANGSMITH_API_KEY=lsv2_sk_xxxxx
 """
-    
+
     @staticmethod
     def validate_api_key(api_key: str) -> tuple[bool, str]:
         """
         Valida una API key LangSmith.
-        
+
         Returns:
             (is_valid, message)
         """
         if not api_key:
             return False, "API key vuota"
-        
+
         if not api_key.startswith('lsv2_'):
             return False, "Formato API key non valido (deve iniziare con lsv2_)"
-        
+
         # Test connessione
         try:
             response = requests.get(
@@ -1070,7 +1070,7 @@ SETUP LANGSMITH
                 headers={'x-api-key': api_key},
                 timeout=10
             )
-            
+
             if response.status_code == 200:
                 return True, "API key valida"
             elif response.status_code == 401:
@@ -1079,37 +1079,37 @@ SETUP LANGSMITH
                 return False, f"Errore verifica: {response.status_code}"
         except Exception as e:
             return False, f"Errore connessione: {e}"
-    
+
     @staticmethod
     def extract_project_id(url: str) -> Optional[str]:
         """
         Estrae project ID da URL LangSmith.
-        
+
         Args:
             url: URL del progetto
-            
+
         Returns:
             Project ID o None
         """
         # Format: https://smith.langchain.com/o/ORG/projects/p/PROJECT_ID
         # o: https://smith.langchain.com/projects/p/PROJECT_ID
-        
+
         if '/projects/p/' in url:
             parts = url.split('/projects/p/')
             if len(parts) > 1:
                 project_id = parts[1].split('/')[0].split('?')[0]
                 return project_id
-        
+
         return None
-    
+
     @staticmethod
     def extract_org_id(url: str) -> Optional[str]:
         """
         Estrae org ID da URL LangSmith.
-        
+
         Args:
             url: URL del progetto
-            
+
         Returns:
             Org ID o None
         """
@@ -1118,5 +1118,5 @@ SETUP LANGSMITH
             if len(parts) > 1:
                 org_id = parts[1].split('/')[0]
                 return org_id
-        
+
         return None

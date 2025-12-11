@@ -1,6 +1,6 @@
 # Chatbot Tester
 
-Tool automatizzato per testare chatbot web con supporto multi-progetto, AI locale e reporting avanzato.
+Automated testing tool for web chatbots with multi-project support, local AI, and advanced reporting.
 
 [![macOS](https://img.shields.io/badge/macOS-12.0+-blue.svg)](https://www.apple.com/macos/)
 [![Python](https://img.shields.io/badge/Python-3.10+-green.svg)](https://www.python.org/)
@@ -8,148 +8,168 @@ Tool automatizzato per testare chatbot web con supporto multi-progetto, AI local
 
 ---
 
-## Caratteristiche
+## Features
 
-- **Multi-progetto**: Testa diversi chatbot dalla stessa installazione
-- **3 Modalita**: Train, Assisted, Auto per ogni fase del testing
-- **AI Locale**: Ollama per analisi privacy-first
-- **Report Flessibili**: HTML locale + Google Sheets opzionale
-- **Export Report**: PDF, Excel, HTML, CSV
-- **Notifiche**: Desktop (macOS), Email, Microsoft Teams
-- **Screenshot Completi**: Cattura l'intera conversazione con tutti i prodotti
-- **Single-Turn Mode**: Esegui solo la domanda iniziale senza followup
-- **LangSmith Integration**: Debug avanzato delle risposte chatbot
-- **Analisi Testing**: Confronto A/B, regressioni, test flaky
-- **Esecuzione Parallela**: Multi-browser per test veloci
-- **Scheduled Runs**: Cron locale e GitHub Actions
-- **Bilingue**: Italiano e Inglese
-- **Health Check**: Verifica servizi prima dell'esecuzione
-- **Cloud Execution**: Esegui test su GitHub Actions senza Chromium locale
-- **Docker Ready**: Container pronto all'uso
+- **Multi-project**: Test different chatbots from the same installation
+- **3 Modes**: Train, Assisted, Auto for each testing phase
+- **Local AI**: Ollama for privacy-first analysis
+- **Flexible Reports**: Local HTML + optional Google Sheets
+- **Report Export**: PDF, Excel, HTML, CSV
+- **Notifications**: Desktop (macOS), Email, Microsoft Teams
+- **Full Screenshots**: Capture entire conversation with all products
+- **Single-Turn Mode**: Execute only initial question without followups
+- **LangSmith Integration**: Advanced chatbot response debugging
+- **Testing Analysis**: A/B comparison, regressions, flaky tests
+- **Parallel Execution**: Multi-browser for fast testing
+- **Scheduled Runs**: Local cron and GitHub Actions
+- **Performance Metrics**: Timing, throughput, latency tracking with alerting
+- **Bilingual**: Italian and English
+- **Health Check**: Service verification before execution
+- **Cloud Execution**: Run tests on GitHub Actions without local Chromium
+- **Docker Ready**: Ready-to-use container
 
 ---
 
 ## Quick Start
 
-### 1. Installazione
+### 1. Installation
 
 ```bash
-# Clona il repository
+# Clone the repository
 git clone https://github.com/corradofrancolini/chatbot-tester.git
 cd chatbot-tester
 
-# Crea ambiente virtuale
+# Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Installa dipendenze
+# Install dependencies
 pip install -r requirements.txt
 playwright install chromium
 ```
 
-### 2. Avvia i test
+### 2. Run tests
 
 ```bash
-# Modalità Auto - nuovo run
+# Auto mode - new run
 python run.py -p my-chatbot -m auto --no-interactive --new-run
 
-# Modalità Auto - continua run esistente
+# Auto mode - continue existing run
 python run.py -p my-chatbot -m auto --no-interactive
 
-# Modalità Train (apprendimento)
+# Train mode (learning)
 python run.py -p my-chatbot -m train
 ```
 
 ---
 
-## Comandi CLI
+## CLI Commands
 
-### Esecuzione Test
-
-```bash
-# Nuovo run completo (crea nuovo foglio Google Sheets)
-python run.py -p <progetto> -m auto --no-interactive --new-run
-
-# Continua run esistente (solo test pending)
-python run.py -p <progetto> -m auto --no-interactive
-
-# Esegui singolo test
-python run.py -p <progetto> -m auto --no-interactive -t TEST_050
-
-# Ri-esegui singolo test (sovrascrive)
-python run.py -p <progetto> -m auto --no-interactive -t TEST_050 --tests all
-
-# Ri-esegui tutti i test falliti
-python run.py -p <progetto> -m auto --no-interactive --tests failed
-
-# Ri-esegui tutti i test (sovrascrive)
-python run.py -p <progetto> -m auto --no-interactive --tests all
-```
-
-### Export Report
+### Test Execution
 
 ```bash
-# Esporta ultimo run in HTML
-python run.py -p <progetto> --export html
+# New full run (creates new Google Sheets sheet)
+python run.py -p <project> -m auto --no-interactive --new-run
 
-# Esporta run specifico in PDF
-python run.py -p <progetto> --export pdf --export-run 15
+# Continue existing run (pending tests only)
+python run.py -p <project> -m auto --no-interactive
 
-# Esporta in tutti i formati
-python run.py -p <progetto> --export all
+# Execute single test
+python run.py -p <project> -m auto --no-interactive -t TEST_050
+
+# Re-run single test (overwrite)
+python run.py -p <project> -m auto --no-interactive -t TEST_050 --tests all
+
+# Re-run all failed tests
+python run.py -p <project> -m auto --no-interactive --tests failed
+
+# Re-run all tests (overwrite)
+python run.py -p <project> -m auto --no-interactive --tests all
 ```
 
-### Notifiche
+### Report Export
 
 ```bash
-# Testa notifica desktop
-python run.py -p <progetto> --test-notify
+# Export last run to HTML
+python run.py -p <project> --export html
 
-# Invia notifica dopo run
-python run.py -p <progetto> -m auto --no-interactive --notify desktop
+# Export specific run to PDF
+python run.py -p <project> --export pdf --export-run 15
+
+# Export all formats
+python run.py -p <project> --export all
 ```
 
-### Opzioni
+### Performance Metrics
 
-| Opzione | Descrizione | Default |
-|---------|-------------|---------|
-| `-p, --project` | Nome del progetto | - |
-| `-m, --mode` | Modalita: train, assisted, auto | train |
-| `-t, --test` | ID singolo test da eseguire | - |
-| `--tests` | Quali test: all, pending, failed | pending |
-| `--new-run` | Crea nuovo run su Google Sheets | false |
-| `--no-interactive` | Esecuzione non interattiva | false |
-| `--dry-run` | Simula senza eseguire | false |
-| `--health-check` | Verifica servizi e esci | false |
-| `--skip-health-check` | Salta verifica servizi | false |
-| `--headless` | Browser in modalita headless | false |
-| `--lang` | Lingua interfaccia: it, en | it |
-| `--debug` | Output debug dettagliato | false |
-| `--export` | Esporta report: pdf, excel, html, csv, all | - |
-| `--export-run` | Numero run da esportare | ultimo |
-| `--notify` | Invia notifica: desktop, email, teams, all | - |
-| `--test-notify` | Testa configurazione notifiche | false |
-| `-v, --version` | Mostra versione | - |
+```bash
+# Show performance report for last run
+python run.py -p <project> --perf-report
 
-Per la guida completa a tutte le opzioni di configurazione, vedi [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+# Historical dashboard (last N runs)
+python run.py -p <project> --perf-dashboard 10
+
+# Compare two runs (e.g., local vs cloud)
+python run.py -p <project> --perf-compare 15:16
+
+# List all runs from all projects
+python run.py --list-runs
+```
+
+### Notifications
+
+```bash
+# Test desktop notification
+python run.py -p <project> --test-notify
+
+# Send notification after run
+python run.py -p <project> -m auto --no-interactive --notify desktop
+```
+
+### Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-p, --project` | Project name | - |
+| `-m, --mode` | Mode: train, assisted, auto | train |
+| `-t, --test` | Single test ID to execute | - |
+| `--tests` | Which tests: all, pending, failed | pending |
+| `--new-run` | Create new run on Google Sheets | false |
+| `--no-interactive` | Non-interactive execution | false |
+| `--dry-run` | Simulate without executing | false |
+| `--health-check` | Check services and exit | false |
+| `--skip-health-check` | Skip service verification | false |
+| `--headless` | Browser in headless mode | false |
+| `--lang` | Interface language: it, en | it |
+| `--debug` | Detailed debug output | false |
+| `--export` | Export report: pdf, excel, html, csv, all | - |
+| `--export-run` | Run number to export | latest |
+| `--notify` | Send notification: desktop, email, teams, all | - |
+| `--test-notify` | Test notification configuration | false |
+| `--perf-report` | Show performance report | - |
+| `--perf-dashboard` | Historical performance dashboard | - |
+| `--list-runs` | List recent runs from all projects | - |
+| `-v, --version` | Show version | - |
+
+For the complete guide to all configuration options, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ---
 
-## Modalita di Test
+## Test Modes
 
-| Modalita | Descrizione | Quando usarla |
-|----------|-------------|---------------|
-| **Train** | Esegui test manualmente, il tool impara | Prima configurazione |
-| **Assisted** | AI suggerisce, tu confermi | Validazione, correzioni |
-| **Auto** | Completamente automatico | Regression testing |
+| Mode | Description | When to use |
+|------|-------------|-------------|
+| **Train** | Execute tests manually, tool learns | Initial setup |
+| **Assisted** | AI suggests, you confirm | Validation, corrections |
+| **Auto** | Fully automatic | Regression testing |
 
 ---
 
-## Configurazione
+## Configuration
 
 ### run_config.json
 
-Ogni progetto ha un file `projects/<nome>/run_config.json`:
+Each project has a `projects/<name>/run_config.json` file:
 
 ```json
 {
@@ -162,105 +182,107 @@ Ogni progetto ha un file `projects/<nome>/run_config.json`:
 }
 ```
 
-| Opzione | Descrizione | Accessibile da |
-|---------|-------------|----------------|
-| `env` | Ambiente: DEV, STAGING, PROD | Menu > Configura |
-| `active_run` | Numero del run attivo su Google Sheets | Automatico |
-| `dry_run` | Simula senza eseguire | Menu > Toggle |
-| `use_langsmith` | Abilita tracing LangSmith | Menu > Toggle |
-| `use_rag` | Abilita recupero RAG | Menu > Toggle |
-| `use_ollama` | Abilita valutazione Ollama | Menu > Toggle |
-| `single_turn` | Solo domanda iniziale, no followup | Menu > Toggle |
+| Option | Description | Accessible from |
+|--------|-------------|-----------------|
+| `env` | Environment: DEV, STAGING, PROD | Menu > Configure |
+| `active_run` | Active run number on Google Sheets | Automatic |
+| `dry_run` | Simulate without executing | Menu > Toggle |
+| `use_langsmith` | Enable LangSmith tracing | Menu > Toggle |
+| `use_rag` | Enable RAG retrieval | Menu > Toggle |
+| `use_ollama` | Enable Ollama evaluation | Menu > Toggle |
+| `single_turn` | Initial question only, no followups | Menu > Toggle |
 
-### Toggle Runtime
+### Runtime Toggles
 
-Dal menu interattivo: **Progetto > Toggle Opzioni**
+From interactive menu: **Project > Toggle Options**
 
 ```
-[1] Dry Run:      OFF  (simula senza eseguire)
-[2] LangSmith:    ON   (tracing attivo)
-[3] RAG:          OFF  (disabilitato)
-[4] Ollama:       ON   (valutazione AI)
-[5] Single Turn:  ON   (solo domanda iniziale)
+[1] Dry Run:      OFF  (simulate without executing)
+[2] LangSmith:    ON   (tracing active)
+[3] RAG:          OFF  (disabled)
+[4] Ollama:       ON   (AI evaluation)
+[5] Single Turn:  ON   (initial question only)
 ```
 
 ---
 
-## Screenshot
+## Screenshots
 
-Gli screenshot catturano l'**intera conversazione** con tutti i prodotti visibili.
+Screenshots capture the **entire conversation** with all products visible.
 
-- Nasconde automaticamente: input bar, footer, scroll indicators
-- Espande i container per mostrare tutto il contenuto
-- Salva in: `reports/<progetto>/run_<N>/screenshots/`
+- Automatically hides: input bar, footer, scroll indicators
+- Expands containers to show all content
+- Saves to: `reports/<project>/run_<N>/screenshots/`
 
 ---
 
-## Struttura Progetto
+## Project Structure
 
 ```
 chatbot-tester/
 ├── run.py                  # Entry point
-├── CLAUDE.md               # Note progetto per Claude Code
+├── CLAUDE.md               # Project notes for Claude Code
 │
 ├── config/
-│   ├── .env                # Credenziali (gitignored)
-│   └── settings.yaml       # Settings globali
+│   ├── .env                # Credentials (gitignored)
+│   └── settings.yaml       # Global settings
 │
-├── projects/               # Progetti configurati
-│   └── <nome-progetto>/
-│       ├── project.yaml    # Configurazione chatbot
+├── projects/               # Configured projects
+│   └── <project-name>/
+│       ├── project.yaml    # Chatbot configuration
 │       ├── tests.json      # Test cases
-│       ├── run_config.json # Stato run corrente
-│       └── browser-data/   # Sessione browser
+│       ├── run_config.json # Current run state
+│       └── browser-data/   # Browser session
 │
-├── reports/                # Report locali
-│   └── <nome-progetto>/
+├── reports/                # Local reports
+│   └── <project-name>/
 │       └── run_<N>/
 │           ├── report.html
-│           └── screenshots/
+│           ├── screenshots/
+│           └── performance/
 │
-└── src/                    # Codice sorgente
-    ├── browser.py          # Automazione Playwright
-    ├── tester.py           # Logica test
-    ├── config_loader.py    # Gestione configurazione
+└── src/                    # Source code
+    ├── browser.py          # Playwright automation
+    ├── tester.py           # Test logic
+    ├── config_loader.py    # Configuration management
     ├── export.py           # Export PDF, Excel, HTML, CSV
-    └── notifications.py    # Notifiche Desktop, Email, Teams
+    ├── notifications.py    # Desktop, Email, Teams notifications
+    └── performance.py      # Performance metrics collection
 ```
 
 ---
 
-## Integrazioni
+## Integrations
 
-### Ollama (AI Locale)
+### Ollama (Local AI)
 
 ```bash
-# Installa Ollama
+# Install Ollama
 brew install ollama
 
-# Avvia servizio
+# Start service
 ollama serve
 
-# Scarica modello
+# Download model
 ollama pull llama3.2:3b
 ```
 
 ### Google Sheets
 
-1. Crea progetto su [Google Cloud Console](https://console.cloud.google.com)
-2. Abilita Google Sheets API e Google Drive API
-3. Crea credenziali OAuth 2.0
-4. Configura in `config/.env`
+1. Create project on [Google Cloud Console](https://console.cloud.google.com)
+2. Enable Google Sheets API and Google Drive API
+3. Create OAuth 2.0 credentials
+4. Configure in `config/.env`
 
 ### LangSmith
 
-1. Crea account su [smith.langchain.com](https://smith.langchain.com)
-2. Genera API Key
-3. Configura in `config/.env`
+1. Create account on [smith.langchain.com](https://smith.langchain.com)
+2. Generate API Key
+3. Configure in `config/.env`
 
-### Notifiche
+### Notifications
 
-Configura in `config/settings.yaml`:
+Configure in `config/settings.yaml`:
 
 ```yaml
 notifications:
@@ -271,14 +293,17 @@ notifications:
     enabled: false
     smtp_host: "smtp.gmail.com"
     smtp_port: 587
-    smtp_user: "tuo@email.com"
+    smtp_user: "your@email.com"
     recipients: ["team@email.com"]
   teams:
     enabled: false
-    webhook_url_env: "TEAMS_WEBHOOK_URL"  # Variabile ambiente
+    webhook_url_env: "TEAMS_WEBHOOK_URL"  # Environment variable
+  triggers:
+    on_complete: true  # Notify on run completion
+    on_failure: true   # Notify on failures
 ```
 
-**Microsoft Teams**: Crea un Incoming Webhook nel canale Teams e imposta la variabile ambiente:
+**Microsoft Teams**: Create an Incoming Webhook in Teams channel and set the environment variable:
 ```bash
 export TEAMS_WEBHOOK_URL="https://outlook.office.com/webhook/..."
 ```
@@ -287,16 +312,19 @@ export TEAMS_WEBHOOK_URL="https://outlook.office.com/webhook/..."
 
 ## Deployment
 
-Esegui test senza avere Chromium locale. Vedi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) per la guida completa.
+Run tests without local Chromium. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the complete guide.
 
-### GitHub Actions (consigliato)
+### GitHub Actions (recommended)
 
 ```bash
-# Installa GitHub CLI
+# Install GitHub CLI
 brew install gh
 
-# Lancia test nel cloud
+# Launch tests in the cloud
 gh workflow run chatbot-test.yml -f project=my-chatbot -f mode=auto
+
+# Monitor cloud run with progress bar
+python run.py --watch-cloud
 ```
 
 ### Docker
@@ -305,51 +333,51 @@ gh workflow run chatbot-test.yml -f project=my-chatbot -f mode=auto
 # Build
 docker build -t chatbot-tester .
 
-# Esegui
+# Run
 docker run -v ./projects:/app/projects chatbot-tester -p my-chatbot -m auto
 ```
 
 ### Health Check
 
 ```bash
-# Verifica servizi prima di eseguire
+# Verify services before execution
 python run.py --health-check -p my-chatbot
 ```
 
 ---
 
-## Documentazione
+## Documentation
 
-| Guida | Descrizione |
+| Guide | Description |
 |-------|-------------|
-| [CONFIGURATION.md](docs/CONFIGURATION.md) | Guida completa a tutte le opzioni |
-| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploy su Docker, GitHub Actions, PyPI |
-| [CLAUDE.md](CLAUDE.md) | Note per sviluppo con Claude Code |
+| [CONFIGURATION.md](docs/CONFIGURATION.md) | Complete guide to all options |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploy on Docker, GitHub Actions, PyPI |
+| [CLAUDE.md](CLAUDE.md) | Development notes for Claude Code |
 
 ---
 
 ## Troubleshooting
 
-**Il browser non si apre**
+**Browser doesn't open**
 ```bash
 source .venv/bin/activate
 playwright install chromium
 ```
 
-**Errore "Module not found"**
+**"Module not found" error**
 ```bash
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**Sessione scaduta**
+**Session expired**
 ```bash
-rm -rf projects/<nome>/browser-data/
-python run.py -p <nome>
+rm -rf projects/<name>/browser-data/
+python run.py -p <name>
 ```
 
 ---
 
-## Licenza
+## License
 
-MIT License - vedi [LICENSE](LICENSE) per dettagli.
+MIT License - see [LICENSE](LICENSE) for details.

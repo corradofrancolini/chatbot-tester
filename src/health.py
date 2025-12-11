@@ -1,24 +1,24 @@
 """
-Health Check Module - Verifica disponibilità servizi
+Health Check Module - Service availability verification
 
-Fornisce:
-- Health checks per tutti i servizi (Ollama, LangSmith, Google, Chatbot URL)
-- Circuit breaker per gestire fallimenti
-- Auto-retry con backoff esponenziale
-- Graceful degradation quando servizi non disponibili
+Provides:
+- Health checks for all services (Ollama, LangSmith, Google, Chatbot URL)
+- Circuit breaker for failure handling
+- Auto-retry with exponential backoff
+- Graceful degradation when services unavailable
 
 Usage:
     health = HealthChecker(config)
 
-    # Check singolo servizio
+    # Single service check
     result = health.check_ollama()
 
-    # Check tutti i servizi
+    # Check all services
     status = health.check_all()
     if not status.can_run:
         print(status.blocking_issues)
 
-    # Con circuit breaker
+    # With circuit breaker
     with health.circuit_breaker("google_sheets"):
         sheets_client.append_row(...)
 """

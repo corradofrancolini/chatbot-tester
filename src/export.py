@@ -1,12 +1,12 @@
 """
-Export Module - Generazione Report
+Export Module - Report Generation
 
-Supporta:
-- PDF: report professionale con grafici e screenshot
-- Excel: dati strutturati per analisi
-- HTML: file standalone (esistente, migliorato)
+Supports:
+- PDF: professional report with charts and screenshots
+- Excel: structured data for analysis
+- HTML: standalone file (existing, enhanced)
 
-Dipendenze opzionali:
+Optional dependencies:
 - PDF: reportlab, pillow
 - Excel: openpyxl
 """
@@ -20,7 +20,7 @@ import csv
 import base64
 import io
 
-# Import opzionali per PDF
+# Optional imports for PDF
 try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, letter
@@ -35,7 +35,7 @@ try:
 except ImportError:
     REPORTLAB_AVAILABLE = False
 
-# Import opzionali per Excel
+# Optional imports for Excel
 try:
     from openpyxl import Workbook
     from openpyxl.styles import Font, Fill, PatternFill, Alignment, Border, Side
@@ -45,7 +45,7 @@ try:
 except ImportError:
     OPENPYXL_AVAILABLE = False
 
-# Import opzionali per immagini
+# Optional imports for images
 try:
     from PIL import Image as PILImage
     PIL_AVAILABLE = True
@@ -55,7 +55,7 @@ except ImportError:
 
 @dataclass
 class TestResult:
-    """Risultato singolo test per export"""
+    """Single test result for export"""
     test_id: str
     category: str
     question: str
@@ -72,7 +72,7 @@ class TestResult:
 
 @dataclass
 class RunReport:
-    """Report completo di un run"""
+    """Complete run report"""
     project: str
     run_number: int
     timestamp: str
@@ -90,7 +90,7 @@ class RunReport:
 
     @classmethod
     def from_local_report(cls, report_path: Path) -> 'RunReport':
-        """Carica da report locale JSON"""
+        """Load from local JSON report"""
         with open(report_path) as f:
             data = json.load(f)
 
@@ -130,14 +130,14 @@ class RunReport:
 
     @classmethod
     def from_summary_and_csv(cls, summary_path: Path, csv_path: Path = None) -> 'RunReport':
-        """Carica da summary.json e report.csv (formato esistente)"""
+        """Load from summary.json and report.csv (existing format)"""
         with open(summary_path) as f:
             summary = json.load(f)
 
         tests = []
         screenshots_dir = summary_path.parent / "screenshots"
 
-        # Carica test da CSV se disponibile
+        # Load tests from CSV if available
         if csv_path and csv_path.exists():
             import csv as csv_module
             with open(csv_path, 'r', encoding='utf-8') as f:
@@ -188,17 +188,17 @@ class RunReport:
 
 
 class PDFExporter:
-    """Esportazione report in PDF"""
+    """Export report to PDF"""
 
     def __init__(self, output_path: Path):
         if not REPORTLAB_AVAILABLE:
-            raise ImportError("reportlab non installato. Installa con: pip install reportlab")
+            raise ImportError("reportlab not installed. Install with: pip install reportlab")
         self.output_path = output_path
         self.styles = getSampleStyleSheet()
         self._setup_custom_styles()
 
     def _setup_custom_styles(self):
-        """Configura stili personalizzati"""
+        """Configure custom styles"""
         self.styles.add(ParagraphStyle(
             name='Title',
             parent=self.styles['Heading1'],
@@ -231,7 +231,7 @@ class PDFExporter:
         ))
 
     def export(self, report: RunReport, include_screenshots: bool = True) -> Path:
-        """Genera PDF del report"""
+        """Generate PDF report"""
         doc = SimpleDocTemplate(
             str(self.output_path),
             pagesize=A4,
@@ -243,7 +243,7 @@ class PDFExporter:
 
         story = []
 
-        # Titolo
+        # Title
         story.append(Paragraph(
             f"Chatbot Test Report",
             self.styles['Title']
@@ -259,27 +259,27 @@ class PDFExporter:
         story.extend(self._create_summary_section(report))
         story.append(Spacer(1, 20))
 
-        # Tabella risultati
-        story.append(Paragraph("Risultati per Test", self.styles['SectionHeader']))
+        # Results table
+        story.append(Paragraph("Results by Test", self.styles['SectionHeader']))
         story.extend(self._create_results_table(report))
 
-        # Regressioni (se presenti)
+        # Regressions (if present)
         if report.regressions:
             story.append(PageBreak())
-            story.append(Paragraph("Regressioni Rilevate", self.styles['SectionHeader']))
+            story.append(Paragraph("Detected Regressions", self.styles['SectionHeader']))
             story.extend(self._create_regressions_section(report))
 
-        # Dettaglio test falliti
+        # Failed tests detail
         failed_tests = [t for t in report.tests if t.status == 'FAIL']
         if failed_tests:
             story.append(PageBreak())
-            story.append(Paragraph("Dettaglio Test Falliti", self.styles['SectionHeader']))
+            story.append(Paragraph("Failed Tests Detail", self.styles['SectionHeader']))
             story.extend(self._create_failed_tests_section(failed_tests, include_screenshots))
 
         # Footer info
         story.append(Spacer(1, 30))
         story.append(Paragraph(
-            f"Generato il {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} da Chatbot Tester",
+            f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} by Chatbot Tester",
             ParagraphStyle('Footer', parent=self.styles['Normal'], fontSize=8, textColor=colors.grey)
         ))
 
@@ -287,15 +287,15 @@ class PDFExporter:
         return self.output_path
 
     def _create_summary_section(self, report: RunReport) -> List:
-        """Crea sezione summary"""
+        """Create summary section"""
         elements = []
 
-        # Info generali
+        # General info
         info_data = [
-            ['Progetto', report.project],
+            ['Project', report.project],
             ['Run', f"#{report.run_number}"],
-            ['Data', report.timestamp[:10] if report.timestamp else 'N/A'],
-            ['Ambiente', report.env],
+            ['Date', report.timestamp[:10] if report.timestamp else 'N/A'],
+            ['Environment', report.env],
             ['Prompt Version', report.prompt_version],
             ['Model Version', report.model_version],
         ]
@@ -309,11 +309,11 @@ class PDFExporter:
         elements.append(info_table)
         elements.append(Spacer(1, 15))
 
-        # Metriche
+        # Metrics
         pass_color = colors.HexColor('#28a745') if report.pass_rate >= 80 else colors.HexColor('#dc3545')
 
         metrics_data = [
-            ['Totale Test', 'Passati', 'Falliti', 'Pass Rate'],
+            ['Total Tests', 'Passed', 'Failed', 'Pass Rate'],
             [str(report.total_tests), str(report.passed), str(report.failed), f"{report.pass_rate:.1f}%"]
         ]
 
@@ -334,13 +334,13 @@ class PDFExporter:
         return elements
 
     def _create_results_table(self, report: RunReport) -> List:
-        """Crea tabella risultati"""
+        """Create results table"""
         elements = []
 
         # Header
-        data = [['ID', 'Categoria', 'Status', 'Score']]
+        data = [['ID', 'Category', 'Status', 'Score']]
 
-        # Righe
+        # Rows
         for test in report.tests:
             status_text = test.status
             score_text = f"{test.score:.1f}" if test.score is not None else "-"
@@ -360,7 +360,7 @@ class PDFExporter:
             ('TOPPADDING', (0, 0), (-1, -1), 6),
         ]
 
-        # Colora righe per status
+        # Color rows by status
         for i, test in enumerate(report.tests, start=1):
             if test.status == 'PASS':
                 style.append(('TEXTCOLOR', (2, i), (2, i), colors.HexColor('#28a745')))
@@ -374,7 +374,7 @@ class PDFExporter:
         return elements
 
     def _create_regressions_section(self, report: RunReport) -> List:
-        """Crea sezione regressioni"""
+        """Create regressions section"""
         elements = []
 
         for regression in report.regressions:
@@ -386,11 +386,11 @@ class PDFExporter:
         return elements
 
     def _create_failed_tests_section(self, tests: List[TestResult], include_screenshots: bool) -> List:
-        """Crea sezione dettaglio test falliti"""
+        """Create failed tests detail section"""
         elements = []
 
         for test in tests:
-            # Box per ogni test
+            # Box for each test
             test_elements = []
 
             test_elements.append(Paragraph(
@@ -399,27 +399,27 @@ class PDFExporter:
             ))
 
             test_elements.append(Paragraph(
-                f"<b>Domanda:</b> {test.question[:500]}",
+                f"<b>Question:</b> {test.question[:500]}",
                 self.styles['Normal']
             ))
 
             test_elements.append(Paragraph(
-                f"<b>Risposta attesa:</b> {test.expected[:300]}",
+                f"<b>Expected response:</b> {test.expected[:300]}",
                 self.styles['Normal']
             ))
 
             test_elements.append(Paragraph(
-                f"<b>Risposta ricevuta:</b> {test.actual_response[:500]}",
+                f"<b>Actual response:</b> {test.actual_response[:500]}",
                 self.styles['Normal']
             ))
 
             if test.evaluation:
                 test_elements.append(Paragraph(
-                    f"<b>Valutazione:</b> {test.evaluation[:300]}",
+                    f"<b>Evaluation:</b> {test.evaluation[:300]}",
                     self.styles['Normal']
                 ))
 
-            # Screenshot (se disponibile e richiesto)
+            # Screenshot (if available and requested)
             if include_screenshots and test.screenshot_path and PIL_AVAILABLE:
                 screenshot_path = Path(test.screenshot_path)
                 if screenshot_path.exists():
@@ -432,34 +432,34 @@ class PDFExporter:
 
             test_elements.append(Spacer(1, 20))
 
-            # Mantieni insieme
+            # Keep together
             elements.append(KeepTogether(test_elements))
 
         return elements
 
 
 class ExcelExporter:
-    """Esportazione report in Excel"""
+    """Export report to Excel"""
 
     def __init__(self, output_path: Path):
         if not OPENPYXL_AVAILABLE:
-            raise ImportError("openpyxl non installato. Installa con: pip install openpyxl")
+            raise ImportError("openpyxl not installed. Install with: pip install openpyxl")
         self.output_path = output_path
 
     def export(self, report: RunReport) -> Path:
-        """Genera Excel del report"""
+        """Generate Excel report"""
         wb = Workbook()
 
         # Sheet Summary
         self._create_summary_sheet(wb, report)
 
-        # Sheet Risultati
+        # Results Sheet
         self._create_results_sheet(wb, report)
 
-        # Sheet Dettaglio (conversazioni)
+        # Detail Sheet (conversations)
         self._create_detail_sheet(wb, report)
 
-        # Rimuovi sheet default
+        # Remove default sheet
         if 'Sheet' in wb.sheetnames:
             del wb['Sheet']
 
@@ -467,25 +467,25 @@ class ExcelExporter:
         return self.output_path
 
     def _create_summary_sheet(self, wb: Workbook, report: RunReport):
-        """Crea sheet summary"""
+        """Create summary sheet"""
         ws = wb.create_sheet("Summary", 0)
 
-        # Stili
+        # Styles
         header_font = Font(bold=True, size=14)
         label_font = Font(bold=True)
         pass_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
         fail_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
 
-        # Titolo
+        # Title
         ws['A1'] = f"Chatbot Test Report - {report.project}"
         ws['A1'].font = Font(bold=True, size=16)
         ws.merge_cells('A1:D1')
 
-        # Info generali
+        # General info
         info = [
             ('Run', report.run_number),
-            ('Data', report.timestamp),
-            ('Ambiente', report.env),
+            ('Date', report.timestamp),
+            ('Environment', report.env),
             ('Prompt Version', report.prompt_version),
             ('Model Version', report.model_version),
         ]
@@ -496,48 +496,48 @@ class ExcelExporter:
             ws.cell(row=row, column=2, value=value)
             row += 1
 
-        # Metriche
+        # Metrics
         row += 1
-        ws.cell(row=row, column=1, value="Metriche").font = header_font
+        ws.cell(row=row, column=1, value="Metrics").font = header_font
         row += 1
 
         metrics = [
-            ('Totale Test', report.total_tests),
-            ('Passati', report.passed),
-            ('Falliti', report.failed),
+            ('Total Tests', report.total_tests),
+            ('Passed', report.passed),
+            ('Failed', report.failed),
             ('Skipped', report.skipped),
             ('Pass Rate', f"{report.pass_rate:.1f}%"),
-            ('Durata (s)', report.duration_seconds),
+            ('Duration (s)', report.duration_seconds),
         ]
 
         for label, value in metrics:
             ws.cell(row=row, column=1, value=label).font = label_font
             cell = ws.cell(row=row, column=2, value=value)
-            if label == 'Passati':
+            if label == 'Passed':
                 cell.fill = pass_fill
-            elif label == 'Falliti' and report.failed > 0:
+            elif label == 'Failed' and report.failed > 0:
                 cell.fill = fail_fill
             row += 1
 
-        # Regressioni
+        # Regressions
         if report.regressions:
             row += 1
-            ws.cell(row=row, column=1, value="Regressioni").font = header_font
+            ws.cell(row=row, column=1, value="Regressions").font = header_font
             row += 1
             for reg in report.regressions:
                 ws.cell(row=row, column=1, value=reg)
                 row += 1
 
-        # Adatta colonne
+        # Adjust columns
         ws.column_dimensions['A'].width = 20
         ws.column_dimensions['B'].width = 30
 
     def _create_results_sheet(self, wb: Workbook, report: RunReport):
-        """Crea sheet risultati"""
-        ws = wb.create_sheet("Risultati")
+        """Create results sheet"""
+        ws = wb.create_sheet("Results")
 
         # Header
-        headers = ['Test ID', 'Categoria', 'Status', 'Score', 'Domanda', 'Risposta Attesa', 'Risposta Ricevuta']
+        headers = ['Test ID', 'Category', 'Status', 'Score', 'Question', 'Expected Response', 'Actual Response']
         header_font = Font(bold=True, color="FFFFFF")
         header_fill = PatternFill(start_color="343A40", end_color="343A40", fill_type="solid")
 
@@ -547,7 +547,7 @@ class ExcelExporter:
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal='center')
 
-        # Dati
+        # Data
         pass_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
         fail_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
 
@@ -566,7 +566,7 @@ class ExcelExporter:
             ws.cell(row=row, column=6, value=test.expected[:500])
             ws.cell(row=row, column=7, value=test.actual_response[:500])
 
-        # Adatta colonne
+        # Adjust columns
         ws.column_dimensions['A'].width = 12
         ws.column_dimensions['B'].width = 20
         ws.column_dimensions['C'].width = 10
@@ -575,14 +575,14 @@ class ExcelExporter:
         ws.column_dimensions['F'].width = 40
         ws.column_dimensions['G'].width = 40
 
-        # Filtri
+        # Filters
         ws.auto_filter.ref = ws.dimensions
 
     def _create_detail_sheet(self, wb: Workbook, report: RunReport):
-        """Crea sheet dettaglio conversazioni"""
-        ws = wb.create_sheet("Dettaglio")
+        """Create conversations detail sheet"""
+        ws = wb.create_sheet("Detail")
 
-        headers = ['Test ID', 'Turno', 'Ruolo', 'Messaggio', 'Sources']
+        headers = ['Test ID', 'Turn', 'Role', 'Message', 'Sources']
         header_font = Font(bold=True, color="FFFFFF")
         header_fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
 
@@ -604,7 +604,7 @@ class ExcelExporter:
                 ws.cell(row=row, column=5, value=', '.join(test.sources) if turn_idx == 1 else '')
                 row += 1
 
-        # Adatta colonne
+        # Adjust columns
         ws.column_dimensions['A'].width = 12
         ws.column_dimensions['B'].width = 8
         ws.column_dimensions['C'].width = 10
@@ -613,13 +613,13 @@ class ExcelExporter:
 
 
 class HTMLExporter:
-    """Esportazione report in HTML standalone"""
+    """Export report to standalone HTML"""
 
     def __init__(self, output_path: Path):
         self.output_path = output_path
 
     def export(self, report: RunReport, include_screenshots: bool = True) -> Path:
-        """Genera HTML del report"""
+        """Generate HTML report"""
         html = self._generate_html(report, include_screenshots)
 
         with open(self.output_path, 'w', encoding='utf-8') as f:
@@ -628,8 +628,8 @@ class HTMLExporter:
         return self.output_path
 
     def _generate_html(self, report: RunReport, include_screenshots: bool) -> str:
-        """Genera contenuto HTML"""
-        # Embed screenshots come base64
+        """Generate HTML content"""
+        # Embed screenshots as base64
         screenshots_html = ""
         if include_screenshots:
             for test in report.tests:
@@ -660,9 +660,9 @@ class HTMLExporter:
                 </div>
                 <div class="test-category">{test.category}</div>
                 <div class="test-content">
-                    <p><strong>Domanda:</strong> {test.question[:500]}</p>
-                    <p><strong>Risposta:</strong> {test.actual_response[:500]}</p>
-                    {f'<p><strong>Valutazione:</strong> {test.evaluation}</p>' if test.evaluation else ''}
+                    <p><strong>Question:</strong> {test.question[:500]}</p>
+                    <p><strong>Response:</strong> {test.actual_response[:500]}</p>
+                    {f'<p><strong>Evaluation:</strong> {test.evaluation}</p>' if test.evaluation else ''}
                     {screenshot_img}
                 </div>
             </div>
@@ -717,15 +717,15 @@ class HTMLExporter:
         <div class="summary">
             <div class="metric">
                 <div class="value">{report.total_tests}</div>
-                <div class="label">Totale Test</div>
+                <div class="label">Total Tests</div>
             </div>
             <div class="metric">
                 <div class="value" style="color: #28a745;">{report.passed}</div>
-                <div class="label">Passati</div>
+                <div class="label">Passed</div>
             </div>
             <div class="metric">
                 <div class="value" style="color: #dc3545;">{report.failed}</div>
-                <div class="label">Falliti</div>
+                <div class="label">Failed</div>
             </div>
             <div class="metric pass-rate">
                 <div class="value">{report.pass_rate:.1f}%</div>
@@ -734,20 +734,20 @@ class HTMLExporter:
         </div>
 
         <div class="info-grid">
-            <div class="info-item"><span>Data</span><span>{report.timestamp[:10] if report.timestamp else 'N/A'}</span></div>
-            <div class="info-item"><span>Ambiente</span><span>{report.env}</span></div>
+            <div class="info-item"><span>Date</span><span>{report.timestamp[:10] if report.timestamp else 'N/A'}</span></div>
+            <div class="info-item"><span>Environment</span><span>{report.env}</span></div>
             <div class="info-item"><span>Prompt Version</span><span>{report.prompt_version}</span></div>
             <div class="info-item"><span>Model Version</span><span>{report.model_version}</span></div>
-            <div class="info-item"><span>Durata</span><span>{report.duration_seconds:.0f}s</span></div>
+            <div class="info-item"><span>Duration</span><span>{report.duration_seconds:.0f}s</span></div>
         </div>
 
         <div class="tests-section">
-            <h2>Risultati Test</h2>
+            <h2>Test Results</h2>
             {tests_html}
         </div>
 
         <div class="footer">
-            Generato il {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} da Chatbot Tester
+            Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} by Chatbot Tester
         </div>
     </div>
 </body>
@@ -759,17 +759,17 @@ class HTMLExporter:
 
 class ReportExporter:
     """
-    Gestore centralizzato export report.
+    Centralized report export manager.
 
     Usage:
         exporter = ReportExporter(report)
 
-        # Export singolo formato
+        # Single format export
         exporter.to_pdf(Path("report.pdf"))
         exporter.to_excel(Path("report.xlsx"))
         exporter.to_html(Path("report.html"))
 
-        # Export multiplo
+        # Multiple format export
         exporter.export_all(output_dir)
     """
 
@@ -777,22 +777,22 @@ class ReportExporter:
         self.report = report
 
     def to_pdf(self, output_path: Path, include_screenshots: bool = True) -> Path:
-        """Esporta in PDF"""
+        """Export to PDF"""
         exporter = PDFExporter(output_path)
         return exporter.export(self.report, include_screenshots)
 
     def to_excel(self, output_path: Path) -> Path:
-        """Esporta in Excel"""
+        """Export to Excel"""
         exporter = ExcelExporter(output_path)
         return exporter.export(self.report)
 
     def to_html(self, output_path: Path, include_screenshots: bool = True) -> Path:
-        """Esporta in HTML"""
+        """Export to HTML"""
         exporter = HTMLExporter(output_path)
         return exporter.export(self.report, include_screenshots)
 
     def to_csv(self, output_path: Path) -> Path:
-        """Esporta in CSV (semplice)"""
+        """Export to CSV (simple)"""
         with open(output_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(['Test ID', 'Categoria', 'Status', 'Score', 'Domanda', 'Risposta'])
@@ -810,26 +810,26 @@ class ReportExporter:
         return output_path
 
     def export_all(self, output_dir: Path) -> Dict[str, Path]:
-        """Esporta in tutti i formati disponibili"""
+        """Export to all available formats"""
         output_dir.mkdir(parents=True, exist_ok=True)
 
         base_name = f"{self.report.project}_run{self.report.run_number}"
         results = {}
 
-        # HTML (sempre disponibile)
+        # HTML (always available)
         results['html'] = self.to_html(output_dir / f"{base_name}.html")
 
-        # CSV (sempre disponibile)
+        # CSV (always available)
         results['csv'] = self.to_csv(output_dir / f"{base_name}.csv")
 
-        # PDF (se reportlab disponibile)
+        # PDF (if reportlab available)
         if REPORTLAB_AVAILABLE:
             try:
                 results['pdf'] = self.to_pdf(output_dir / f"{base_name}.pdf")
             except Exception as e:
                 print(f"! PDF export failed: {e}")
 
-        # Excel (se openpyxl disponibile)
+        # Excel (if openpyxl available)
         if OPENPYXL_AVAILABLE:
             try:
                 results['excel'] = self.to_excel(output_dir / f"{base_name}.xlsx")
@@ -840,7 +840,7 @@ class ReportExporter:
 
 
 def check_dependencies() -> Dict[str, bool]:
-    """Verifica dipendenze disponibili"""
+    """Check available dependencies"""
     return {
         'pdf': REPORTLAB_AVAILABLE,
         'excel': OPENPYXL_AVAILABLE,
@@ -851,9 +851,9 @@ def check_dependencies() -> Dict[str, bool]:
 if __name__ == "__main__":
     # Test
     deps = check_dependencies()
-    print("Dipendenze disponibili:")
+    print("Available dependencies:")
     for name, available in deps.items():
-        status = "OK" if available else "Non installato"
+        status = "OK" if available else "Not installed"
         print(f"  {name}: {status}")
 
     if not deps['pdf']:
