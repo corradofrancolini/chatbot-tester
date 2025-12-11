@@ -335,6 +335,23 @@ Documentazione: https://github.com/user/chatbot-tester
     )
 
     # ═══════════════════════════════════════════════════════════════════
+    # Cloud Monitoring
+    # ═══════════════════════════════════════════════════════════════════
+    cloud_group = parser.add_argument_group('Cloud Monitoring')
+    cloud_group.add_argument(
+        '--watch-cloud',
+        nargs='?',
+        const='latest',
+        metavar='RUN_ID',
+        help='Monitora run cloud con barra di avanzamento (default: ultimo run)'
+    )
+    cloud_group.add_argument(
+        '--cloud-runs',
+        action='store_true',
+        help='Lista ultimi run cloud'
+    )
+
+    # ═══════════════════════════════════════════════════════════════════
     # Output
     # ═══════════════════════════════════════════════════════════════════
     output_group = parser.add_argument_group('Output')
@@ -2722,6 +2739,94 @@ def run_scheduler_commands(args):
         return
 
 
+def run_cli_cloud_monitor(args):
+    """
+    Gestisce comandi di monitoraggio cloud.
+
+    Opzioni:
+    - --watch-cloud [RUN_ID]: Monitora run con barra di avanzamento
+    - --cloud-runs: Lista ultimi run cloud
+    """
+    from src.github_actions import (
+        GitHubActionsClient, watch_cloud_run, CloudRunProgress
+    )
+
+    ui = get_ui()
+    client = GitHubActionsClient()
+
+    if not client.is_available():
+        ui.error("gh CLI non disponibile")
+        ui.print(client.get_install_instructions())
+        return
+
+    # --cloud-runs: lista run recenti
+    if args.cloud_runs:
+        runs = client.list_runs(limit=10)
+
+        if not runs:
+            ui.print("\nNessun run cloud trovato")
+            return
+
+        ui.print("\n[bold]Ultimi Run Cloud[/bold]\n")
+        ui.print("  ID           Stato       Conclusione  Data")
+        ui.print("  " + "─" * 55)
+
+        for run in runs:
+            # Format status with color
+            status_color = {
+                "completed": "green" if run.conclusion == "success" else "red",
+                "in_progress": "yellow",
+                "queued": "dim"
+            }.get(run.status, "white")
+
+            conclusion = run.conclusion or "-"
+            conclusion_color = "green" if conclusion == "success" else "red" if conclusion == "failure" else "dim"
+
+            date = run.created_at[:16].replace("T", " ") if run.created_at else "-"
+
+            ui.print(
+                f"  {run.id}  [{status_color}]{run.status:<12}[/{status_color}]"
+                f"[{conclusion_color}]{conclusion:<11}[/{conclusion_color}] {date}"
+            )
+
+        ui.print("")
+        ui.print("  Usa --watch-cloud RUN_ID per monitorare un run specifico")
+        return
+
+    # --watch-cloud: monitora run
+    if args.watch_cloud:
+        run_id = None
+        if args.watch_cloud != 'latest':
+            try:
+                run_id = int(args.watch_cloud)
+            except ValueError:
+                ui.error(f"ID run non valido: {args.watch_cloud}")
+                return
+
+        ui.print("\n[bold]Cloud Run Monitor[/bold]\n")
+
+        progress = watch_cloud_run(run_id)
+
+        # Mostra riepilogo finale con più dettagli
+        ui.print("")
+        if progress.conclusion == "success":
+            ui.success("Run completato con successo!")
+        elif progress.conclusion == "failure":
+            ui.error(f"Run fallito: {progress.error_message or 'errore sconosciuto'}")
+        elif progress.conclusion == "cancelled":
+            ui.warning("Run cancellato")
+
+        if progress.total_tests > 0:
+            ui.print(f"\n  Test eseguiti: {progress.total_tests}")
+            ui.print(f"  Passati: [green]{progress.passed_tests}[/green]")
+            ui.print(f"  Falliti: [red]{progress.failed_tests}[/red]")
+
+        if progress.sheets_run:
+            ui.print(f"\n  📊 Google Sheets: RUN {progress.sheets_run}")
+
+        return
+
+
 def run_cli_analysis(args):
     """Esegue analisi da CLI (--compare, --regressions, --flaky)"""
     from src.comparison import (
@@ -3373,6 +3478,11 @@ def main():
     # Comandi scheduler da CLI
     if args.scheduler or args.add_schedule or args.list_schedules:
         run_scheduler_commands(args)
+        sys.exit(ExitCode.SUCCESS)
+
+    # Comandi cloud monitoring da CLI
+    if args.watch_cloud or args.cloud_runs:
+        run_cli_cloud_monitor(args)
         sys.exit(ExitCode.SUCCESS)
 
     # Comandi export da CLI
