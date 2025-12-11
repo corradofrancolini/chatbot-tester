@@ -2318,7 +2318,8 @@ async def run_test_session(
         on_progress,
         dry_run=run_config.dry_run,
         use_langsmith=run_config.use_langsmith,
-        single_turn=run_config.single_turn
+        single_turn=run_config.single_turn,
+        run_config=run_config
     )
 
     try:

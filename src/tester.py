@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from .config_loader import (
-    ConfigLoader, ProjectConfig, GlobalSettings,
+    ConfigLoader, ProjectConfig, GlobalSettings, RunConfig,
     load_tests, save_tests
 )
 from .browser import BrowserManager, BrowserSettings, ChatbotSelectors
@@ -111,7 +111,8 @@ class ChatbotTester:
                  on_progress: Optional[Callable[[int, int], None]] = None,
                  dry_run: bool = False,
                  use_langsmith: bool = True,
-                 single_turn: bool = False):
+                 single_turn: bool = False,
+                 run_config: Optional[RunConfig] = None):
         """
         Inizializza il tester.
 
@@ -123,6 +124,7 @@ class ChatbotTester:
             dry_run: Se True, non salva su Google Sheets
             use_langsmith: Se False, disabilita LangSmith
             single_turn: Se True, modalità AUTO esegue solo domanda iniziale (no followup)
+            run_config: Configurazione run corrente (per prompt_version, env, etc.)
         """
         self.project = project
         self.settings = settings
@@ -133,6 +135,7 @@ class ChatbotTester:
         self.dry_run = dry_run
         self.use_langsmith = use_langsmith
         self.single_turn = single_turn
+        self.run_config = run_config
 
         # Browser
         self.browser: Optional[BrowserManager] = None
