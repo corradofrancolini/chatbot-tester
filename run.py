@@ -926,16 +926,21 @@ def show_cloud_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
             for run in runs[:3]:
                 status_icon = {
                     "completed": "[green]OK[/green]" if run.conclusion == "success" else "[red]FAIL[/red]",
-                    "in_progress": "[yellow]...[/yellow]",
+                    "in_progress": "[yellow]RUN[/yellow]",
                     "queued": "[dim]queue[/dim]"
                 }.get(run.status, "[dim]?[/dim]")
                 ui.print(f"    {status_icon} {run.name[:40]} ({run.created_at[:10]})")
             ui.print("")
 
+        # Verifica se c'è un run attivo
+        active_runs = [r for r in runs if r.status in ("in_progress", "queued")]
+        has_active = len(active_runs) > 0
+
         items = [
             MenuItem('1', "Lancia test", "Avvia nuova esecuzione nel cloud"),
-            MenuItem('2', "Stato esecuzioni", "Vedi run in corso e recenti"),
-            MenuItem('3', "Scarica risultati", "Download report e screenshot"),
+            MenuItem('2', "Monitora run", "Barra avanzamento in tempo reale", disabled=not has_active),
+            MenuItem('3', "Stato esecuzioni", "Vedi run in corso e recenti"),
+            MenuItem('4', "Scarica risultati", "Download report e screenshot"),
         ]
 
         choice = ui.menu(items, "Azione", allow_back=True)
@@ -947,10 +952,92 @@ def show_cloud_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
             _cloud_launch_test(ui, loader, gh_client)
 
         elif choice == '2':
-            _cloud_show_status(ui, gh_client)
+            _cloud_monitor_run(ui, gh_client, runs)
 
         elif choice == '3':
+            _cloud_show_status(ui, gh_client)
+
+        elif choice == '4':
             _cloud_download_results(ui, gh_client)
+
+
+def _cloud_monitor_run(ui: ConsoleUI, gh_client: GitHubActionsClient, runs: list) -> None:
+    """Monitora run cloud con barra di avanzamento"""
+    from src.github_actions import watch_cloud_run, CloudRunMonitor, create_progress_display
+
+    # Filtra run attivi o recenti
+    active_runs = [r for r in runs if r.status in ("in_progress", "queued")]
+    recent_runs = runs[:5]
+
+    if not active_runs and not recent_runs:
+        ui.warning("Nessun run da monitorare")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    ui.section("Monitora Run Cloud")
+
+    # Mostra opzioni
+    ui.print("\n  Run disponibili:\n")
+
+    display_runs = active_runs if active_runs else recent_runs[:3]
+    for i, run in enumerate(display_runs, 1):
+        if run.status == "in_progress":
+            icon = "[yellow]● IN CORSO[/yellow]"
+        elif run.status == "queued":
+            icon = "[dim]○ IN CODA[/dim]"
+        elif run.status == "completed":
+            icon = "[green]✓ COMPLETATO[/green]" if run.conclusion == "success" else "[red]✗ FALLITO[/red]"
+        else:
+            icon = "[dim]?[/dim]"
+
+        ui.print(f"  [{i}] {icon}")
+        ui.print(f"      ID: {run.id} | {run.created_at[:16].replace('T', ' ')}")
+        ui.print("")
+
+    # Selezione
+    if len(display_runs) == 1:
+        ui.print("  [dim]Premi INVIO per monitorare, 'q' per tornare[/dim]")
+        choice = input("\n  > ").strip().lower()
+        if choice == 'q':
+            return
+        selected_run = display_runs[0]
+    else:
+        choice = input("\n  Numero run da monitorare (INVIO per l'ultimo): ").strip()
+        if choice == '':
+            selected_run = display_runs[0]
+        elif choice.isdigit() and 1 <= int(choice) <= len(display_runs):
+            selected_run = display_runs[int(choice) - 1]
+        else:
+            return
+
+    # Avvia monitoraggio
+    ui.print(f"\n  [cyan]Monitoraggio run #{selected_run.id}[/cyan]")
+    ui.print("  [dim]Premi Ctrl+C per interrompere[/dim]\n")
+
+    try:
+        progress = watch_cloud_run(selected_run.id)
+
+        # Riepilogo finale
+        ui.print("")
+        if progress.conclusion == "success":
+            ui.success("Run completato con successo!")
+        elif progress.conclusion == "failure":
+            ui.error(f"Run fallito: {progress.error_message or 'errore sconosciuto'}")
+        elif progress.conclusion == "cancelled":
+            ui.warning("Run cancellato")
+
+        if progress.total_tests > 0:
+            ui.print(f"\n  Test eseguiti: {progress.total_tests}")
+            ui.print(f"  Passati: [green]{progress.passed_tests}[/green]")
+            ui.print(f"  Falliti: [red]{progress.failed_tests}[/red]")
+
+        if progress.sheets_run:
+            ui.print(f"\n  [cyan]📊 Risultati su Google Sheets: RUN {progress.sheets_run}[/cyan]")
+
+    except KeyboardInterrupt:
+        ui.print("\n\n  [dim]Monitoraggio interrotto[/dim]")
+
+    input("\n  Premi INVIO per continuare...")
 
 
 def _cloud_launch_test(ui: ConsoleUI, loader: ConfigLoader, gh_client: GitHubActionsClient) -> None:
@@ -1006,7 +1093,33 @@ def _cloud_launch_test(ui: ConsoleUI, loader: ConfigLoader, gh_client: GitHubAct
 
     if success:
         ui.success(message)
-        ui.print("\n  [dim]Usa 'Stato esecuzioni' per monitorare il progresso[/dim]")
+
+        # Chiedi se monitorare
+        monitor = input("\n  Vuoi monitorare l'esecuzione? (s/n): ").strip().lower()
+        if monitor == 's':
+            ui.print("\n  [dim]Attendo avvio workflow...[/dim]")
+            import time
+            time.sleep(3)  # Attendi che il workflow si avvii
+
+            # Ottieni il run appena lanciato
+            from src.github_actions import watch_cloud_run
+            runs = gh_client.list_runs(limit=1)
+            if runs and runs[0].status in ("in_progress", "queued"):
+                ui.print("")
+                try:
+                    progress = watch_cloud_run(runs[0].id)
+
+                    if progress.conclusion == "success":
+                        ui.success("\nRun completato con successo!")
+                    elif progress.conclusion == "failure":
+                        ui.error(f"\nRun fallito: {progress.error_message or 'errore'}")
+
+                    if progress.sheets_run:
+                        ui.print(f"\n  [cyan]📊 Risultati su Google Sheets: RUN {progress.sheets_run}[/cyan]")
+                except KeyboardInterrupt:
+                    ui.print("\n\n  [dim]Monitoraggio interrotto[/dim]")
+            else:
+                ui.warning("Workflow non ancora avviato")
     else:
         ui.error(message)
 
