@@ -149,9 +149,10 @@ jobs:
               - 'no'
 
           google_sheets:
-            enabled: ${{ secrets.GOOGLE_TOKEN_JSON != '' }}
+            enabled: true
             spreadsheet_id: 'YOUR_SPREADSHEET_ID'
             drive_folder_id: 'YOUR_DRIVE_FOLDER_ID'
+            credentials_path: 'config/oauth_credentials.json'
 
           langsmith:
             enabled: ${{ secrets.LANGSMITH_API_KEY != '' }}
