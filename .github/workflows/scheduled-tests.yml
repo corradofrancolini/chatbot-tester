@@ -1,0 +1,270 @@
+# Chatbot Tester - Scheduled Test Runs
+# Esegue test automatici su base schedulata (cron)
+# Trigger: schedule (6:00 UTC daily, 2:00 UTC Monday) or workflow_dispatch
+
+name: Scheduled Chatbot Tests
+
+on:
+  # Schedule configurabile
+  schedule:
+    # Ogni giorno alle 6:00 UTC (7:00 CET, 8:00 CEST)
+    - cron: '0 6 * * *'
+    # Ogni lunedi alle 2:00 UTC (regression weekly)
+    - cron: '0 2 * * 1'
+
+  # Trigger manuale per test
+  workflow_dispatch:
+    inputs:
+      schedule_type:
+        description: 'Tipo di schedule da simulare'
+        required: true
+        default: 'daily'
+        type: choice
+        options:
+          - daily
+          - weekly
+          - regression
+
+env:
+  # Projects to test (comma-separated)
+  # Customize this with your project names
+  PROJECTS: 'my-chatbot'
+  # Modalita default
+  DEFAULT_MODE: 'auto'
+  # Test default
+  DEFAULT_TESTS: 'pending'
+
+jobs:
+  # Determina quali progetti testare
+  prepare:
+    name: Prepare Test Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      schedule_type: ${{ steps.detect-schedule.outputs.type }}
+
+    steps:
+      - name: Detect schedule type
+        id: detect-schedule
+        run: |
+          # Determina tipo di schedule dal cron o input
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "type=${{ inputs.schedule_type }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" == "0 6 * * *" ]; then
+            echo "type=daily" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" == "0 2 * * 1" ]; then
+            echo "type=weekly" >> $GITHUB_OUTPUT
+          else
+            echo "type=daily" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set test matrix
+        id: set-matrix
+        run: |
+          # Converti PROJECTS in array JSON
+          PROJECTS_JSON=$(echo "${{ env.PROJECTS }}" | tr ',' '\n' | jq -R . | jq -s .)
+          echo "matrix={\"project\":$PROJECTS_JSON}" >> $GITHUB_OUTPUT
+
+  # Test per ogni progetto
+  test:
+    name: Test ${{ matrix.project }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    strategy:
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      fail-fast: false  # Continua anche se un progetto fallisce
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: |
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Setup credentials
+        run: |
+          mkdir -p config
+
+          # Google OAuth credentials per Sheets/Drive
+          if [ -n "${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}" ]; then
+            echo '${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}' > config/oauth_credentials.json
+          fi
+
+          # Google OAuth token (con refresh token per accesso non interattivo)
+          if [ -n "${{ secrets.GOOGLE_TOKEN_JSON }}" ]; then
+            echo '${{ secrets.GOOGLE_TOKEN_JSON }}' > config/token.json
+          fi
+
+          # Environment variables
+          if [ -n "${{ secrets.LANGSMITH_API_KEY }}" ]; then
+            echo "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" >> config/.env
+          fi
+
+      # NOTE: Projects should be created locally and committed to the repo
+      # This step verifies the project exists
+      - name: Verify project exists
+        run: |
+          if [ ! -d "projects/${{ matrix.project }}" ]; then
+            echo "ERROR: Project ${{ matrix.project }} not found"
+            echo "Create the project locally with: python run.py --new-project"
+            exit 1
+          fi
+          echo "✓ Project ${{ matrix.project }} found"
+
+      - name: Determine test parameters
+        id: params
+        run: |
+          SCHEDULE_TYPE="${{ needs.prepare.outputs.schedule_type }}"
+
+          case $SCHEDULE_TYPE in
+            daily)
+              echo "tests=pending" >> $GITHUB_OUTPUT
+              echo "new_run=false" >> $GITHUB_OUTPUT
+              echo "mode=auto" >> $GITHUB_OUTPUT
+              ;;
+            weekly)
+              echo "tests=all" >> $GITHUB_OUTPUT
+              echo "new_run=true" >> $GITHUB_OUTPUT
+              echo "mode=auto" >> $GITHUB_OUTPUT
+              ;;
+            regression)
+              echo "tests=failed" >> $GITHUB_OUTPUT
+              echo "new_run=false" >> $GITHUB_OUTPUT
+              echo "mode=auto" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "tests=pending" >> $GITHUB_OUTPUT
+              echo "new_run=false" >> $GITHUB_OUTPUT
+              echo "mode=auto" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Run tests
+        id: run-tests
+        run: |
+          NEW_RUN_FLAG=""
+          if [ "${{ steps.params.outputs.new_run }}" == "true" ]; then
+            NEW_RUN_FLAG="--new-run"
+          fi
+
+          python run.py \
+            -p ${{ matrix.project }} \
+            -m ${{ steps.params.outputs.mode }} \
+            --tests ${{ steps.params.outputs.tests }} \
+            --no-interactive \
+            --headless \
+            --skip-health-check \
+            $NEW_RUN_FLAG
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+
+      - name: Check for regressions
+        id: regressions
+        if: always()
+        run: |
+          # Esegui check regressioni
+          python run.py -p ${{ matrix.project }} --regressions 2>&1 | tee regression_report.txt || true
+
+          # Controlla se ci sono regressioni
+          if grep -q "REGRESSIONI" regression_report.txt; then
+            echo "has_regressions=true" >> $GITHUB_OUTPUT
+            echo "::warning::Regressioni rilevate in ${{ matrix.project }}"
+          else
+            echo "has_regressions=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports-${{ matrix.project }}-${{ github.run_number }}
+          path: reports/
+          retention-days: 30
+
+      - name: Upload regression report
+        uses: actions/upload-artifact@v4
+        if: steps.regressions.outputs.has_regressions == 'true'
+        with:
+          name: regressions-${{ matrix.project }}-${{ github.run_number }}
+          path: regression_report.txt
+
+  # Summary finale
+  summary:
+    name: Test Summary
+    needs: [prepare, test]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Scheduled Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Schedule Type**: ${{ needs.prepare.outputs.schedule_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Project | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Note: in a real workflow, this data would come from job outputs
+          echo "| ${{ env.PROJECTS }} | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+
+  # Notifiche (opzionale)
+  notify:
+    name: Send Notifications
+    needs: [prepare, test, summary]
+    runs-on: ubuntu-latest
+    if: failure() || (needs.test.result == 'failure')
+
+    steps:
+      - name: Notify on failure (Slack)
+        if: vars.SLACK_ENABLED == 'true'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Scheduled Chatbot Tests Failed",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Scheduled Test Failure"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Schedule:*\n${{ needs.prepare.outputs.schedule_type }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Run:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|#${{ github.run_number }}>"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
