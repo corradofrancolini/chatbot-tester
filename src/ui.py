@@ -56,20 +56,20 @@ class MenuItem:
 class ConsoleUI:
     """
     Interfaccia console con Rich.
-    
+
     Fallback a print() se Rich non disponibile.
-    
+
     Usage:
         ui = ConsoleUI()
         ui.header("Titolo")
         ui.success("Operazione completata!")
-        
+
         choice = ui.menu([
             MenuItem("1", "Opzione 1"),
             MenuItem("2", "Opzione 2")
         ])
     """
-    
+
     def __init__(self, use_colors: bool = True, quiet: bool = False):
         """
         Inizializza la console.
@@ -99,16 +99,16 @@ class ConsoleUI:
             self.console = Console()
         else:
             self.console = None
-    
+
     # ==================== OUTPUT BASE ====================
-    
+
     def print(self, message: str, style: Optional[str] = None) -> None:
         """Stampa messaggio"""
         if self.console:
             self.console.print(message, style=style)
         else:
             print(message)
-    
+
     def success(self, message: str) -> None:
         """Messaggio di successo"""
         self.print(f"✓ {message}", UIStyle.SUCCESS.value)
@@ -124,13 +124,13 @@ class ConsoleUI:
     def info(self, message: str) -> None:
         """Messaggio informativo"""
         self.print(f"> {message}", UIStyle.INFO.value)
-    
+
     def muted(self, message: str) -> None:
         """Testo secondario"""
         self.print(message, UIStyle.MUTED.value)
-    
+
     # ==================== STRUTTURE ====================
-    
+
     def header(self, title: str, subtitle: str = "") -> None:
         """Header principale app (con box leggero)"""
         if self.console:
@@ -155,43 +155,43 @@ class ConsoleUI:
             self.console.print(f"\n[bold]{title}[/bold]")
         else:
             print(f"\n{title}")
-    
+
     def divider(self) -> None:
         """Linea divisoria"""
         if self.console:
             self.console.rule(style="dim")
         else:
             print("-" * 40)
-    
+
     # ==================== TABELLE ====================
-    
-    def table(self, 
+
+    def table(self,
               headers: List[str],
               rows: List[List[str]],
               title: str = "") -> None:
         """Stampa tabella"""
         if self.console:
             table = Table(title=title, show_header=True, header_style="bold")
-            
+
             for h in headers:
                 table.add_column(h)
-            
+
             for row in rows:
                 table.add_row(*row)
-            
+
             self.console.print(table)
         else:
             if title:
                 print(f"\n{title}")
-            
+
             # Header
             print(" | ".join(headers))
             print("-" * (sum(len(h) for h in headers) + len(headers) * 3))
-            
+
             # Rows
             for row in rows:
                 print(" | ".join(row))
-    
+
     def stats_row(self, stats: dict) -> None:
         """Riga di statistiche"""
         if self.console:
@@ -201,35 +201,35 @@ class ConsoleUI:
             self.console.print("  ".join(parts))
         else:
             print("  ".join(f"{k}: {v}" for k, v in stats.items()))
-    
+
     # ==================== PROGRESS ====================
-    
-    def progress_bar(self, 
+
+    def progress_bar(self,
                      total: int,
                      description: str = "Progresso") -> 'ProgressContext':
         """
         Crea progress bar.
-        
+
         Usage:
             with ui.progress_bar(100) as progress:
                 for i in range(100):
                     progress.advance()
         """
         return ProgressContext(self, total, description)
-    
+
     def spinner(self, message: str) -> 'SpinnerContext':
         """
         Crea spinner per operazioni lunghe.
-        
+
         Usage:
             with ui.spinner("Caricamento..."):
                 do_something()
         """
         return SpinnerContext(self, message)
-    
+
     # ==================== INPUT ====================
-    
-    def input(self, 
+
+    def input(self,
               prompt: str,
               default: str = "",
               password: bool = False) -> str:
@@ -242,8 +242,8 @@ class ConsoleUI:
                 return result if result else default
             else:
                 return input(f"{prompt}: ").strip()
-    
-    def confirm(self, 
+
+    def confirm(self,
                 question: str,
                 default: bool = False) -> bool:
         """Conferma sì/no"""
@@ -252,11 +252,11 @@ class ConsoleUI:
         else:
             suffix = "[Y/n]" if default else "[y/N]"
             response = input(f"{question} {suffix}: ").strip().lower()
-            
+
             if not response:
                 return default
             return response in ['y', 'yes', 's', 'sì', 'si']
-    
+
     def menu(self,
              items: List[MenuItem],
              prompt: str = ">",
@@ -314,7 +314,7 @@ class ConsoleUI:
                 return choice
 
             self.warning(f"Opzione non valida: {choice}")
-    
+
     def select_multiple(self,
                         items: List[MenuItem],
                         prompt: str = "Seleziona (separati da virgola) >") -> List[str]:
@@ -338,9 +338,9 @@ class ConsoleUI:
 
         valid_keys = [i.key for i in items]
         return [s for s in selected if s in valid_keys]
-    
+
     # ==================== WIZARD ====================
-    
+
     def wizard_step(self,
                     step_number: int,
                     total_steps: int,
@@ -362,7 +362,7 @@ class ConsoleUI:
             print(f"\n{header}")
             if description:
                 print(f"      {description}")
-    
+
     def wizard_summary(self, settings: dict) -> None:
         """Riepilogo configurazione wizard"""
         self.print("\n[bold]Riepilogo[/bold]\n" if self.console else "\nRiepilogo\n")
@@ -382,9 +382,9 @@ class ConsoleUI:
                 val_str = str(value)
 
             self.print(f"  {key:<{max_key_len}}  {val_str}")
-    
+
     # ==================== MESSAGGI SPECIALI ====================
-    
+
     def error_panel(self,
                     error_type: str,
                     detail: str,
@@ -406,14 +406,14 @@ class ConsoleUI:
                 print(f"\n  Soluzioni:")
                 for s in solutions:
                     print(f"  · {s}")
-    
+
     def help_text(self, text: str) -> None:
         """Testo di aiuto"""
         if self.console:
             self.console.print(f"[dim]{text}[/dim]")
         else:
             print(f"  {text}")
-    
+
     def clear(self) -> None:
         """Pulisce lo schermo"""
         if self.console:
@@ -424,7 +424,7 @@ class ConsoleUI:
 
 class ProgressContext:
     """Context manager per progress bar"""
-    
+
     def __init__(self, ui: ConsoleUI, total: int, description: str):
         self.ui = ui
         self.total = total
@@ -432,7 +432,7 @@ class ProgressContext:
         self.current = 0
         self._progress = None
         self._task = None
-    
+
     def __enter__(self):
         if self.ui.console:
             self._progress = Progress(
@@ -445,11 +445,11 @@ class ProgressContext:
             self._progress.start()
             self._task = self._progress.add_task(self.description, total=self.total)
         return self
-    
+
     def __exit__(self, *args):
         if self._progress:
             self._progress.stop()
-    
+
     def advance(self, amount: int = 1) -> None:
         """Avanza la progress bar"""
         self.current += amount
@@ -460,7 +460,7 @@ class ProgressContext:
             print(f"\r{self.description}: {pct}%", end="", flush=True)
             if self.current >= self.total:
                 print()
-    
+
     def update(self, description: str) -> None:
         """Aggiorna descrizione"""
         if self._progress and self._task is not None:
@@ -469,13 +469,13 @@ class ProgressContext:
 
 class SpinnerContext:
     """Context manager per spinner"""
-    
+
     def __init__(self, ui: ConsoleUI, message: str):
         self.ui = ui
         self.message = message
         self._progress = None
         self._task = None
-    
+
     def __enter__(self):
         if self.ui.console:
             self._progress = Progress(
@@ -488,13 +488,13 @@ class SpinnerContext:
         else:
             print(f"{self.message}...", end="", flush=True)
         return self
-    
+
     def __exit__(self, *args):
         if self._progress:
             self._progress.stop()
         elif not self.ui.console:
             print(" fatto")
-    
+
     def update(self, message: str) -> None:
         """Aggiorna messaggio"""
         if self._progress and self._task is not None:
@@ -508,12 +508,12 @@ class WizardUI:
     UI specifica per il wizard di setup.
     Fornisce metodi per navigazione step, progress, input guidato.
     """
-    
+
     def __init__(self, total_steps: int = 9):
         self.console = Console() if RICH_AVAILABLE else None
         self.total_steps = total_steps
         self.current_step = 0
-    
+
     def show_header(self, step_number: int, title: str, description: str = "", time_remaining: str = "") -> None:
         """Mostra header dello step"""
         self.current_step = step_number
@@ -532,7 +532,7 @@ class WizardUI:
             print(f"\n{header}")
             if description:
                 print(f"      {description}")
-    
+
     def show_success(self, message: str) -> None:
         """Messaggio successo"""
         if self.console:
@@ -540,12 +540,42 @@ class WizardUI:
         else:
             print(f"✓ {message}")
 
-    def show_error(self, message: str) -> None:
-        """Messaggio errore"""
+    def show_error(self, title: str, details: str = "", solutions: list = None) -> str:
+        """
+        Messaggio errore con opzioni di recovery.
+
+        Args:
+            title: Titolo errore
+            details: Dettagli errore (opzionale)
+            solutions: Lista soluzioni suggerite (opzionale)
+
+        Returns:
+            'r' per retry, 's' per skip, 'q' per quit
+        """
         if self.console:
-            self.console.print(f"[red]✗ {message}[/red]")
+            self.console.print(f"\n[red]✗ Errore: {title}[/red]")
+            if details:
+                self.console.print(f"  [dim]{details}[/dim]")
+            if solutions:
+                self.console.print("\n  [yellow]Soluzioni suggerite:[/yellow]")
+                for sol in solutions:
+                    self.console.print(f"    • {sol}")
+            self.console.print("\n  [dim][r] Riprova  [s] Salta  [q] Esci[/dim]")
         else:
-            print(f"✗ {message}")
+            print(f"\n✗ Errore: {title}")
+            if details:
+                print(f"  {details}")
+            if solutions:
+                print("\n  Soluzioni suggerite:")
+                for sol in solutions:
+                    print(f"    • {sol}")
+            print("\n  [r] Riprova  [s] Salta  [q] Esci")
+
+        while True:
+            choice = input("  Scelta: ").strip().lower()
+            if choice in ['r', 's', 'q']:
+                return choice
+            print("  Inserisci r, s, o q")
 
     def show_warning(self, message: str) -> None:
         """Messaggio warning"""
@@ -567,7 +597,7 @@ class WizardUI:
             self.console.print(f"[dim]~ {message}[/dim]")
         else:
             print(f"~ {message}")
-    
+
     def ask_input(self, prompt: str, default: str = "") -> str:
         """Chiedi input"""
         if self.console:
@@ -577,7 +607,7 @@ class WizardUI:
                 result = input(f"{prompt} [{default}]: ").strip()
                 return result if result else default
             return input(f"{prompt}: ").strip()
-    
+
     def ask_confirm(self, question: str, default: bool = False) -> bool:
         """Chiedi conferma"""
         if self.console:
@@ -588,7 +618,7 @@ class WizardUI:
             if not response:
                 return default
             return response in ['y', 'yes', 's', 'sì', 'si']
-    
+
     def show_options(self, options: List[tuple], prompt: str = ">") -> str:
         """Mostra opzioni e ritorna scelta"""
         print("")
@@ -608,7 +638,7 @@ class WizardUI:
             if choice in valid_keys:
                 return choice
             self.show_warning(f"Opzione non valida: {choice}")
-    
+
     def show_summary(self, settings: dict) -> None:
         """Mostra riepilogo configurazione"""
         if self.console:
@@ -634,11 +664,11 @@ class WizardUI:
                 self.console.print(line)
             else:
                 print(line)
-    
+
     def show_spinner(self, message: str):
         """Ritorna context manager per spinner"""
         return SpinnerContext(ConsoleUI(), message)
-    
+
     def show_step(self, step_num: int, title: str, description: str = "",
                   content: str = "", show_skip: bool = False) -> None:
         """
@@ -672,7 +702,7 @@ class WizardUI:
                 print(content)
             if show_skip:
                 print("      s per saltare")
-    
+
     def show_help(self, help_text: str) -> None:
         """
         Mostra testo di aiuto.
@@ -686,7 +716,7 @@ class WizardUI:
         else:
             print(f"\nAiuto")
             print(f"  {help_text}")
-    
+
     def clear(self) -> None:
         """Pulisce schermo"""
         if self.console:
@@ -774,11 +804,11 @@ def with_spinner(message: str):
 def ask_confirm(question: str, default: bool = False) -> bool:
     """
     Chiede conferma sì/no.
-    
+
     Args:
         question: Domanda da porre
         default: Valore default se l'utente preme solo INVIO
-    
+
     Returns:
         True/False
     """
@@ -795,11 +825,11 @@ def ask_confirm(question: str, default: bool = False) -> bool:
 def ask(prompt: str, default: str = "") -> str:
     """
     Chiede input testuale.
-    
+
     Args:
         prompt: Messaggio prompt
         default: Valore default
-    
+
     Returns:
         Input dell'utente
     """
@@ -815,7 +845,7 @@ def ask(prompt: str, default: str = "") -> str:
 def show_key_value(key: str, value: Any, style: str = "") -> None:
     """
     Mostra coppia chiave-valore.
-    
+
     Args:
         key: Nome chiave
         value: Valore

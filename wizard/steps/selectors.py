@@ -11,6 +11,13 @@ from rich.prompt import Prompt, Confirm
 from rich.table import Table
 from rich import box
 
+# Permette asyncio.run() anche dentro un event loop esistente
+try:
+    import nest_asyncio
+    nest_asyncio.apply()
+except ImportError:
+    pass
+
 from wizard.steps.base import BaseStep
 from wizard.utils import get_project_dir
 from src.ui import console

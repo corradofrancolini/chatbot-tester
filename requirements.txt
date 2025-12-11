@@ -20,3 +20,4 @@ pandas>=2.0.0
 
 # Utilities
 questionary>=2.0.0  # Per prompt interattivi nel wizard
+nest-asyncio>=1.5.0  # Per asyncio.run() dentro event loop esistenti
