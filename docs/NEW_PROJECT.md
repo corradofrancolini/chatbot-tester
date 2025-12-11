@@ -1,152 +1,152 @@
-# 🆕 Creare un Nuovo Progetto
+# Creating a New Project
 
-Questa guida ti mostra come configurare un nuovo progetto di test per un chatbot.
+This guide shows you how to configure a new test project for a chatbot.
 
 ---
 
-## 📋 Indice
+## Table of Contents
 
-1. [Wizard Interattivo](#wizard-interattivo)
-2. [Configurazione Manuale](#configurazione-manuale)
-3. [Rilevamento Selettori](#rilevamento-selettori)
+1. [Interactive Wizard](#interactive-wizard)
+2. [Manual Configuration](#manual-configuration)
+3. [Selector Detection](#selector-detection)
 4. [Import Test Cases](#import-test-cases)
-5. [Primo Test](#primo-test)
+5. [First Test](#first-test)
 
 ---
 
-## Wizard Interattivo
+## Interactive Wizard
 
-Il modo più semplice per creare un progetto è usare il wizard:
+The easiest way to create a project is using the wizard:
 
 ```bash
 ./chatbot-tester --new-project
 ```
 
-### Step del wizard
+### Wizard Steps
 
-#### Step 1: Verifica Prerequisiti
-Il wizard verifica che tutto sia installato correttamente.
+#### Step 1: Prerequisites Check
+The wizard verifies that everything is installed correctly.
 
-#### Step 2: Informazioni Progetto
+#### Step 2: Project Information
 ```
-Nome progetto: mio-chatbot
-Descrizione: Chatbot assistenza clienti Example Corp
+Project name: my-chatbot
+Description: Customer support chatbot for Example Corp
 ```
 
-> 💡 Il nome deve contenere solo lettere minuscole, numeri e trattini.
+> The name must contain only lowercase letters, numbers, and hyphens.
 
-#### Step 3: URL Chatbot
+#### Step 3: Chatbot URL
 ```
 URL: https://chat.example.com/assistant
 ```
 
-Il wizard:
-1. Verifica che l'URL sia raggiungibile
-2. Apre il browser per il login (se necessario)
-3. Salva la sessione per usi futuri
+The wizard:
+1. Verifies that the URL is reachable
+2. Opens the browser for login (if needed)
+3. Saves the session for future use
 
-#### Step 4: Rilevamento Selettori
+#### Step 4: Selector Detection
 
-**Auto-detect** (consigliato):
-Il wizard cerca automaticamente i selettori CSS comuni.
+**Auto-detect** (recommended):
+The wizard automatically searches for common CSS selectors.
 
 **Click-to-learn** (fallback):
-Se l'auto-detect fallisce, il wizard ti chiede di cliccare:
-1. La textarea dove scrivi i messaggi
-2. Il bottone di invio
-3. Un messaggio del bot
+If auto-detect fails, the wizard asks you to click:
+1. The textarea where you type messages
+2. The send button
+3. A bot message
 
-#### Step 5: Google Sheets (opzionale)
+#### Step 5: Google Sheets (optional)
 ```
-[1] Solo report locali (HTML/CSV)
-[2] Configura Google Sheets
-[3] Configuro dopo
-```
-
-#### Step 6: LangSmith (opzionale)
-```
-[1] Non uso LangSmith
-[2] Configura LangSmith
-[3] Configuro dopo
+[1] Local reports only (HTML/CSV)
+[2] Configure Google Sheets
+[3] Configure later
 ```
 
-#### Step 7: Ollama (opzionale)
+#### Step 6: LangSmith (optional)
 ```
-[1] Installa Ollama + Mistral
-[2] Già installato
-[3] Solo modalità Train (skip)
+[1] I don't use LangSmith
+[2] Configure LangSmith
+[3] Configure later
+```
+
+#### Step 7: Ollama (optional)
+```
+[1] Install Ollama + Mistral
+[2] Already installed
+[3] Train mode only (skip)
 ```
 
 #### Step 8: Test Cases
 ```
-[1] Importa da file (JSON/CSV/Excel)
-[2] Crea manualmente
-[3] Inizio senza test
+[1] Import from file (JSON/CSV/Excel)
+[2] Create manually
+[3] Start without tests
 ```
 
-#### Step 9: Riepilogo
-Conferma della configurazione e salvataggio.
+#### Step 9: Summary
+Configuration confirmation and save.
 
 ---
 
-## Configurazione Manuale
+## Manual Configuration
 
-Se preferisci configurare manualmente:
+If you prefer to configure manually:
 
-### 1. Crea la cartella del progetto
+### 1. Create the project folder
 
 ```bash
-mkdir -p projects/mio-chatbot
+mkdir -p projects/my-chatbot
 ```
 
-### 2. Crea project.yaml
+### 2. Create project.yaml
 
 ```bash
-cat > projects/mio-chatbot/project.yaml << 'EOF'
-# Configurazione Progetto Chatbot Tester
+cat > projects/my-chatbot/project.yaml << 'EOF'
+# Chatbot Tester Project Configuration
 
 project:
-  name: "mio-chatbot"
-  description: "Chatbot assistenza clienti"
+  name: "my-chatbot"
+  description: "Customer support chatbot"
   created: "2025-12-02"
-  language: "it"
+  language: "en"
 
 chatbot:
   url: "https://chat.example.com/assistant"
-  
+
   selectors:
     textarea: "#chat-input"
     submit_button: "button.send-btn"
     bot_messages: ".message.assistant"
-    thread_container: ".chat-thread"  # opzionale
-  
-  # CSS da iniettare per screenshot puliti
+    thread_container: ".chat-thread"  # optional
+
+  # CSS to inject for clean screenshots
   screenshot_css: |
     .header, .footer { display: none !important; }
-  
+
   timeouts:
     page_load: 30000
     bot_response: 60000
 
-# Dati default per i test
+# Default test data
 test_defaults:
   email: "test@example.com"
   countries: ["Italy", "Germany", "France"]
 
-# Google Sheets (opzionale)
+# Google Sheets (optional)
 google_sheets:
   enabled: false
   spreadsheet_id: ""
   drive_folder_id: ""
 
-# LangSmith (opzionale)
+# LangSmith (optional)
 langsmith:
   enabled: false
   project_id: ""
   org_id: ""
   tool_names: []
 
-# Ollama (opzionale)
+# Ollama (optional)
 ollama:
   enabled: true
   model: "mistral"
@@ -154,60 +154,59 @@ ollama:
 EOF
 ```
 
-### 3. Crea tests.json
+### 3. Create tests.json
 
 ```bash
-cat > projects/mio-chatbot/tests.json << 'EOF'
+cat > projects/my-chatbot/tests.json << 'EOF'
 [
   {
     "id": "TC001",
-    "question": "Come posso resettare la password?",
+    "question": "How can I reset my password?",
     "category": "account",
     "expected_topics": ["password", "reset", "email"]
   },
   {
-    "id": "TC002", 
-    "question": "Quali sono gli orari di apertura?",
+    "id": "TC002",
+    "question": "What are your opening hours?",
     "category": "info",
-    "expected_topics": ["orari", "apertura"]
+    "expected_topics": ["hours", "opening"]
   }
 ]
 EOF
 ```
 
-### 4. Crea training_data.json (vuoto)
+### 4. Create training_data.json (empty)
 
 ```bash
-echo "[]" > projects/mio-chatbot/training_data.json
+echo "[]" > projects/my-chatbot/training_data.json
 ```
 
 ---
 
-## Rilevamento Selettori
+## Selector Detection
 
-### Selettori comuni già supportati
+### Common selectors already supported
 
-Il tool cerca automaticamente questi pattern:
+The tool automatically searches for these patterns:
 
-**Textarea (input messaggi)**:
+**Textarea (message input)**:
 ```css
 #llm-prompt-textarea
 [data-testid='chat-input']
 textarea[placeholder*='message' i]
-textarea[placeholder*='scrivi' i]
+textarea[placeholder*='type' i]
 .chat-input textarea
 ```
 
-**Bottone invio**:
+**Send button**:
 ```css
 button.llm__prompt-submit
 button[type='submit']
 button[aria-label*='send' i]
-button[aria-label*='invia' i]
 .send-button
 ```
 
-**Messaggi bot**:
+**Bot messages**:
 ```css
 .llm__message--assistant .llm__text-body
 [data-role='assistant']
@@ -216,162 +215,162 @@ button[aria-label*='invia' i]
 .ai-response
 ```
 
-### Trovare selettori manualmente
+### Finding selectors manually
 
-Se i selettori automatici non funzionano:
+If automatic selectors don't work:
 
-1. Apri il chatbot nel browser
-2. Premi `F12` per aprire DevTools
-3. Clicca l'icona selettore (↖️) in alto a sinistra
-4. Clicca sull'elemento desiderato
-5. Nel pannello Elements, tasto destro → Copy → Copy selector
+1. Open the chatbot in browser
+2. Press `F12` to open DevTools
+3. Click the selector icon (arrow) in the top left
+4. Click on the desired element
+5. In the Elements panel, right-click → Copy → Copy selector
 
 ### Click-to-learn
 
-Se usi la modalità click-to-learn:
+If you use click-to-learn mode:
 
-1. Il tool apre il browser
-2. L'elemento da cliccare viene evidenziato in giallo
-3. Clicca sull'elemento richiesto
-4. Il tool estrae automaticamente il selettore
-5. Conferma o modifica manualmente
+1. The tool opens the browser
+2. The element to click is highlighted in yellow
+3. Click on the requested element
+4. The tool automatically extracts the selector
+5. Confirm or edit manually
 
 ---
 
 ## Import Test Cases
 
-### Da JSON
+### From JSON
 
-Formato nativo, supporta tutte le funzionalità:
+Native format, supports all features:
 
 ```json
 [
   {
     "id": "TC001",
-    "question": "Domanda principale",
-    "category": "categoria",
+    "question": "Main question",
+    "category": "category",
     "expected_topics": ["topic1", "topic2"],
     "followups": [
       {
-        "condition": "contains:parola",
-        "question": "Domanda followup"
+        "condition": "contains:word",
+        "question": "Follow-up question"
       }
     ]
   }
 ]
 ```
 
-### Da CSV
+### From CSV
 
 ```csv
 id,question,category,expected_topics
-TC001,"Come resetto la password?",account,"password,reset,email"
-TC002,"Orari apertura?",info,"orari,apertura"
+TC001,"How do I reset my password?",account,"password,reset,email"
+TC002,"Opening hours?",info,"hours,opening"
 ```
 
-### Da Excel
+### From Excel
 
-Stesso formato del CSV, prima riga come intestazioni.
+Same format as CSV, first row as headers.
 
-### Condizioni followup
+### Follow-up conditions
 
-| Condizione | Esempio | Descrizione |
-|------------|---------|-------------|
-| `contains:X` | `contains:email` | La risposta contiene "email" |
-| `not_contains:X` | `not_contains:errore` | La risposta NON contiene "errore" |
-| `length_gt:N` | `length_gt:100` | Risposta più lunga di N caratteri |
-| `length_lt:N` | `length_lt:50` | Risposta più corta di N caratteri |
-| `always` | `always` | Esegui sempre |
+| Condition | Example | Description |
+|-----------|---------|-------------|
+| `contains:X` | `contains:email` | Response contains "email" |
+| `not_contains:X` | `not_contains:error` | Response does NOT contain "error" |
+| `length_gt:N` | `length_gt:100` | Response longer than N characters |
+| `length_lt:N` | `length_lt:50` | Response shorter than N characters |
+| `always` | `always` | Always execute |
 
 ---
 
-## Primo Test
+## First Test
 
-### 1. Avvia in modalità Train
+### 1. Start in Train mode
 
 ```bash
-./chatbot-tester --project=mio-chatbot --mode=train
+./chatbot-tester --project=my-chatbot --mode=train
 ```
 
-### 2. Esegui un test singolo
+### 2. Run a single test
 
 ```bash
-./chatbot-tester --project=mio-chatbot --mode=train --test=TC001
+./chatbot-tester --project=my-chatbot --mode=train --test=TC001
 ```
 
-### 3. Cosa succede in Train mode
+### 3. What happens in Train mode
 
-1. Il browser si apre sulla pagina del chatbot
-2. La domanda viene inviata automaticamente
-3. Attendi la risposta del bot
-4. Ti viene chiesto di valutare la risposta:
-   - ✅ **Pass**: Risposta corretta
-   - ❌ **Fail**: Risposta errata
-   - ⚠️ **Warning**: Parzialmente corretta
-5. Puoi aggiungere note
-6. Il risultato viene salvato
+1. The browser opens to the chatbot page
+2. The question is sent automatically
+3. Wait for the bot's response
+4. You are asked to evaluate the response:
+   - **Pass**: Correct response
+   - **Fail**: Incorrect response
+   - **Warning**: Partially correct
+5. You can add notes
+6. The result is saved
 
-### 4. Verifica i report
+### 4. Check the reports
 
 ```bash
-# Report locale
-open reports/mio-chatbot/run_001/report.html
+# Local report
+open reports/my-chatbot/run_001/report.html
 
-# Oppure vedi il CSV
-cat reports/mio-chatbot/run_001/report.csv
+# Or view the CSV
+cat reports/my-chatbot/run_001/report.csv
 ```
 
 ---
 
-## Flusso di lavoro consigliato
+## Recommended Workflow
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                                                             │
-│  1. TRAIN MODE (10-20 test)                                │
-│     - Esegui i test manualmente                            │
-│     - Valuta le risposte                                   │
-│     - Il tool impara dai tuoi feedback                     │
+│  1. TRAIN MODE (10-20 tests)                               │
+│     - Run tests manually                                    │
+│     - Evaluate responses                                    │
+│     - The tool learns from your feedback                    │
 │                                                             │
 │                          ↓                                  │
 │                                                             │
-│  2. ASSISTED MODE (validazione)                            │
-│     - L'AI suggerisce le valutazioni                       │
-│     - Tu confermi o correggi                               │
-│     - Affina l'apprendimento                               │
+│  2. ASSISTED MODE (validation)                             │
+│     - AI suggests evaluations                               │
+│     - You confirm or correct                                │
+│     - Refine the learning                                   │
 │                                                             │
 │                          ↓                                  │
 │                                                             │
 │  3. AUTO MODE (regression)                                 │
-│     - Esecuzione completamente automatica                  │
-│     - Ideale per CI/CD                                     │
-│     - Report automatici                                    │
+│     - Fully automatic execution                             │
+│     - Ideal for CI/CD                                       │
+│     - Automatic reports                                     │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Checklist nuovo progetto
+## New Project Checklist
 
-- [ ] Progetto creato in `projects/<nome>/`
-- [ ] `project.yaml` configurato con URL e selettori
-- [ ] `tests.json` con almeno alcuni test case
-- [ ] Login effettuato (sessione salvata)
-- [ ] Primo test eseguito con successo
-- [ ] Report generato correttamente
-
----
-
-## Prossimi passi
-
-1. Aggiungi più test cases
-2. Configura i followup per scenari complessi
-3. Passa alla modalità Assisted
-4. Integra con CI/CD usando modalità Auto
+- [ ] Project created in `projects/<name>/`
+- [ ] `project.yaml` configured with URL and selectors
+- [ ] `tests.json` with at least some test cases
+- [ ] Login completed (session saved)
+- [ ] First test executed successfully
+- [ ] Report generated correctly
 
 ---
 
-## Problemi?
+## Next Steps
 
-Consulta la [Guida Troubleshooting](TROUBLESHOOTING.md).
+1. Add more test cases
+2. Configure follow-ups for complex scenarios
+3. Move to Assisted mode
+4. Integrate with CI/CD using Auto mode
+
+---
+
+## Problems?
+
+See the [Troubleshooting Guide](TROUBLESHOOTING.md).

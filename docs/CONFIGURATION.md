@@ -1,158 +1,158 @@
-# Guida Completa alla Configurazione
+# Complete Configuration Guide
 
-Questa guida documenta **tutte** le opzioni di configurazione disponibili in Chatbot Tester.
+This guide documents **all** configuration options available in Chatbot Tester.
 
-**Mantra: Se si puo fare, deve essere visibile, spiegato, e configurabile.**
-
----
-
-## Indice
-
-1. [Opzioni CLI](#1-opzioni-cli)
-2. [File di Configurazione](#2-file-di-configurazione)
-   - [settings.yaml](#settingsyaml-configurazione-globale)
-   - [project.yaml](#projectyaml-configurazione-progetto)
-   - [run_config.json](#run_configjson-stato-run)
-3. [Toggle Runtime](#3-toggle-runtime)
-4. [Variabili d'Ambiente](#4-variabili-dambiente)
+**Mantra: If it can be done, it must be visible, explained, and configurable.**
 
 ---
 
-## 1. Opzioni CLI
+## Table of Contents
 
-Tutte le opzioni disponibili via `python run.py [OPZIONI]`:
+1. [CLI Options](#1-cli-options)
+2. [Configuration Files](#2-configuration-files)
+   - [settings.yaml](#settingsyaml-global-configuration)
+   - [project.yaml](#projectyaml-project-configuration)
+   - [run_config.json](#run_configjson-run-state)
+3. [Runtime Toggles](#3-runtime-toggles)
+4. [Environment Variables](#4-environment-variables)
 
-### Selezione Progetto
+---
 
-| Opzione | Descrizione | Esempio |
-|---------|-------------|---------|
-| `-p, --project` | Nome del progetto | `-p my-chatbot` |
-| `--new-project` | Avvia wizard nuovo progetto | `--new-project` |
+## 1. CLI Options
 
-### Modalita di Test
+All options available via `python run.py [OPTIONS]`:
 
-| Opzione | Descrizione | Valori |
-|---------|-------------|--------|
-| `-m, --mode` | Modalita di esecuzione | `train`, `assisted`, `auto` |
-| `-t, --test` | Esegui singolo test | `-t TEST_001` |
-| `--tests` | Quali test eseguire | `all`, `pending` (default), `failed` |
-| `--new-run` | Forza nuova RUN | flag |
+### Project Selection
 
-### Comportamento Browser
+| Option | Description | Example |
+|--------|-------------|---------|
+| `-p, --project` | Project name | `-p my-chatbot` |
+| `--new-project` | Start new project wizard | `--new-project` |
 
-| Opzione | Descrizione | Default |
-|---------|-------------|---------|
-| `--headless` | Browser invisibile | `false` |
-| `--no-interactive` | Senza prompt utente | `false` |
-| `--dry-run` | Simula senza eseguire | `false` |
+### Test Modes
 
-### Servizi e Debug
+| Option | Description | Values |
+|--------|-------------|--------|
+| `-m, --mode` | Execution mode | `train`, `assisted`, `auto` |
+| `-t, --test` | Run single test | `-t TEST_001` |
+| `--tests` | Which tests to run | `all`, `pending` (default), `failed` |
+| `--new-run` | Force new RUN | flag |
 
-| Opzione | Descrizione | Note |
-|---------|-------------|------|
-| `--health-check` | Verifica servizi e esci | Esce con codice 0/1 |
-| `--skip-health-check` | Salta verifica iniziale | Velocizza avvio |
-| `--debug` | Output debug dettagliato | Per troubleshooting |
+### Browser Behavior
 
-### Esecuzione Parallela
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--headless` | Invisible browser | `false` |
+| `--no-interactive` | No user prompts | `false` |
+| `--dry-run` | Simulate without executing | `false` |
 
-| Opzione | Descrizione | Default |
-|---------|-------------|---------|
-| `--parallel` | Esegui test in parallelo | `false` |
-| `--workers` | Numero browser paralleli | `3` (max: 5) |
+### Services and Debug
 
-**Come funziona:**
-- Ogni worker ha un browser Chromium isolato
-- I risultati vengono accumulati in memoria
-- Alla fine vengono scritti in batch su Google Sheets
-- Thread-safe: nessun rischio di sovrascrittura
+| Option | Description | Note |
+|--------|-------------|------|
+| `--health-check` | Check services and exit | Exits with code 0/1 |
+| `--skip-health-check` | Skip initial check | Speeds up startup |
+| `--debug` | Detailed debug output | For troubleshooting |
 
-**Quando usarlo:**
-- Suite di test grandi (50+ test)
-- CI/CD dove il tempo e critico
-- Hardware con RAM sufficiente (ogni browser ~200MB)
+### Parallel Execution
 
-### Analisi Testing
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--parallel` | Run tests in parallel | `false` |
+| `--workers` | Number of parallel browsers | `3` (max: 5) |
 
-| Opzione | Descrizione | Esempio |
-|---------|-------------|---------|
-| `--compare` | Confronta run | `--compare 15:16` o `--compare` |
-| `--regressions` | Mostra regressioni | `--regressions 16` o `--regressions` |
-| `--flaky` | Test flaky | `--flaky 20` (default: 10 run) |
+**How it works:**
+- Each worker has an isolated Chromium browser
+- Results are accumulated in memory
+- At the end, they are written in batch to Google Sheets
+- Thread-safe: no risk of overwriting
 
-### Lingua e Versione
+**When to use it:**
+- Large test suites (50+ tests)
+- CI/CD where time is critical
+- Hardware with sufficient RAM (each browser ~200MB)
 
-| Opzione | Descrizione | Default |
-|---------|-------------|---------|
-| `--lang` | Lingua interfaccia | `it` |
-| `-v, --version` | Mostra versione | - |
-| `--help` | Mostra aiuto | - |
+### Testing Analysis
 
-### Esempi Completi
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--compare` | Compare runs | `--compare 15:16` or `--compare` |
+| `--regressions` | Show regressions | `--regressions 16` or `--regressions` |
+| `--flaky` | Flaky tests | `--flaky 20` (default: 10 runs) |
+
+### Language and Version
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--lang` | Interface language | `it` |
+| `-v, --version` | Show version | - |
+| `--help` | Show help | - |
+
+### Complete Examples
 
 ```bash
-# Test automatici con nuovo run, headless
+# Automatic tests with new run, headless
 python run.py -p my-chatbot -m auto --no-interactive --new-run --headless
 
-# Debug di un singolo test
+# Debug a single test
 python run.py -p my-chatbot -m auto -t TEST_001 --debug
 
-# Health check veloce
+# Quick health check
 python run.py --health-check -p my-chatbot
 
-# Interfaccia in inglese
+# English interface
 python run.py --lang en
 
-# Esecuzione parallela con 4 worker
+# Parallel execution with 4 workers
 python run.py -p my-chatbot -m auto --parallel --workers 4 --no-interactive
 
-# Confronta ultimi 2 run
+# Compare last 2 runs
 python run.py -p my-chatbot --compare
 
-# Regressioni nella run 16
+# Regressions in run 16
 python run.py -p my-chatbot --regressions 16
 
-# Test flaky su 20 run
+# Flaky tests over 20 runs
 python run.py -p my-chatbot --flaky 20
 ```
 
 ---
 
-## 2. File di Configurazione
+## 2. Configuration Files
 
-### settings.yaml (Configurazione Globale)
+### settings.yaml (Global Configuration)
 
-**Percorso:** `config/settings.yaml`
+**Path:** `config/settings.yaml`
 
-Queste impostazioni si applicano a **tutti** i progetti.
+These settings apply to **all** projects.
 
 ```yaml
 # =============================================================================
-# CHATBOT TESTER - Settings Globali
+# CHATBOT TESTER - Global Settings
 # =============================================================================
 
 app:
   version: "1.1.0"
-  language: "it"              # Lingua default: it | en
+  language: "it"              # Default language: it | en
 
 # -----------------------------------------------------------------------------
 # Browser
 # -----------------------------------------------------------------------------
 browser:
-  headless: false             # true = browser nascosto
-  slow_mo: 0                  # ms di pausa tra azioni (utile per debug)
+  headless: false             # true = hidden browser
+  slow_mo: 0                  # ms pause between actions (useful for debug)
   viewport:
-    width: 1280               # Larghezza finestra
-    height: 720               # Altezza finestra
-  device_scale_factor: 2      # 2 = retina display (screenshot HD)
+    width: 1280               # Window width
+    height: 720               # Window height
+  device_scale_factor: 2      # 2 = retina display (HD screenshots)
 
 # -----------------------------------------------------------------------------
 # Test
 # -----------------------------------------------------------------------------
 test:
-  max_turns: 15               # Max turni per conversazione
+  max_turns: 15               # Max turns per conversation
   screenshot_on_complete: true
-  default_wait_after_send: 1000  # ms attesa dopo invio messaggio
+  default_wait_after_send: 1000  # ms wait after sending message
 
 # -----------------------------------------------------------------------------
 # Report
@@ -161,40 +161,40 @@ reports:
   local:
     enabled: true
     formats:
-      - html                  # Report HTML interattivo
-      - csv                   # Esportazione dati
-    keep_last_n: 50           # Mantieni ultimi N run (0 = tutti)
+      - html                  # Interactive HTML report
+      - csv                   # Data export
+    keep_last_n: 50           # Keep last N runs (0 = all)
 
 # -----------------------------------------------------------------------------
-# UI Terminal
+# Terminal UI
 # -----------------------------------------------------------------------------
 ui:
-  colors: true                # Colori nel terminale
-  progress_bar: true          # Mostra barra progresso
-  clear_screen: true          # Pulisce schermo tra step
+  colors: true                # Terminal colors
+  progress_bar: true          # Show progress bar
+  clear_screen: true          # Clear screen between steps
 
 # -----------------------------------------------------------------------------
-# Esecuzione Parallela
+# Parallel Execution
 # -----------------------------------------------------------------------------
 parallel:
-  enabled: false            # true = abilita esecuzione parallela
-  max_workers: 3            # Numero browser in parallelo (1-5)
+  enabled: false            # true = enable parallel execution
+  max_workers: 3            # Number of parallel browsers (1-5)
   retry_strategy: "exponential"  # none | linear | exponential
-  max_retries: 2            # Tentativi per test fallito
-  base_delay_ms: 1000       # Delay base tra retry
-  rate_limit_per_minute: 60 # Limite richieste al chatbot
+  max_retries: 2            # Attempts for failed test
+  base_delay_ms: 1000       # Base delay between retries
+  rate_limit_per_minute: 60 # Request limit to chatbot
 
 # -----------------------------------------------------------------------------
 # Cache
 # -----------------------------------------------------------------------------
 cache:
-  enabled: true             # Abilita caching risposte
+  enabled: true             # Enable response caching
   memory:
-    max_entries: 1000       # Max entry in memoria
-    default_ttl_seconds: 300  # TTL default (5 minuti)
+    max_entries: 1000       # Max entries in memory
+    default_ttl_seconds: 300  # Default TTL (5 minutes)
   langsmith:
-    trace_ttl_seconds: 300  # Cache trace (5 minuti)
-    report_ttl_seconds: 600 # Cache report (10 minuti)
+    trace_ttl_seconds: 300  # Trace cache (5 minutes)
+    report_ttl_seconds: 600 # Report cache (10 minutes)
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -206,69 +206,69 @@ logging:
   backup_count: 3
 ```
 
-#### Opzioni Dettagliate
+#### Detailed Options
 
-| Sezione | Opzione | Descrizione | Impatto |
-|---------|---------|-------------|---------|
-| `browser.headless` | Browser visibile/nascosto | `true` per CI/cloud, `false` per debug |
-| `browser.slow_mo` | Rallenta azioni browser | Utile per vedere cosa succede |
-| `browser.device_scale_factor` | Qualita screenshot | `2` = retina, `1` = normale |
-| `test.max_turns` | Limite conversazione | Evita loop infiniti |
-| `test.screenshot_on_complete` | Cattura automatica | Ogni test salva screenshot |
-| `test.default_wait_after_send` | Pausa dopo invio | Aumentare se chatbot e lento |
-| `reports.keep_last_n` | Pulizia automatica | `0` = mantieni tutto |
-| `ui.colors` | Output colorato | `false` per pipe/log |
-| `parallel.enabled` | Esecuzione parallela | `true` per test veloci |
-| `parallel.max_workers` | Browser simultanei | 1-5, piu worker = piu RAM |
-| `parallel.retry_strategy` | Strategia retry | `exponential` per API lente |
-| `cache.enabled` | Caching risposte | Riduce chiamate LangSmith |
-| `cache.memory.max_entries` | Limite cache | Bilanciare RAM vs hit rate |
-| `logging.level` | Verbosita log | `DEBUG` per troubleshooting |
+| Section | Option | Description | Impact |
+|---------|--------|-------------|--------|
+| `browser.headless` | Visible/hidden browser | `true` for CI/cloud, `false` for debug |
+| `browser.slow_mo` | Slow down browser actions | Useful to see what's happening |
+| `browser.device_scale_factor` | Screenshot quality | `2` = retina, `1` = normal |
+| `test.max_turns` | Conversation limit | Prevents infinite loops |
+| `test.screenshot_on_complete` | Automatic capture | Each test saves screenshot |
+| `test.default_wait_after_send` | Pause after send | Increase if chatbot is slow |
+| `reports.keep_last_n` | Automatic cleanup | `0` = keep all |
+| `ui.colors` | Colored output | `false` for pipe/log |
+| `parallel.enabled` | Parallel execution | `true` for fast tests |
+| `parallel.max_workers` | Simultaneous browsers | 1-5, more workers = more RAM |
+| `parallel.retry_strategy` | Retry strategy | `exponential` for slow APIs |
+| `cache.enabled` | Response caching | Reduces LangSmith calls |
+| `cache.memory.max_entries` | Cache limit | Balance RAM vs hit rate |
+| `logging.level` | Log verbosity | `DEBUG` for troubleshooting |
 
 ---
 
-### project.yaml (Configurazione Progetto)
+### project.yaml (Project Configuration)
 
-**Percorso:** `projects/<nome>/project.yaml`
+**Path:** `projects/<name>/project.yaml`
 
-Configurazione specifica per ogni chatbot.
+Specific configuration for each chatbot.
 
 ```yaml
 project:
   name: my-chatbot
-  description: Descrizione del chatbot
+  description: Chatbot description
   created: '2024-12-01'
-  language: it                # Lingua principale test
+  language: it                # Main test language
 
 # -----------------------------------------------------------------------------
-# Chatbot Target
+# Target Chatbot
 # -----------------------------------------------------------------------------
 chatbot:
   url: https://example.com/chatbot
 
-  # Selettori CSS per elementi UI
+  # CSS selectors for UI elements
   selectors:
-    textarea: '#chat-input'           # Campo input messaggio
-    submit_button: 'button.send'      # Bottone invio
-    bot_messages: '.message.bot'      # Messaggi del bot
-    thread_container: '.chat-thread'  # Container conversazione
-    loading_indicator: '.typing'      # Indicatore "sta scrivendo"
+    textarea: '#chat-input'           # Message input field
+    submit_button: 'button.send'      # Send button
+    bot_messages: '.message.bot'      # Bot messages
+    thread_container: '.chat-thread'  # Conversation container
+    loading_indicator: '.typing'      # "typing" indicator
 
-  # CSS extra per screenshot (nasconde elementi)
+  # Extra CSS for screenshots (hides elements)
   screenshot_css: |
     .unwanted-element { display: none !important; }
 
-  # Timeout in millisecondi
+  # Timeouts in milliseconds
   timeouts:
-    page_load: 30000          # Attesa caricamento pagina
-    bot_response: 60000       # Attesa risposta bot
+    page_load: 30000          # Page load wait
+    bot_response: 60000       # Bot response wait
 
 # -----------------------------------------------------------------------------
 # Test Defaults
 # -----------------------------------------------------------------------------
 test_defaults:
-  email: test@example.com     # Email per test che richiedono auth
-  countries:                  # Valori predefiniti per campi select
+  email: test@example.com     # Email for tests requiring auth
+  countries:                  # Default values for select fields
     - Italy
     - Germany
   confirmations:
@@ -276,84 +276,84 @@ test_defaults:
     - 'no'
 
 # -----------------------------------------------------------------------------
-# Google Sheets (opzionale)
+# Google Sheets (optional)
 # -----------------------------------------------------------------------------
 google_sheets:
   enabled: true
-  spreadsheet_id: '1abc...'   # ID dallo URL del foglio
-  drive_folder_id: '1xyz...'  # ID cartella per screenshot
+  spreadsheet_id: '1abc...'   # ID from sheet URL
+  drive_folder_id: '1xyz...'  # Folder ID for screenshots
 
 # -----------------------------------------------------------------------------
-# LangSmith (opzionale)
+# LangSmith (optional)
 # -----------------------------------------------------------------------------
 langsmith:
   enabled: true
-  api_key_env: LANGSMITH_API_KEY  # Nome variabile ambiente
-  project_id: 'uuid-...'          # ID progetto LangSmith
-  org_id: ''                      # Org ID (vuoto = default)
-  tool_names: []                  # Tool da tracciare (vuoto = auto)
+  api_key_env: LANGSMITH_API_KEY  # Environment variable name
+  project_id: 'uuid-...'          # LangSmith project ID
+  org_id: ''                      # Org ID (empty = default)
+  tool_names: []                  # Tools to track (empty = auto)
 
 # -----------------------------------------------------------------------------
-# Ollama LLM (opzionale)
+# Ollama LLM (optional)
 # -----------------------------------------------------------------------------
 ollama:
   enabled: true
-  model: llama3.2:3b              # Modello per valutazione
+  model: llama3.2:3b              # Model for evaluation
   url: http://localhost:11434/api/generate
 ```
 
-#### Selettori CSS - Come Trovarli
+#### CSS Selectors - How to Find Them
 
-1. Apri il chatbot nel browser
-2. Premi `F12` per DevTools
-3. Usa il selettore elementi (icona freccia)
-4. Clicca sull'elemento desiderato
-5. Copia il selettore CSS dall'HTML
+1. Open the chatbot in browser
+2. Press `F12` for DevTools
+3. Use the element selector (arrow icon)
+4. Click on the desired element
+5. Copy the CSS selector from HTML
 
-**Esempi comuni:**
+**Common examples:**
 ```yaml
-# Per ID
+# By ID
 textarea: '#message-input'
 
-# Per classe
+# By class
 bot_messages: '.chat-message.assistant'
 
-# Per attributo
+# By attribute
 submit_button: 'button[type="submit"]'
 
-# Combinato
+# Combined
 thread_container: 'div.chat-container > .messages'
 ```
 
-#### Screenshot CSS - Personalizzazione
+#### Screenshot CSS - Customization
 
-Il campo `screenshot_css` inietta CSS prima di catturare lo screenshot:
+The `screenshot_css` field injects CSS before capturing the screenshot:
 
 ```yaml
 screenshot_css: |
-  /* Nascondi footer */
+  /* Hide footer */
   footer { display: none !important; }
 
-  /* Nascondi barra input */
+  /* Hide input bar */
   .input-bar { display: none !important; }
 
-  /* Espandi container */
+  /* Expand container */
   .chat-container {
     max-height: none !important;
     overflow: visible !important;
   }
 
-  /* Nascondi scrollbar */
+  /* Hide scrollbar */
   ::-webkit-scrollbar { display: none !important; }
 ```
 
 ---
 
-### run_config.json (Stato Run)
+### run_config.json (Run State)
 
-**Percorso:** `projects/<nome>/run_config.json`
+**Path:** `projects/<name>/run_config.json`
 
-Stato della sessione di test corrente. Modificabile anche da menu interattivo.
+Current test session state. Also modifiable from interactive menu.
 
 ```json
 {
@@ -373,137 +373,137 @@ Stato della sessione di test corrente. Modificabile anche da menu interattivo.
 }
 ```
 
-#### Opzioni Run
+#### Run Options
 
-| Opzione | Tipo | Descrizione | Dove Configurare |
-|---------|------|-------------|------------------|
-| `env` | string | Ambiente: DEV, STAGING, PROD | Menu > Configura |
-| `prompt_version` | string | Versione prompt del chatbot | Menu > Configura |
-| `model_version` | string | Versione modello LLM chatbot | Auto da LangSmith |
-| `active_run` | number | Numero run su Google Sheets | Auto |
-| `dry_run` | bool | Simula senza eseguire | Menu > Toggle |
-| `use_langsmith` | bool | Abilita tracing LangSmith | Menu > Toggle |
-| `use_rag` | bool | Abilita recupero RAG | Menu > Toggle |
-| `use_ollama` | bool | Abilita valutazione Ollama | Menu > Toggle |
-| `single_turn` | bool | Solo domanda iniziale | Menu > Toggle |
+| Option | Type | Description | Where to Configure |
+|--------|------|-------------|-------------------|
+| `env` | string | Environment: DEV, STAGING, PROD | Menu > Configure |
+| `prompt_version` | string | Chatbot prompt version | Menu > Configure |
+| `model_version` | string | Chatbot LLM model version | Auto from LangSmith |
+| `active_run` | number | Run number on Google Sheets | Auto |
+| `dry_run` | bool | Simulate without executing | Menu > Toggle |
+| `use_langsmith` | bool | Enable LangSmith tracing | Menu > Toggle |
+| `use_rag` | bool | Enable RAG retrieval | Menu > Toggle |
+| `use_ollama` | bool | Enable Ollama evaluation | Menu > Toggle |
+| `single_turn` | bool | Initial question only | Menu > Toggle |
 
 #### Single Turn Mode
 
-Quando `single_turn: true`:
-- Esegue **solo** la domanda iniziale di ogni test
-- **Non** genera followup con Ollama
-- Utile per test rapidi o quando Ollama non e disponibile
+When `single_turn: true`:
+- Executes **only** the initial question for each test
+- Does **not** generate followups with Ollama
+- Useful for quick tests or when Ollama is not available
 
 ---
 
-## 3. Toggle Runtime
+## 3. Runtime Toggles
 
-Accessibili dal menu interattivo: **Progetto > Toggle Opzioni**
+Accessible from interactive menu: **Project > Toggle Options**
 
-| Toggle | Effetto ON | Effetto OFF |
-|--------|------------|-------------|
-| **Dry Run** | Simula test senza eseguire | Esecuzione reale |
-| **LangSmith** | Recupera traces e sources | Skip LangSmith |
-| **RAG** | Abilita ricerca RAG | Disabilita RAG |
-| **Ollama** | Valutazione automatica AI | Valutazione manuale |
-| **Single Turn** | Solo domanda iniziale | Conversazione completa |
+| Toggle | Effect ON | Effect OFF |
+|--------|-----------|------------|
+| **Dry Run** | Simulate tests without executing | Real execution |
+| **LangSmith** | Retrieve traces and sources | Skip LangSmith |
+| **RAG** | Enable RAG search | Disable RAG |
+| **Ollama** | Automatic AI evaluation | Manual evaluation |
+| **Single Turn** | Initial question only | Full conversation |
 
-### Da CLI
+### From CLI
 
 ```bash
 # Dry run
 python run.py -p my-chatbot -m auto --dry-run
 
-# Senza Ollama (imposta in run_config.json)
-# Modifica: "use_ollama": false
+# Without Ollama (set in run_config.json)
+# Modify: "use_ollama": false
 python run.py -p my-chatbot -m auto --no-interactive
 ```
 
 ---
 
-## 4. Variabili d'Ambiente
+## 4. Environment Variables
 
-**Percorso:** `config/.env` (non versionato)
+**Path:** `config/.env` (not versioned)
 
 ```bash
 # LangSmith
 LANGSMITH_API_KEY=lsv2_sk_...
 
-# Google (opzionale, se non usi file credenziali)
+# Google (optional, if not using credentials file)
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
 
-# OpenAI (per fine-tuning)
+# OpenAI (for fine-tuning)
 OPENAI_API_KEY=sk-...
 ```
 
-### Priorita Configurazione
+### Configuration Priority
 
-1. **CLI** (massima priorita)
-2. **Variabili ambiente**
+1. **CLI** (highest priority)
+2. **Environment variables**
 3. **run_config.json**
 4. **project.yaml**
-5. **settings.yaml** (minima priorita)
+5. **settings.yaml** (lowest priority)
 
 ---
 
 ## Troubleshooting
 
-### Browser non si apre
+### Browser doesn't open
 
 ```bash
-# Installa browser
+# Install browser
 playwright install chromium
 
-# Verifica
+# Verify
 playwright --version
 ```
 
-### Selettori non funzionano
+### Selectors don't work
 
-1. Apri browser con `--debug`:
+1. Open browser with `--debug`:
    ```bash
-   python run.py -p mio-progetto --debug
+   python run.py -p my-project --debug
    ```
-2. Verifica selettori in DevTools
-3. Aggiorna `project.yaml`
+2. Verify selectors in DevTools
+3. Update `project.yaml`
 
-### Screenshot vuoti
+### Empty screenshots
 
-Verifica `screenshot_css` non nasconda elementi necessari.
+Verify `screenshot_css` doesn't hide necessary elements.
 
-### Timeout troppo frequenti
+### Frequent timeouts
 
-Aumenta timeout in `project.yaml`:
+Increase timeouts in `project.yaml`:
 ```yaml
 chatbot:
   timeouts:
-    page_load: 60000    # 60 secondi
-    bot_response: 120000 # 2 minuti
+    page_load: 60000    # 60 seconds
+    bot_response: 120000 # 2 minutes
 ```
 
 ---
 
-## Riferimento Rapido
+## Quick Reference
 
-### File Principali
+### Main Files
 
-| File | Scope | Modifica |
-|------|-------|----------|
-| `config/settings.yaml` | Globale | Manuale |
-| `projects/<nome>/project.yaml` | Progetto | Wizard o manuale |
-| `projects/<nome>/run_config.json` | Sessione | Menu o manuale |
-| `config/.env` | Credenziali | Manuale |
+| File | Scope | Modify |
+|------|-------|--------|
+| `config/settings.yaml` | Global | Manual |
+| `projects/<name>/project.yaml` | Project | Wizard or manual |
+| `projects/<name>/run_config.json` | Session | Menu or manual |
+| `config/.env` | Credentials | Manual |
 
-### Comandi Utili
+### Useful Commands
 
 ```bash
-# Visualizza configurazione
+# View configuration
 cat projects/my-chatbot/project.yaml
 cat projects/my-chatbot/run_config.json
 
 # Reset run
 rm projects/my-chatbot/run_config.json
 
-# Reset sessione browser
+# Reset browser session
 rm -rf projects/my-chatbot/browser-data/
 ```

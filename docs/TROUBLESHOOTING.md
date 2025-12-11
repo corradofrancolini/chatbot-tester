@@ -1,143 +1,143 @@
-# 🔧 Troubleshooting
+# Troubleshooting
 
-Guida alla risoluzione dei problemi comuni.
-
----
-
-## 📋 Indice
-
-1. [Problemi di Installazione](#problemi-di-installazione)
-2. [Problemi con il Browser](#problemi-con-il-browser)
-3. [Problemi di Connessione](#problemi-di-connessione)
-4. [Problemi con i Selettori](#problemi-con-i-selettori)
-5. [Problemi con Ollama](#problemi-con-ollama)
-6. [Problemi con Google Sheets](#problemi-con-google-sheets)
-7. [Problemi con LangSmith](#problemi-con-langsmith)
-8. [Errori Comuni](#errori-comuni)
-9. [Reset Completo](#reset-completo)
+Guide to solving common problems.
 
 ---
 
-## Problemi di Installazione
+## Table of Contents
+
+1. [Installation Problems](#installation-problems)
+2. [Browser Problems](#browser-problems)
+3. [Connection Problems](#connection-problems)
+4. [Selector Problems](#selector-problems)
+5. [Ollama Problems](#ollama-problems)
+6. [Google Sheets Problems](#google-sheets-problems)
+7. [LangSmith Problems](#langsmith-problems)
+8. [Common Errors](#common-errors)
+9. [Complete Reset](#complete-reset)
+
+---
+
+## Installation Problems
 
 ### "Command not found: ./install.sh"
 
-**Causa**: Il file non ha permessi di esecuzione.
+**Cause**: The file doesn't have execution permissions.
 
-**Soluzione**:
+**Solution**:
 ```bash
 chmod +x install.sh update.sh uninstall.sh
 ./install.sh
 ```
 
-### "Python 3.10+ non trovato"
+### "Python 3.10+ not found"
 
-**Soluzione**:
+**Solution**:
 ```bash
-# Installa Python 3.12 via Homebrew
+# Install Python 3.12 via Homebrew
 brew install python@3.12
 
-# Verifica
+# Verify
 python3.12 --version
 ```
 
-### "Homebrew non trovato"
+### "Homebrew not found"
 
-**Soluzione**:
+**Solution**:
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Per Apple Silicon, aggiungi al PATH
+# For Apple Silicon, add to PATH
 echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
 eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
-### "pip install fallisce"
+### "pip install fails"
 
-**Possibili cause e soluzioni**:
+**Possible causes and solutions**:
 
 ```bash
-# 1. Aggiorna pip
+# 1. Upgrade pip
 source .venv/bin/activate
 pip install --upgrade pip
 
-# 2. Installa dipendenze di sistema
+# 2. Install system dependencies
 xcode-select --install
 
-# 3. Prova installazione singola
+# 3. Try installing one at a time
 pip install playwright
 pip install rich
 # ... etc
 ```
 
-### "Spazio disco insufficiente"
+### "Insufficient disk space"
 
-**Soluzione**:
+**Solution**:
 ```bash
-# Verifica spazio disponibile
+# Check available space
 df -h .
 
-# Libera spazio
-# - Svuota cestino
-# - Rimuovi vecchi backup
-# - Usa Disk Utility per ottimizzare
+# Free up space
+# - Empty trash
+# - Remove old backups
+# - Use Disk Utility to optimize
 ```
 
 ---
 
-## Problemi con il Browser
+## Browser Problems
 
-### "Il browser non si apre"
+### "Browser doesn't open"
 
-**Soluzioni**:
+**Solutions**:
 
 ```bash
-# 1. Reinstalla Chromium
+# 1. Reinstall Chromium
 source .venv/bin/activate
 playwright install chromium --force
 
-# 2. Verifica installazione
+# 2. Verify installation
 playwright install --help
 
-# 3. Se su Apple Silicon
+# 3. If on Apple Silicon
 playwright install chromium --with-deps
 ```
 
-### "Browser si apre ma pagina bianca"
+### "Browser opens but page is blank"
 
-**Causa**: Problema di connessione o URL errato.
+**Cause**: Connection problem or incorrect URL.
 
-**Soluzioni**:
-1. Verifica che l'URL sia corretto nel `project.yaml`
-2. Prova l'URL manualmente in un browser
-3. Verifica connessione internet
+**Solutions**:
+1. Verify the URL is correct in `project.yaml`
+2. Try the URL manually in a browser
+3. Check internet connection
 
-### "Screenshot non vengono salvati"
+### "Screenshots aren't being saved"
 
-**Soluzioni**:
+**Solutions**:
 
 ```bash
-# 1. Verifica permessi cartella
+# 1. Check folder permissions
 ls -la reports/
 
-# 2. Crea manualmente se non esiste
-mkdir -p reports/<progetto>/screenshots
+# 2. Create manually if it doesn't exist
+mkdir -p reports/<project>/screenshots
 
-# 3. Verifica spazio disco
+# 3. Check disk space
 df -h .
 ```
 
-### "Browser si chiude improvvisamente"
+### "Browser closes unexpectedly"
 
-**Possibili cause**:
-- Timeout troppo breve
-- Errore JavaScript nella pagina
-- Problema di memoria
+**Possible causes**:
+- Timeout too short
+- JavaScript error on the page
+- Memory problem
 
-**Soluzioni**:
+**Solutions**:
 
 ```yaml
-# In project.yaml, aumenta timeout
+# In project.yaml, increase timeout
 chatbot:
   timeouts:
     page_load: 60000
@@ -146,103 +146,103 @@ chatbot:
 
 ---
 
-## Problemi di Connessione
+## Connection Problems
 
-### "URL non raggiungibile"
+### "URL not reachable"
 
-**Verifica**:
+**Verify**:
 ```bash
-# Test connessione
+# Test connection
 curl -I https://chat.example.com
 
-# Verifica DNS
+# Check DNS
 nslookup chat.example.com
 
-# Verifica se sei dietro proxy/VPN
+# Check if you're behind proxy/VPN
 ```
 
-### "Errore SSL/TLS"
+### "SSL/TLS error"
 
-**Soluzioni**:
+**Solutions**:
 ```bash
-# 1. Verifica data/ora del sistema
+# 1. Check system date/time
 date
 
-# 2. Se certificato self-signed, potrebbe essere necessario
-# modificare la configurazione (non consigliato per produzione)
+# 2. If self-signed certificate, may need to
+# modify configuration (not recommended for production)
 ```
 
-### "Timeout durante la risposta del bot"
+### "Timeout during bot response"
 
-**Soluzioni**:
+**Solutions**:
 
 ```yaml
 # In project.yaml
 chatbot:
   timeouts:
-    bot_response: 120000  # Aumenta a 2 minuti
+    bot_response: 120000  # Increase to 2 minutes
 ```
 
 ```bash
-# Verifica latenza
+# Check latency
 ping chat.example.com
 ```
 
 ---
 
-## Problemi con i Selettori
+## Selector Problems
 
-### "Selettore non trovato"
+### "Selector not found"
 
-**Diagnosi**:
-1. Apri il chatbot in Chrome
-2. Premi F12 → Console
-3. Esegui:
+**Diagnosis**:
+1. Open the chatbot in Chrome
+2. Press F12 → Console
+3. Run:
 ```javascript
-document.querySelector('#tuo-selettore')
+document.querySelector('#your-selector')
 ```
 
-**Se ritorna `null`**, il selettore è errato.
+**If it returns `null`**, the selector is wrong.
 
-**Soluzioni**:
-1. Usa il Click-to-learn:
+**Solutions**:
+1. Use Click-to-learn:
 ```bash
 ./chatbot-tester --new-project
-# Al passo 4, scegli "Click-to-learn"
+# At step 4, choose "Click-to-learn"
 ```
 
-2. Trova manualmente con DevTools:
+2. Find manually with DevTools:
    - F12 → Elements
-   - Click sull'icona selettore (↖️)
-   - Clicca sull'elemento
-   - Tasto destro → Copy → Copy selector
+   - Click the selector icon (arrow)
+   - Click on the element
+   - Right-click → Copy → Copy selector
 
-### "Selettore trova più elementi"
+### "Selector finds multiple elements"
 
-Il selettore deve essere univoco. 
+The selector must be unique.
 
-**Soluzioni**:
+**Solutions**:
 ```css
-/* Troppo generico */
+/* Too generic */
 .message
 
-/* Più specifico */
+/* More specific */
 .message.assistant:last-child
 
-/* Con ID parent */
+/* With parent ID */
 #chat-container .message.assistant
 ```
 
-### "Il bot risponde ma non viene rilevato"
+### "Bot responds but isn't detected"
 
-**Cause possibili**:
-- Selettore messaggi errato
-- Risposta caricata dinamicamente
-- Iframe nascosto
+**Possible causes**:
+- Wrong message selector
+- Response loaded dynamically
+- Hidden iframe
 
-**Soluzioni**:
+**Solutions**:
 ```yaml
-# In project.yaml, prova diversi selettori
+# In project.yaml, try different selectors
 chatbot:
   selectors:
     bot_messages: ".ai-response, .bot-message, [data-role='assistant']"
@@ -250,297 +250,297 @@ chatbot:
 
 ---
 
-## Problemi con Ollama
+## Ollama Problems
 
-### "Ollama non risponde"
+### "Ollama not responding"
 
-**Verifica**:
+**Verify**:
 ```bash
-# Ollama è in esecuzione?
+# Is Ollama running?
 curl http://localhost:11434/api/tags
 
-# Se errore, avvia Ollama
+# If error, start Ollama
 ollama serve
 ```
 
-### "Modello Mistral non trovato"
+### "Mistral model not found"
 
 ```bash
-# Scarica il modello
+# Download the model
 ollama pull mistral
 
-# Verifica modelli disponibili
+# Check available models
 ollama list
 ```
 
-### "Risposte Ollama lente"
+### "Ollama responses slow"
 
-**Soluzioni**:
-1. Verifica RAM disponibile (Activity Monitor)
-2. Chiudi altre applicazioni
-3. Usa modello più leggero:
+**Solutions**:
+1. Check available RAM (Activity Monitor)
+2. Close other applications
+3. Use a lighter model:
 ```yaml
 ollama:
-  model: "llama2"  # Più veloce di mistral
+  model: "llama2"  # Faster than mistral
 ```
 
-### "Errore 'out of memory'"
+### "'Out of memory' error"
 
 ```bash
-# Verifica memoria usata
+# Check memory usage
 ollama ps
 
-# Riavvia Ollama
+# Restart Ollama
 pkill ollama
 ollama serve
 ```
 
 ---
 
-## Problemi con Google Sheets
+## Google Sheets Problems
 
-### "Errore OAuth / Authentication"
+### "OAuth / Authentication error"
 
-**Soluzioni**:
+**Solutions**:
 
 ```bash
-# 1. Rimuovi token salvati
+# 1. Remove saved tokens
 rm -f config/token.json
 
-# 2. Verifica credenziali
+# 2. Verify credentials
 cat config/oauth_credentials.json | python -m json.tool
 
-# 3. Riesegui autorizzazione
-./chatbot-tester --project=<nome>
-# Segui il flusso OAuth nel browser
+# 3. Re-run authorization
+./chatbot-tester --project=<name>
+# Follow the OAuth flow in browser
 ```
 
-### "Spreadsheet non trovato"
+### "Spreadsheet not found"
 
-**Verifica**:
-1. L'ID è corretto? (dall'URL di Sheets)
-2. Hai condiviso il foglio con l'account OAuth?
-3. API Sheets abilitata?
+**Verify**:
+1. Is the ID correct? (from Sheets URL)
+2. Did you share the sheet with the OAuth account?
+3. Is Sheets API enabled?
 
 ```bash
-# Testa accesso
+# Test access
 curl -s "https://sheets.googleapis.com/v4/spreadsheets/YOUR_ID" \
   -H "Authorization: Bearer $(cat config/token.json | jq -r .access_token)"
 ```
 
-### "Quota API superata"
+### "API quota exceeded"
 
-Google Sheets ha limiti:
-- 100 richieste / 100 secondi / utente
-- 500 richieste / 100 secondi / progetto
+Google Sheets has limits:
+- 100 requests / 100 seconds / user
+- 500 requests / 100 seconds / project
 
-**Soluzioni**:
-1. Riduci frequenza test
-2. Usa batch updates
-3. Abilita più quota in Google Cloud Console
+**Solutions**:
+1. Reduce test frequency
+2. Use batch updates
+3. Enable more quota in Google Cloud Console
 
-### "Screenshot non caricati su Drive"
+### "Screenshots not uploaded to Drive"
 
-**Verifica**:
-1. API Drive abilitata?
-2. Cartella Drive condivisa?
-3. Drive Folder ID corretto?
+**Verify**:
+1. Is Drive API enabled?
+2. Is Drive folder shared?
+3. Is Drive Folder ID correct?
 
 ---
 
-## Problemi con LangSmith
+## LangSmith Problems
 
-### "API Key non valida"
+### "Invalid API Key"
 
-**Verifica**:
+**Verify**:
 ```bash
-# Testa chiave
+# Test key
 curl -s "https://api.smith.langchain.com/projects" \
   -H "x-api-key: YOUR_KEY"
 ```
 
-**Se errore 401**:
-1. Rigenera la chiave in LangSmith
-2. Aggiorna `config/.env`
+**If 401 error**:
+1. Regenerate the key in LangSmith
+2. Update `config/.env`
 
-### "Trace non trovate"
+### "Traces not found"
 
-**Possibili cause**:
-1. Project ID errato
-2. Org ID errato
-3. Nessuna trace recente
+**Possible causes**:
+1. Wrong Project ID
+2. Wrong Org ID
+3. No recent traces
 
-**Verifica**:
-1. Vai su smith.langchain.com
-2. Verifica che ci siano trace nel progetto
-3. Confronta Project ID e Org ID
+**Verify**:
+1. Go to smith.langchain.com
+2. Verify there are traces in the project
+3. Compare Project ID and Org ID
 
-### "Tool names non rilevati"
+### "Tool names not detected"
 
-**Soluzioni**:
-1. Esegui un test manuale sul chatbot
-2. Aspetta che la trace appaia in LangSmith
-3. Riesegui il wizard per auto-detect
+**Solutions**:
+1. Run a manual test on the chatbot
+2. Wait for the trace to appear in LangSmith
+3. Re-run the wizard for auto-detect
 
 ---
 
-## Errori Comuni
+## Common Errors
 
 ### "ModuleNotFoundError"
 
 ```bash
-# Assicurati di usare il venv
+# Make sure you're using the venv
 source .venv/bin/activate
 
-# Reinstalla dipendenze
+# Reinstall dependencies
 pip install -r requirements.txt
 ```
 
 ### "FileNotFoundError: project.yaml"
 
 ```bash
-# Verifica che il progetto esista
+# Verify the project exists
 ls projects/
 
-# Se mancante, ricrea
+# If missing, recreate
 ./chatbot-tester --new-project
 ```
 
 ### "JSONDecodeError in tests.json"
 
 ```bash
-# Valida JSON
-cat projects/<nome>/tests.json | python -m json.tool
+# Validate JSON
+cat projects/<name>/tests.json | python -m json.tool
 
-# Errori comuni:
-# - Virgola finale: [{"a": 1},]  ← ERRATO
-# - Quote singole: {'a': 1}      ← ERRATO
-# - Commenti: /* comment */      ← ERRATO
+# Common errors:
+# - Trailing comma: [{"a": 1},]  ← WRONG
+# - Single quotes: {'a': 1}      ← WRONG
+# - Comments: /* comment */      ← WRONG
 ```
 
 ### "PermissionError"
 
 ```bash
-# Fix permessi
+# Fix permissions
 chmod -R u+rw projects/ reports/ config/
 ```
 
 ### "TimeoutError"
 
-**Soluzioni**:
-1. Aumenta timeout in `project.yaml`
-2. Verifica connessione
-3. Il chatbot potrebbe essere lento
+**Solutions**:
+1. Increase timeout in `project.yaml`
+2. Check connection
+3. The chatbot might be slow
 
 ---
 
-## Reset Completo
+## Complete Reset
 
-Se nulla funziona, reset completo:
+If nothing works, complete reset:
 
-### Reset singolo progetto
+### Reset single project
 
 ```bash
-# Rimuovi dati browser e training
-rm -rf projects/<nome>/browser-data/
-rm -f projects/<nome>/training_data.json
-echo "[]" > projects/<nome>/training_data.json
+# Remove browser data and training
+rm -rf projects/<name>/browser-data/
+rm -f projects/<name>/training_data.json
+echo "[]" > projects/<name>/training_data.json
 
-# Rimuovi report
-rm -rf reports/<nome>/
+# Remove reports
+rm -rf reports/<name>/
 ```
 
-### Reset installazione
+### Reset installation
 
 ```bash
-# Disinstalla
+# Uninstall
 ./uninstall.sh
 
-# Rimuovi residui
+# Remove residuals
 rm -rf .venv/
 rm -rf projects/*/browser-data/
 
-# Reinstalla
+# Reinstall
 ./install.sh
 ```
 
-### Reset completo (ATTENZIONE: perdi tutto!)
+### Complete reset (WARNING: you'll lose everything!)
 
 ```bash
-# Backup prima!
+# Backup first!
 cp -r projects/ ~/backup-chatbot-tester-projects/
 cp config/.env ~/backup-env
 
 # Reset
 ./uninstall.sh --remove-all
 
-# Reinstalla
+# Reinstall
 ./install.sh
 ```
 
 ---
 
-## Log e Debug
+## Logs and Debug
 
-### Abilita log verbose
-
-```bash
-./chatbot-tester --project=<nome> --verbose
-```
-
-### Log Playwright
+### Enable verbose logs
 
 ```bash
-DEBUG=pw:api ./chatbot-tester --project=<nome>
+./chatbot-tester --project=<name> --verbose
 ```
 
-### Log Python
+### Playwright logs
+
+```bash
+DEBUG=pw:api ./chatbot-tester --project=<name>
+```
+
+### Python logs
 
 ```python
-# In run.py, temporaneamente aggiungi:
+# In run.py, temporarily add:
 import logging
 logging.basicConfig(level=logging.DEBUG)
 ```
 
 ---
 
-## Supporto
+## Support
 
-Se il problema persiste:
+If the problem persists:
 
-1. **Raccogli informazioni**:
+1. **Gather information**:
 ```bash
-# Versioni
+# Versions
 python --version
 ./chatbot-tester --version
 ollama --version 2>/dev/null
 
-# Sistema
+# System
 sw_vers
 uname -m
 ```
 
-2. **Crea issue su GitHub** con:
-   - Descrizione del problema
-   - Passaggi per riprodurre
-   - Log di errore
-   - Versioni software
+2. **Create a GitHub issue** with:
+   - Problem description
+   - Steps to reproduce
+   - Error logs
+   - Software versions
 
 ---
 
 ## FAQ
 
-**Q: Posso usare Firefox invece di Chromium?**
-A: No, attualmente solo Chromium è supportato per garantire consistenza.
+**Q: Can I use Firefox instead of Chromium?**
+A: No, currently only Chromium is supported for consistency.
 
-**Q: Funziona su Windows/Linux?**
-A: No, solo macOS è ufficialmente supportato.
+**Q: Does it work on Windows/Linux?**
+A: No, only macOS is officially supported.
 
-**Q: Posso testare più chatbot contemporaneamente?**
-A: Sì, crea progetti separati ed eseguili in terminali diversi.
+**Q: Can I test multiple chatbots simultaneously?**
+A: Yes, create separate projects and run them in different terminals.
 
-**Q: I dati del browser sono condivisi tra progetti?**
-A: No, ogni progetto ha la sua sessione browser isolata.
+**Q: Is browser data shared between projects?**
+A: No, each project has its own isolated browser session.
 
-**Q: Come faccio backup dei dati?**
-A: Copia le cartelle `projects/` e `config/.env`.
+**Q: How do I backup data?**
+A: Copy the `projects/` folder and `config/.env`.

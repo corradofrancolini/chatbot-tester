@@ -1,68 +1,72 @@
-# 📚 Documentazione Chatbot Tester
+# Chatbot Tester Documentation
 
-Benvenuto nella documentazione di Chatbot Tester!
+Welcome to the Chatbot Tester documentation!
 
 ---
 
-## Guide
+## Guides
 
-| Documento | Descrizione |
-|-----------|-------------|
-| [README](../README.md) | Quick start e panoramica |
-| [SETUP](SETUP.md) | Guida installazione dettagliata |
-| [NEW_PROJECT](NEW_PROJECT.md) | Come creare un nuovo progetto |
-| [TROUBLESHOOTING](TROUBLESHOOTING.md) | Risoluzione problemi |
+| Document | Description |
+|----------|-------------|
+| [README](../README.md) | Quick start and overview |
+| [SETUP](SETUP.md) | Detailed installation guide |
+| [CONFIGURATION](CONFIGURATION.md) | Complete configuration reference |
+| [DEPLOYMENT](DEPLOYMENT.md) | Docker, GitHub Actions, PyPI |
+| [NEW_PROJECT](NEW_PROJECT.md) | How to create a new project |
+| [TROUBLESHOOTING](TROUBLESHOOTING.md) | Problem solving |
 
 ---
 
 ## Quick Links
 
-### Installazione
+### Installation
 ```bash
 ./install.sh
 ```
 
-### Nuovo progetto
+### New project
 ```bash
 ./chatbot-tester --new-project
 ```
 
-### Avvia test
+### Run tests
 ```bash
-./chatbot-tester --project=<nome> --mode=train
+./chatbot-tester --project=<name> --mode=train
 ```
 
-### Aiuto
+### Help
 ```bash
 ./chatbot-tester --help
 ```
 
 ---
 
-## Struttura Documentazione
+## Documentation Structure
 
 ```
 docs/
-├── README.md           # Questo file
-├── SETUP.md            # Setup dettagliato
-├── NEW_PROJECT.md      # Creazione progetti
-├── TROUBLESHOOTING.md  # Problemi e soluzioni
-└── images/             # Screenshot per le guide
+├── README.md           # This file
+├── SETUP.md            # Detailed setup
+├── CONFIGURATION.md    # Configuration reference
+├── DEPLOYMENT.md       # Deployment options
+├── NEW_PROJECT.md      # Project creation
+├── TROUBLESHOOTING.md  # Problems and solutions
+└── images/             # Screenshots for guides
 ```
 
 ---
 
-## Contribuire alla documentazione
+## Contributing to Documentation
 
-Se trovi errori o vuoi migliorare la documentazione:
+If you find errors or want to improve the documentation:
 
-1. Modifica il file markdown
-2. Testa i comandi che documenti
-3. Aggiungi screenshot se utili
-4. Apri una Pull Request
+1. Edit the markdown file
+2. Test the commands you document
+3. Add screenshots if useful
+4. Open a Pull Request
 
 ---
 
-## Versione
+## Version
 
-Documentazione per Chatbot Tester v1.0.0
+Documentation for Chatbot Tester v1.6.0

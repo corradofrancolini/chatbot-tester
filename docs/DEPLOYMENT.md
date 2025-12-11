@@ -1,37 +1,37 @@
-# Guida al Deployment
+# Deployment Guide
 
-Questa guida spiega come eseguire Chatbot Tester senza avere Chromium in esecuzione sul tuo Mac.
+This guide explains how to run Chatbot Tester without having Chromium running on your Mac.
 
 ---
 
-## Indice
+## Table of Contents
 
-1. [GitHub Actions (Consigliato)](#1-github-actions-consigliato)
+1. [GitHub Actions (Recommended)](#1-github-actions-recommended)
 2. [Docker](#2-docker)
 3. [PyPI Package](#3-pypi-package)
-4. [Binary Standalone](#4-binary-standalone)
+4. [Standalone Binary](#4-standalone-binary)
 5. [GitHub Action Marketplace](#5-github-action-marketplace)
 
 ---
 
-## 1. GitHub Actions (Consigliato)
+## 1. GitHub Actions (Recommended)
 
-Esegui test direttamente sui server GitHub, senza alcun software locale.
+Run tests directly on GitHub servers, without any local software.
 
-### Setup (una tantum)
+### Setup (one-time)
 
-#### Step 1: Configura i Secrets
+#### Step 1: Configure Secrets
 
-Vai su **GitHub > Settings > Secrets and variables > Actions** e aggiungi:
+Go to **GitHub > Settings > Secrets and variables > Actions** and add:
 
-| Secret | Valore | Obbligatorio |
-|--------|--------|--------------|
-| `LANGSMITH_API_KEY` | La tua API key LangSmith | No |
-| `GOOGLE_CREDENTIALS` | JSON delle credenziali Google | No |
+| Secret | Value | Required |
+|--------|-------|----------|
+| `LANGSMITH_API_KEY` | Your LangSmith API key | No |
+| `GOOGLE_CREDENTIALS` | Google credentials JSON | No |
 
-#### Step 2: Pusha il workflow
+#### Step 2: Push the workflow
 
-Il file `.github/workflows/chatbot-test.yml` e gia nel repo.
+The `.github/workflows/chatbot-test.yml` file is already in the repo.
 
 ```bash
 git add .github/
@@ -39,72 +39,72 @@ git commit -m "Add GitHub Actions workflow"
 git push
 ```
 
-### Utilizzo quotidiano
+### Daily Usage
 
-#### Via interfaccia web
+#### Via web interface
 
-1. Vai su **GitHub > Actions > Chatbot Test Suite**
-2. Clicca **Run workflow**
-3. Compila i parametri:
-   - `project`: nome del progetto (es. `my-chatbot`)
-   - `mode`: `auto`, `assisted`, o `train`
-   - `tests`: `all`, `pending`, o `failed`
-   - `new_run`: spunta per creare nuovo run
+1. Go to **GitHub > Actions > Chatbot Test Suite**
+2. Click **Run workflow**
+3. Fill in the parameters:
+   - `project`: project name (e.g., `my-chatbot`)
+   - `mode`: `auto`, `assisted`, or `train`
+   - `tests`: `all`, `pending`, or `failed`
+   - `new_run`: check to create new run
 
-#### Via CLI (consigliato)
+#### Via CLI (recommended)
 
 ```bash
-# Installa GitHub CLI
+# Install GitHub CLI
 brew install gh
 
 # Login
 gh auth login
 
-# Lancia test
+# Launch tests
 gh workflow run chatbot-test.yml \
   -f project=my-chatbot \
   -f mode=auto \
   -f tests=pending
 
-# Guarda lo stato
+# Watch status
 gh run watch
 
-# Scarica report
+# Download report
 gh run download <run-id>
 ```
 
-### Costi
+### Costs
 
-- **Gratis**: 2000 minuti/mese per repo pubblici
-- **Privati**: 2000 minuti/mese inclusi, poi $0.008/minuto
+- **Free**: 2000 minutes/month for public repos
+- **Private**: 2000 minutes/month included, then $0.008/minute
 
 ---
 
 ## 2. Docker
 
-Esegui test in un container isolato, localmente o su un server.
+Run tests in an isolated container, locally or on a server.
 
-### Setup locale
+### Local Setup
 
 ```bash
-# Build immagine
+# Build image
 docker build -t chatbot-tester .
 
-# Verifica
+# Verify
 docker run chatbot-tester --help
 ```
 
-### Esecuzione locale
+### Local Execution
 
 ```bash
-# Con progetto esistente
+# With existing project
 docker run \
   -v $(pwd)/projects:/app/projects \
   -v $(pwd)/reports:/app/reports \
   chatbot-tester \
   -p my-chatbot -m auto --no-interactive
 
-# Con variabili d'ambiente
+# With environment variables
 docker run \
   -e LANGSMITH_API_KEY=your_key \
   -v $(pwd)/projects:/app/projects \
@@ -112,25 +112,25 @@ docker run \
   -p my-chatbot -m auto --no-interactive
 ```
 
-### Esecuzione su server remoto
+### Remote Server Execution
 
 ```bash
-# Step 1: Copia immagine su server
+# Step 1: Copy image to server
 docker save chatbot-tester | ssh user@server docker load
 
-# Step 2: Copia progetti
+# Step 2: Copy projects
 scp -r projects/ user@server:~/chatbot-tester/
 
-# Step 3: Esegui da remoto
+# Step 3: Run remotely
 ssh user@server "docker run \
   -v ~/chatbot-tester/projects:/app/projects \
   chatbot-tester \
   -p my-chatbot -m auto --no-interactive"
 ```
 
-### Docker Compose (opzionale)
+### Docker Compose (optional)
 
-Crea `docker-compose.yml`:
+Create `docker-compose.yml`:
 
 ```yaml
 version: '3.8'
@@ -146,7 +146,7 @@ services:
     command: ["-p", "my-chatbot", "-m", "auto", "--no-interactive"]
 ```
 
-Esegui:
+Run:
 ```bash
 docker-compose run chatbot-tester
 ```
@@ -155,57 +155,57 @@ docker-compose run chatbot-tester
 
 ## 3. PyPI Package
 
-Installa come pacchetto Python standard.
+Install as a standard Python package.
 
-### Prerequisiti
+### Prerequisites
 
 - Python 3.10+
 - pip
 
-### Installazione (dopo pubblicazione)
+### Installation (after publishing)
 
 ```bash
-# Installazione base
+# Basic installation
 pip install chatbot-tester
 
-# Con supporto Google Sheets
+# With Google Sheets support
 pip install chatbot-tester[google]
 
-# Completa
+# Complete
 pip install chatbot-tester[all]
 ```
 
-### Utilizzo
+### Usage
 
 ```bash
-# Comando diretto
+# Direct command
 chatbot-tester -p my-chatbot -m auto --no-interactive
 
 # Health check
 chatbot-tester --health-check -p my-chatbot
 ```
 
-### Pubblicazione su PyPI (per maintainer)
+### Publishing to PyPI (for maintainers)
 
 ```bash
 # Build
 pip install build twine
 python -m build
 
-# Upload a TestPyPI (test)
+# Upload to TestPyPI (test)
 twine upload --repository testpypi dist/*
 
-# Upload a PyPI (produzione)
+# Upload to PyPI (production)
 twine upload dist/*
 ```
 
 ---
 
-## 4. Binary Standalone
+## 4. Standalone Binary
 
-Eseguibile singolo senza dipendenze Python.
+Single executable without Python dependencies.
 
-### Prerequisiti
+### Prerequisites
 
 ```bash
 pip install pyinstaller
@@ -214,35 +214,35 @@ pip install pyinstaller
 ### Build
 
 ```bash
-# Build per la piattaforma corrente
+# Build for current platform
 pyinstaller chatbot-tester.spec
 
 # Output in dist/chatbot-tester
 ```
 
-### Utilizzo
+### Usage
 
 ```bash
-# Rendi eseguibile (macOS/Linux)
+# Make executable (macOS/Linux)
 chmod +x dist/chatbot-tester
 
-# Esegui
+# Run
 ./dist/chatbot-tester -p my-chatbot -m auto --no-interactive
 ```
 
-### Note
+### Notes
 
-- Il binary include Python ma **non** include Playwright browsers
-- Devi installare Chromium separatamente: `playwright install chromium`
-- Per distribuzione completa, usa Docker
+- The binary includes Python but does **not** include Playwright browsers
+- You must install Chromium separately: `playwright install chromium`
+- For complete distribution, use Docker
 
 ---
 
 ## 5. GitHub Action Marketplace
 
-Usa Chatbot Tester come action in altri repository.
+Use Chatbot Tester as an action in other repositories.
 
-### Utilizzo in un workflow
+### Usage in a workflow
 
 ```yaml
 name: Test Chatbot
@@ -268,65 +268,65 @@ jobs:
           echo "Failed: ${{ steps.test.outputs.failed }}"
 ```
 
-### Input disponibili
+### Available Inputs
 
-| Input | Descrizione | Default |
+| Input | Description | Default |
 |-------|-------------|---------|
-| `project` | Nome progetto | (obbligatorio) |
-| `mode` | Modalita test | `auto` |
-| `tests` | Quali test | `pending` |
-| `new-run` | Crea nuovo run | `false` |
-| `single-test` | ID singolo test | - |
-| `headless` | Browser headless | `true` |
+| `project` | Project name | (required) |
+| `mode` | Test mode | `auto` |
+| `tests` | Which tests | `pending` |
+| `new-run` | Create new run | `false` |
+| `single-test` | Single test ID | - |
+| `headless` | Headless browser | `true` |
 | `langsmith-api-key` | API key | - |
 | `google-credentials` | JSON credentials | - |
 
-### Output disponibili
+### Available Outputs
 
-| Output | Descrizione |
+| Output | Description |
 |--------|-------------|
-| `report-path` | Path al report HTML |
-| `passed` | Numero test passati |
-| `failed` | Numero test falliti |
-| `total` | Totale test eseguiti |
+| `report-path` | Path to HTML report |
+| `passed` | Number of passed tests |
+| `failed` | Number of failed tests |
+| `total` | Total tests executed |
 
 ---
 
-## Confronto opzioni
+## Options Comparison
 
-| Metodo | Setup | Costo | Manutenzione | Chromium locale |
-|--------|-------|-------|--------------|-----------------|
-| GitHub Actions | Facile | Gratis* | Zero | No |
-| Docker locale | Medio | Zero | Bassa | Si (nel container) |
-| Docker server | Medio | Server | Media | No |
-| PyPI | Facile | Zero | Zero | Si |
-| Binary | Medio | Zero | Zero | Si |
+| Method | Setup | Cost | Maintenance | Local Chromium |
+|--------|-------|------|-------------|----------------|
+| GitHub Actions | Easy | Free* | Zero | No |
+| Docker local | Medium | Zero | Low | Yes (in container) |
+| Docker server | Medium | Server | Medium | No |
+| PyPI | Easy | Zero | Zero | Yes |
+| Binary | Medium | Zero | Zero | Yes |
 
-*2000 minuti/mese inclusi
+*2000 minutes/month included
 
 ---
 
 ## Troubleshooting
 
-### GitHub Actions fallisce
+### GitHub Actions fails
 
-1. Verifica i secrets siano configurati
-2. Controlla i log in **Actions > Run details**
-3. Verifica che il progetto esista in `projects/`
+1. Verify secrets are configured
+2. Check logs in **Actions > Run details**
+3. Verify the project exists in `projects/`
 
-### Docker non trova il progetto
+### Docker doesn't find the project
 
 ```bash
-# Verifica il volume mount
+# Verify volume mount
 docker run -v $(pwd)/projects:/app/projects chatbot-tester ls /app/projects
 ```
 
-### Health check fallisce
+### Health check fails
 
 ```bash
-# Verifica servizi
+# Verify services
 python run.py --health-check -p my-chatbot
 
-# Salta health check per forzare
+# Skip health check to force
 python run.py -p my-chatbot -m auto --skip-health-check
 ```
