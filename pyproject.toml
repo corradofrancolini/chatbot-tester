@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chatbot-tester"
+version = "1.1.0"
+description = "Tool automatizzato per testare chatbot web con supporto multi-progetto, AI locale e reporting avanzato"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Corrado Francolini", email = "corrado@example.com"}
+]
+keywords = [
+    "chatbot",
+    "testing",
+    "automation",
+    "playwright",
+    "llm",
+    "qa"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Quality Assurance",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Internet :: WWW/HTTP :: Browsers",
+]
+
+dependencies = [
+    "playwright>=1.40.0",
+    "rich>=13.0.0",
+    "requests>=2.31.0",
+    "pyyaml>=6.0.0",
+    "python-dotenv>=1.0.0",
+    "questionary>=2.0.0",
+]
+
+[project.optional-dependencies]
+google = [
+    "gspread>=5.12.0",
+    "google-auth>=2.25.0",
+    "google-auth-oauthlib>=1.2.0",
+    "google-api-python-client>=2.110.0",
+]
+excel = [
+    "openpyxl>=3.1.0",
+    "pandas>=2.0.0",
+]
+all = [
+    "chatbot-tester[google,excel]",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+chatbot-tester = "chatbot_tester.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/corradofrancolini/chatbot-tester"
+Documentation = "https://github.com/corradofrancolini/chatbot-tester#readme"
+Repository = "https://github.com/corradofrancolini/chatbot-tester.git"
+Issues = "https://github.com/corradofrancolini/chatbot-tester/issues"
+
+[tool.setuptools]
+packages = ["chatbot_tester", "chatbot_tester.wizard"]
+package-dir = {"chatbot_tester" = "src", "chatbot_tester.wizard" = "wizard"}
+
+[tool.setuptools.package-data]
+chatbot_tester = ["*.yaml", "*.json"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

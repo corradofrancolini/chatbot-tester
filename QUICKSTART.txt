@@ -1,0 +1,87 @@
+================================================================================
+                         CHATBOT TESTER - QUICK START
+================================================================================
+
+Hai ricevuto questo tool come archivio .tar.gz? Segui questi passaggi:
+
+
+PASSO 1: ESTRAI L'ARCHIVIO
+--------------------------
+    tar xzf chatbot-tester-v1.0.0.tar.gz
+    cd chatbot-tester
+
+
+PASSO 2: INSTALLA
+-----------------
+    ./install.sh
+
+L'installer verificherà e installerà tutto il necessario:
+- Virtual environment Python
+- Dipendenze (Playwright, Rich, etc.)
+- Browser Chromium per i test
+
+Tempo stimato: 2-5 minuti
+
+
+PASSO 3: CREA IL TUO PRIMO PROGETTO
+-----------------------------------
+    ./chatbot-tester --new-project
+
+Il wizard ti guiderà nella configurazione:
+- URL del chatbot da testare
+- Rilevamento automatico dei selettori CSS
+- Configurazione report (locale o Google Sheets)
+- Import test cases
+
+
+PASSO 4: AVVIA I TEST
+---------------------
+    ./chatbot-tester --project=<nome> --mode=train
+
+
+================================================================================
+                              COMANDI PRINCIPALI
+================================================================================
+
+    ./chatbot-tester --help              # Mostra aiuto
+    ./chatbot-tester --new-project       # Wizard nuovo progetto
+    ./chatbot-tester --project=<nome>    # Avvia progetto esistente
+    ./chatbot-tester --list-projects     # Lista progetti
+
+
+================================================================================
+                              STRUTTURA DATI
+================================================================================
+
+I tuoi dati sono salvati in:
+
+    projects/           Configurazioni e test dei tuoi progetti
+    config/.env         Credenziali (API keys, etc.)
+    reports/            Report generati
+
+IMPORTANTE: Fai backup di queste cartelle prima di aggiornare!
+
+
+================================================================================
+                             AGGIORNAMENTO
+================================================================================
+
+Se ricevi una nuova versione:
+
+1. Estrai il nuovo archivio in una cartella temporanea
+2. Copia i tuoi dati:
+       cp -r vecchia-cartella/projects/ nuova-cartella/
+       cp vecchia-cartella/config/.env nuova-cartella/config/
+3. Esegui ./install.sh nella nuova cartella
+
+
+================================================================================
+                               PROBLEMI?
+================================================================================
+
+Consulta la documentazione in docs/:
+- docs/SETUP.md          - Guida installazione dettagliata
+- docs/NEW_PROJECT.md    - Creare un nuovo progetto  
+- docs/TROUBLESHOOTING.md - Risoluzione problemi
+
+================================================================================
