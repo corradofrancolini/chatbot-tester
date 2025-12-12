@@ -85,73 +85,128 @@ class LangSmithReport:
     response: str = ""  # Risposta/output
     waterfall: List[WaterfallStep] = field(default_factory=list)  # Tree della run
     sources: List[SourceDocument] = field(default_factory=list)  # Fonti consultate
+    # Metriche timing dettagliate
+    llm_duration_ms: int = 0  # Tempo totale LLM
+    llm_calls: int = 0  # Numero chiamate LLM
+    tool_duration_ms: int = 0  # Tempo totale tool
+    retriever_duration_ms: int = 0  # Tempo retriever/RAG
+    chain_duration_ms: int = 0  # Tempo chain/orchestration
+    queue_time_ms: int = 0  # Tempo in coda (se disponibile)
+    streaming_duration_ms: int = 0  # Durata streaming
+    tokens_per_second: float = 0.0  # Velocità generazione token
 
     def format_for_sheets(self) -> str:
-        """Formatta il report per inserimento in Google Sheets (colonna NOTES)"""
+        """Formatta il report per inserimento in Google Sheets (colonna LS REPORT)"""
         lines = []
 
-        # === QUERY ===
-        if self.query:
-            lines.append("=== QUERY ===")
-            query_preview = self.query[:200] + "..." if len(self.query) > 200 else self.query
-            lines.append(query_preview)
+        # === TIMING (prima, più importante) ===
+        lines.append("=== TIMING ===")
 
-        # === RESPONSE ===
-        if self.response:
-            lines.append("")
-            lines.append("=== RESPONSE ===")
-            response_preview = self.response[:300] + "..." if len(self.response) > 300 else self.response
-            lines.append(response_preview)
+        # Tempo totale
+        if self.duration_ms:
+            duration_sec = self.duration_ms / 1000
+            lines.append(f"⏱️ Total: {self._format_duration(self.duration_ms)}")
 
-        # === PERFORMANCE ===
-        perf_lines = []
+        # Time to first token
+        if self.first_token_ms:
+            lines.append(f"⚡ TTFT: {self._format_duration(self.first_token_ms)}")
+
+        # Breakdown per componente
+        breakdown = []
+        if self.llm_duration_ms:
+            pct = (self.llm_duration_ms / self.duration_ms * 100) if self.duration_ms else 0
+            breakdown.append(f"  • LLM: {self._format_duration(self.llm_duration_ms)} ({pct:.0f}%)")
+        if self.tool_duration_ms:
+            pct = (self.tool_duration_ms / self.duration_ms * 100) if self.duration_ms else 0
+            breakdown.append(f"  • Tools: {self._format_duration(self.tool_duration_ms)} ({pct:.0f}%)")
+        if self.retriever_duration_ms:
+            pct = (self.retriever_duration_ms / self.duration_ms * 100) if self.duration_ms else 0
+            breakdown.append(f"  • RAG/Retriever: {self._format_duration(self.retriever_duration_ms)} ({pct:.0f}%)")
+        if self.chain_duration_ms:
+            pct = (self.chain_duration_ms / self.duration_ms * 100) if self.duration_ms else 0
+            breakdown.append(f"  • Chain: {self._format_duration(self.chain_duration_ms)} ({pct:.0f}%)")
+
+        if breakdown:
+            lines.append("Breakdown:")
+            lines.extend(breakdown)
+
+        # Token speed
+        if self.tokens_per_second > 0:
+            lines.append(f"🚀 Speed: {self.tokens_per_second:.1f} tok/s")
+        elif self.tokens_output and self.llm_duration_ms:
+            # Calcola se non fornito
+            tps = self.tokens_output / (self.llm_duration_ms / 1000)
+            lines.append(f"🚀 Speed: {tps:.1f} tok/s")
+
+        # === MODEL ===
         if self.model:
+            lines.append("")
+            lines.append("=== MODEL ===")
             model_str = self.model
             if self.model_provider:
-                model_str += f" ({self.model_provider})"
-            perf_lines.append(f"Model: {model_str}")
-        if self.duration_ms:
-            perf_lines.append(f"Duration: {self.duration_ms}ms")
-        if self.first_token_ms:
-            perf_lines.append(f"First Token: {self.first_token_ms}ms")
-        if self.tokens_total or self.tokens_input or self.tokens_output:
-            perf_lines.append(f"Tokens: {self.tokens_input} in / {self.tokens_output} out")
+                model_str = f"{self.model_provider}/{self.model}"
+            lines.append(f"🤖 {model_str}")
+            if self.llm_calls > 1:
+                lines.append(f"   ({self.llm_calls} LLM calls)")
 
-        if perf_lines:
+        # === TOKENS ===
+        if self.tokens_total or self.tokens_input or self.tokens_output:
             lines.append("")
-            lines.append("=== PERFORMANCE ===")
-            lines.extend(perf_lines)
+            lines.append("=== TOKENS ===")
+            lines.append(f"📊 Input: {self.tokens_input:,}")
+            lines.append(f"📊 Output: {self.tokens_output:,}")
+            lines.append(f"📊 Total: {self.tokens_total:,}")
+            # Stima costo (prezzi GPT-4 Turbo)
+            if self.tokens_total > 0:
+                cost_estimate = (self.tokens_input * 0.00001) + (self.tokens_output * 0.00003)
+                if cost_estimate > 0.0001:
+                    lines.append(f"💰 Est. cost: ${cost_estimate:.4f}")
 
         # === TOOLS ===
         if self.tools_used:
             lines.append("")
-            lines.append(f"=== TOOLS ({self.tool_count}) ===")
+            lines.append(f"=== TOOLS ({self.tool_count} calls) ===")
             lines.append(", ".join(self.tools_used))
             if self.failed_tools:
-                lines.append(f"Failed: {self.failed_tools}")
+                lines.append(f"❌ Failed: {self.failed_tools}")
+
+        # === WATERFALL TIMING ===
+        if self.waterfall:
+            lines.append("")
+            lines.append(f"=== WATERFALL ({len(self.waterfall)} steps) ===")
+            # Mostra solo gli step principali (depth <= 1) con timing
+            main_steps = [s for s in self.waterfall if s.depth <= 1]
+            for step in main_steps[:10]:  # Max 10 step
+                status_icon = "✓" if step.status == "success" else "✗" if step.error else "→"
+                duration_str = f"{step.duration_ms}ms" if step.duration_ms < 1000 else f"{step.duration_ms/1000:.1f}s"
+                lines.append(f"  {status_icon} {step.name} ({step.run_type}): {duration_str}")
+            if len(main_steps) > 10:
+                lines.append(f"  ... +{len(main_steps) - 10} more steps")
 
         # === SOURCES ===
         if self.sources:
             lines.append("")
             lines.append(f"=== SOURCES ({len(self.sources)}) ===")
-            for src in self.sources:
+            for src in self.sources[:5]:  # Max 5 sources
                 title = src.title or src.source or "Unknown"
                 score_str = f" [{src.score:.2f}]" if src.score else ""
                 lines.append(f"• {title}{score_str}")
-                if src.source and src.source != title:
-                    lines.append(f"  {src.source}")
-                if src.content_preview:
-                    preview = src.content_preview[:120] + "..." if len(src.content_preview) > 120 else src.content_preview
-                    lines.append(f"  \"{preview}\"")
+            if len(self.sources) > 5:
+                lines.append(f"  ... +{len(self.sources) - 5} more sources")
 
-        # === WATERFALL ===
-        if self.waterfall:
+        # === QUERY (breve) ===
+        if self.query:
             lines.append("")
-            lines.append(f"=== WATERFALL ({len(self.waterfall)} steps) ===")
-            for step in self.waterfall:
-                indent = "  " * step.depth
-                status_icon = "✓" if step.status == "success" else "✗" if step.error else "→"
-                lines.append(f"{indent}{status_icon} {step.name} ({step.run_type}) {step.duration_ms}ms")
+            lines.append("=== QUERY ===")
+            query_preview = self.query[:150] + "..." if len(self.query) > 150 else self.query
+            lines.append(query_preview)
+
+        # === RESPONSE (breve) ===
+        if self.response:
+            lines.append("")
+            lines.append("=== RESPONSE ===")
+            response_preview = self.response[:200] + "..." if len(self.response) > 200 else self.response
+            lines.append(response_preview)
 
         # === ERRORS ===
         has_errors = self.error or self.failed_tools or (self.status and self.status != "success")
@@ -164,8 +219,8 @@ class LangSmithReport:
                 lines.append(f"Status: {self.status}")
             if self.error:
                 lines.append(f"Error: {self.error[:150]}")
-            for step in waterfall_errors:
-                lines.append(f"• {step.name}: {step.error[:100]}")
+            for step in waterfall_errors[:3]:  # Max 3 errori
+                lines.append(f"• {step.name}: {step.error[:80]}")
 
         # === TRACE URL ===
         if self.trace_url:
@@ -174,6 +229,17 @@ class LangSmithReport:
             lines.append(self.trace_url)
 
         return "\n".join(lines) if lines else ""
+
+    def _format_duration(self, ms: int) -> str:
+        """Formatta durata in modo leggibile"""
+        if ms < 1000:
+            return f"{ms}ms"
+        elif ms < 60000:
+            return f"{ms/1000:.2f}s"
+        else:
+            mins = ms // 60000
+            secs = (ms % 60000) / 1000
+            return f"{mins}m {secs:.1f}s"
 
     def get_model_version(self) -> str:
         """Restituisce stringa model version per il report"""
@@ -508,6 +574,16 @@ class LangSmithClient:
         # Estrai sources/documenti consultati
         sources = self._extract_sources(trace.id)
 
+        # Calcola metriche di timing dal waterfall
+        timing_metrics = self._calculate_timing_metrics(waterfall)
+
+        # Calcola token/s
+        tokens_output = model_info.get('tokens_output', 0)
+        llm_duration = timing_metrics.get('llm_duration_ms', 0)
+        tokens_per_second = 0.0
+        if tokens_output > 0 and llm_duration > 0:
+            tokens_per_second = tokens_output / (llm_duration / 1000)
+
         return LangSmithReport(
             trace_url=analysis['trace_url'],
             duration_ms=analysis['duration_ms'],
@@ -515,7 +591,7 @@ class LangSmithClient:
             model=model_info.get('model', '') or analysis.get('model', ''),
             model_provider=model_info.get('provider', ''),
             tokens_input=model_info.get('tokens_input', 0),
-            tokens_output=model_info.get('tokens_output', 0),
+            tokens_output=tokens_output,
             tokens_total=analysis['tokens_used'] or model_info.get('tokens_total', 0),
             tools_used=analysis['tool_summary']['tools_used'],
             tool_count=analysis['tool_summary']['total_calls'],
@@ -524,7 +600,14 @@ class LangSmithClient:
             query=trace.input,
             response=trace.output,
             waterfall=waterfall,
-            sources=sources
+            sources=sources,
+            # Nuove metriche timing
+            llm_duration_ms=timing_metrics.get('llm_duration_ms', 0),
+            llm_calls=timing_metrics.get('llm_calls', 0),
+            tool_duration_ms=timing_metrics.get('tool_duration_ms', 0),
+            retriever_duration_ms=timing_metrics.get('retriever_duration_ms', 0),
+            chain_duration_ms=timing_metrics.get('chain_duration_ms', 0),
+            tokens_per_second=tokens_per_second
         )
 
     def _extract_model_info(self, trace_id: str) -> Dict[str, Any]:
@@ -627,6 +710,43 @@ class LangSmithClient:
 
         return model_info
 
+    def _calculate_timing_metrics(self, waterfall: List[WaterfallStep]) -> Dict[str, Any]:
+        """
+        Calcola metriche di timing aggregate dal waterfall.
+
+        Args:
+            waterfall: Lista di WaterfallStep
+
+        Returns:
+            Dict con metriche aggregate per tipo di run
+        """
+        metrics = {
+            'llm_duration_ms': 0,
+            'llm_calls': 0,
+            'tool_duration_ms': 0,
+            'retriever_duration_ms': 0,
+            'chain_duration_ms': 0,
+            'other_duration_ms': 0
+        }
+
+        for step in waterfall:
+            run_type = step.run_type.lower()
+            duration = step.duration_ms
+
+            if run_type in ['llm', 'chat_model', 'chatmodel']:
+                metrics['llm_duration_ms'] += duration
+                metrics['llm_calls'] += 1
+            elif run_type == 'tool':
+                metrics['tool_duration_ms'] += duration
+            elif run_type in ['retriever', 'vectorstore']:
+                metrics['retriever_duration_ms'] += duration
+            elif run_type in ['chain', 'agent']:
+                metrics['chain_duration_ms'] += duration
+            else:
+                metrics['other_duration_ms'] += duration
+
+        return metrics
+
     def _extract_waterfall(self, trace_id: str, trace_start: datetime) -> List[WaterfallStep]:
         """
         Estrae il waterfall tree (sequenza di step con timing).
@@ -670,22 +790,38 @@ class LangSmithClient:
             duration_ms = 0
             try:
                 run_start = run.get('start_time', '')
-                if run_start:
-                    run_start_dt = datetime.fromisoformat(run_start.replace('Z', '+00:00'))
-                    # Rendi trace_start timezone-aware se necessario
-                    if trace_start.tzinfo is None:
-                        from datetime import timezone
-                        trace_start_aware = trace_start.replace(tzinfo=timezone.utc)
-                    else:
-                        trace_start_aware = trace_start
-                    start_offset_ms = int((run_start_dt - trace_start_aware).total_seconds() * 1000)
-
                 run_end = run.get('end_time', '')
+
                 if run_start and run_end:
-                    run_start_dt = datetime.fromisoformat(run_start.replace('Z', '+00:00'))
-                    run_end_dt = datetime.fromisoformat(run_end.replace('Z', '+00:00'))
+                    # Parse timestamps - gestisci sia formato con Z che senza
+                    run_start_str = run_start.replace('Z', '+00:00')
+                    run_end_str = run_end.replace('Z', '+00:00')
+
+                    # Se non ha timezone info, parsalo come naive datetime
+                    try:
+                        run_start_dt = datetime.fromisoformat(run_start_str)
+                    except:
+                        # Prova senza timezone
+                        run_start_dt = datetime.fromisoformat(run_start.split('+')[0].replace('Z', ''))
+
+                    try:
+                        run_end_dt = datetime.fromisoformat(run_end_str)
+                    except:
+                        run_end_dt = datetime.fromisoformat(run_end.split('+')[0].replace('Z', ''))
+
+                    # Calcola durata (naive datetime comparison)
+                    if run_start_dt.tzinfo:
+                        run_start_dt = run_start_dt.replace(tzinfo=None)
+                    if run_end_dt.tzinfo:
+                        run_end_dt = run_end_dt.replace(tzinfo=None)
+
                     duration_ms = int((run_end_dt - run_start_dt).total_seconds() * 1000)
-            except:
+
+                    # Calcola offset dall'inizio del trace
+                    trace_start_naive = trace_start.replace(tzinfo=None) if trace_start.tzinfo else trace_start
+                    start_offset_ms = int((run_start_dt - trace_start_naive).total_seconds() * 1000)
+            except Exception as e:
+                # Debug: print(f"Error parsing timestamps: {e}")
                 pass
 
             depth = id_to_depth.get(run_id, 1)

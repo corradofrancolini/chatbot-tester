@@ -36,6 +36,7 @@ class WizardState:
     project_description: str = ""
     chatbot_url: str = ""
     needs_login: bool = False
+    skip_screenshot: bool = False
     
     # Selectors
     selectors: Dict[str, str] = field(default_factory=lambda: {
@@ -391,6 +392,7 @@ def save_project_config(state: WizardState) -> None:
             'url': state.chatbot_url,
             'selectors': state.selectors,
             'screenshot_css': '',
+            'skip_screenshot': state.skip_screenshot,
             'timeouts': {
                 'page_load': 30000,
                 'bot_response': 60000

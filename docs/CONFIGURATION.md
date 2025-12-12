@@ -263,6 +263,16 @@ chatbot:
     page_load: 30000          # Page load wait
     bot_response: 60000       # Bot response wait
 
+  # Performance options
+  skip_screenshot: false      # Skip screenshot capture (faster tests)
+
+# -----------------------------------------------------------------------------
+# Authentication (optional, for cloud CI)
+# -----------------------------------------------------------------------------
+auth:
+  type: none                  # none | basic | form | sso
+  # See detailed examples below
+
 # -----------------------------------------------------------------------------
 # Test Defaults
 # -----------------------------------------------------------------------------
@@ -345,6 +355,64 @@ screenshot_css: |
 
   /* Hide scrollbar */
   ::-webkit-scrollbar { display: none !important; }
+```
+
+#### Authentication Configuration
+
+For chatbots requiring login (especially for cloud CI), configure the `auth` section:
+
+**No Auth (default):**
+```yaml
+auth:
+  type: none
+```
+
+**HTTP Basic Auth:**
+```yaml
+auth:
+  type: basic
+  basic_username_env: CHATBOT_USERNAME   # Env var name for username
+  basic_password_env: CHATBOT_PASSWORD   # Env var name for password
+```
+
+**Form Login:**
+```yaml
+auth:
+  type: form
+  form_username_selector: '#username'     # CSS selector for username field
+  form_password_selector: '#password'     # CSS selector for password field
+  form_submit_selector: '#login-btn'      # CSS selector for submit button
+  form_username_env: CHATBOT_USERNAME     # Env var name for username
+  form_password_env: CHATBOT_PASSWORD     # Env var name for password
+  form_success_selector: '#chat-input'    # Element visible after login
+  timeout_ms: 30000                       # Auth timeout
+```
+
+**SSO (Microsoft/Google):**
+```yaml
+auth:
+  type: sso
+  sso_provider: microsoft                 # microsoft | google
+  sso_email_env: SSO_EMAIL                # Env var for email
+  sso_password_env: SSO_PASSWORD          # Env var for password
+  sso_success_selector: '#chat-input'     # Element visible after login
+  timeout_ms: 30000                       # Auth timeout
+```
+
+**GitHub Actions Secrets:**
+
+For cloud CI, store credentials as repository secrets:
+```bash
+# Set secrets
+gh secret set CHATBOT_USERNAME --body "your-username"
+gh secret set CHATBOT_PASSWORD --body "your-password"
+```
+
+Then in your workflow:
+```yaml
+env:
+  CHATBOT_USERNAME: ${{ secrets.CHATBOT_USERNAME }}
+  CHATBOT_PASSWORD: ${{ secrets.CHATBOT_PASSWORD }}
 ```
 
 ---

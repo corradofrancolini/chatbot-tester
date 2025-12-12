@@ -146,7 +146,15 @@ class ChatbotUrlStep(BaseStep):
             if success and final_url != self.state.chatbot_url:
                 console.print(f"  [cyan]>  URL aggiornato: {final_url}[/cyan]")
                 self.state.chatbot_url = final_url
-        
+
+        # Performance option: skip screenshots
+        console.print()
+        skip_screenshot = Confirm.ask(
+            "  Disabilita screenshot? (test più veloci)",
+            default=False
+        )
+        self.state.skip_screenshot = skip_screenshot
+
         # Summary
         console.print()
         console.print("  [cyan]─" * 50 + "[/cyan]")
@@ -154,6 +162,7 @@ class ChatbotUrlStep(BaseStep):
         console.print(f"  · Login richiesto: {'Sì' if self.state.needs_login else 'No'}")
         if self.state.needs_login:
             console.print(f"  · Sessione: Salvata")
+        console.print(f"  · Screenshot: {'Disabilitati' if self.state.skip_screenshot else 'Abilitati'}")
         console.print("  [cyan]─" * 50 + "[/cyan]")
         console.print()
         

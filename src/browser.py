@@ -18,6 +18,8 @@ from datetime import datetime
 
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page, Locator
 
+from src.auth import authenticate as auth_authenticate, AuthConfig
+
 
 @dataclass
 class BrowserSettings:
@@ -155,20 +157,31 @@ class BrowserManager:
         """Verifica se il browser è pronto"""
         return self._is_initialized and self._page is not None
 
-    async def navigate(self, url: str, wait_for_selector: Optional[str] = None) -> bool:
+    async def navigate(self, url: str, wait_for_selector: Optional[str] = None,
+                       auth_config: Optional[dict] = None) -> bool:
         """
-        Naviga a un URL.
+        Naviga a un URL con supporto autenticazione.
 
         Args:
             url: URL destinazione
             wait_for_selector: Selettore opzionale da attendere dopo il caricamento
+            auth_config: Configurazione autenticazione da project.yaml (opzionale)
 
         Returns:
             True se navigazione riuscita
         """
         try:
-            await self._page.goto(url, wait_until='networkidle')
-            self._current_url = url
+            # Handle authentication if configured
+            if auth_config and auth_config.get("type", "none") != "none":
+                auth_success = await auth_authenticate(self._page, url, auth_config)
+                if not auth_success:
+                    print(f"Authentication failed for {url}")
+                    return False
+                # Auth handlers may have already navigated to the URL
+                self._current_url = url
+            else:
+                await self._page.goto(url, wait_until='networkidle')
+                self._current_url = url
 
             if wait_for_selector:
                 await self._page.wait_for_selector(wait_for_selector, timeout=self.settings.timeout_page_load)

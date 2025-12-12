@@ -269,11 +269,16 @@ class ChatbotTester:
         """Naviga al chatbot e gestisce login se necessario"""
         self.on_status(f"Navigazione a {self.project.chatbot.url}")
 
-        success = await self.browser.navigate(self.project.chatbot.url)
+        # Pass auth config if configured (for cloud CI auto-login)
+        auth_config = None
+        if hasattr(self.project, 'auth') and self.project.auth.type != "none":
+            auth_config = self.project.auth.to_dict()
+
+        success = await self.browser.navigate(self.project.chatbot.url, auth_config=auth_config)
         if not success:
             return False
 
-        # Verifica se serve login
+        # Verifica se serve login (fallback per login manuale se auth non configurato)
         is_ready = await self.browser.is_element_visible(
             self.project.chatbot.selectors.textarea,
             timeout_ms=5000
@@ -521,9 +526,10 @@ class ChatbotTester:
                     timestamp=datetime.utcnow().isoformat()
                 ))
 
-            # Screenshot finale
+            # Screenshot finale (skip if configured)
             screenshot_path = ""
-            if self.settings.screenshot_on_complete and self.report:
+            skip_ss = getattr(self.project.chatbot, 'skip_screenshot', False)
+            if self.settings.screenshot_on_complete and self.report and not skip_ss:
                 ss_path = self.report.get_screenshot_path(test.id)
                 if await self.browser.take_screenshot(
                     ss_path,
@@ -798,12 +804,13 @@ class ChatbotTester:
                     timestamp=datetime.utcnow().isoformat()
                 ))
 
-            # PHASE: Screenshot finale COMPLETO
-            if self.perf_collector:
+            # PHASE: Screenshot finale COMPLETO (skip if configured)
+            skip_ss = getattr(self.project.chatbot, 'skip_screenshot', False)
+            if self.perf_collector and not skip_ss:
                 self.perf_collector.start_phase("screenshot")
 
             screenshot_path = ""
-            if self.settings.screenshot_on_complete:
+            if self.settings.screenshot_on_complete and not skip_ss:
                 ss_path = self.report.get_screenshot_path(test.id)
                 # Usa take_conversation_screenshot che:
                 # - Nasconde input bar, footer, scroll arrows
@@ -823,7 +830,7 @@ class ChatbotTester:
                 if success:
                     screenshot_path = str(ss_path)
 
-            if self.perf_collector:
+            if self.perf_collector and not skip_ss:
                 self.perf_collector.end_phase()
 
             # Valutazione LLM (solo se Ollama disponibile)
