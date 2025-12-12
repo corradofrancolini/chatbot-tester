@@ -4,9 +4,8 @@
 
 # Patterns to detect (add your own sensitive patterns here)
 PATTERNS=(
-    "my-chatbot"
+    "silicon-"
     "example-bot"
-    "deploy"
     "wslabs\.it"
     "1nUQd_"
     "1cW66"

@@ -30,13 +30,14 @@ class WizardState:
     completed_steps: List[int] = field(default_factory=list)
     started_at: str = ""
     last_updated: str = ""
-    
+
     # Step data
     project_name: str = ""
     project_description: str = ""
     chatbot_url: str = ""
     needs_login: bool = False
-    
+    skip_screenshot: bool = False
+
     # Selectors
     selectors: Dict[str, str] = field(default_factory=lambda: {
         "textarea": "",
@@ -44,41 +45,41 @@ class WizardState:
         "bot_messages": "",
         "thread_container": ""
     })
-    
+
     # Google Sheets
     google_sheets_enabled: bool = False
     spreadsheet_id: str = ""
     drive_folder_id: str = ""
-    
+
     # LangSmith
     langsmith_enabled: bool = False
     langsmith_api_key: str = ""
     langsmith_project_id: str = ""
     langsmith_org_id: str = ""
     langsmith_tool_names: List[str] = field(default_factory=list)
-    
+
     # Ollama
     ollama_enabled: bool = False
     ollama_model: str = "mistral"
-    
+
     # Tests
     tests: List[Dict[str, Any]] = field(default_factory=list)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert state to dictionary for JSON serialization."""
         return asdict(self)
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'WizardState':
         """Create state from dictionary."""
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
-    
+
     def mark_step_complete(self, step: int) -> None:
         """Mark a step as completed."""
         if step not in self.completed_steps:
             self.completed_steps.append(step)
         self.last_updated = datetime.utcnow().isoformat()
-    
+
     def is_step_complete(self, step: int) -> bool:
         """Check if a step is complete."""
         return step in self.completed_steps
@@ -89,18 +90,18 @@ class StateManager:
     Manages wizard state persistence.
     Saves/loads state to/from JSON file.
     """
-    
+
     def __init__(self, project_name: str = ""):
         self.project_name = project_name
         self._state: Optional[WizardState] = None
-    
+
     @property
     def state_file(self) -> Path:
         """Get path to state file."""
         if self.project_name:
             return PROJECT_ROOT / "projects" / self.project_name / ".wizard_state.json"
         return PROJECT_ROOT / ".wizard_state.json"
-    
+
     def load(self) -> WizardState:
         """Load state from file or create new."""
         if self.state_file.exists():
@@ -113,32 +114,32 @@ class StateManager:
         else:
             self._state = WizardState()
             self._state.started_at = datetime.utcnow().isoformat()
-        
+
         return self._state
-    
+
     def save(self, state: WizardState) -> None:
         """Save state to file."""
         state.last_updated = datetime.utcnow().isoformat()
-        
+
         # Ensure directory exists
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open(self.state_file, 'w') as f:
             json.dump(state.to_dict(), f, indent=2)
-        
+
         self._state = state
-    
+
     def clear(self) -> None:
         """Remove state file."""
         if self.state_file.exists():
             self.state_file.unlink()
         self._state = None
-    
+
     def has_previous_session(self) -> bool:
         """Check if there's a previous incomplete session."""
         if not self.state_file.exists():
             return False
-        
+
         state = self.load()
         return state.current_step > 1 and len(state.completed_steps) < 9
 
@@ -148,43 +149,43 @@ class StateManager:
 def validate_project_name(name: str) -> Tuple[bool, str]:
     """
     Validate project name.
-    
+
     Returns:
         (is_valid, error_message)
     """
     if not name:
         return False, "Il nome non può essere vuoto"
-    
+
     if len(name) < 2:
         return False, "Il nome deve essere di almeno 2 caratteri"
-    
+
     if len(name) > 50:
         return False, "Il nome non può superare 50 caratteri"
-    
+
     if not re.match(r'^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$', name):
         return False, "Usa solo lettere minuscole, numeri e trattini"
-    
+
     # Check if project exists
     project_dir = PROJECT_ROOT / "projects" / name
     if project_dir.exists():
         return False, "Un progetto con questo nome esiste già"
-    
+
     return True, ""
 
 
 def validate_url(url: str) -> Tuple[bool, str]:
     """
     Validate URL format.
-    
+
     Returns:
         (is_valid, error_message)
     """
     if not url:
         return False, "L'URL non può essere vuoto"
-    
+
     if not re.match(r'^https?://', url):
         return False, "L'URL deve iniziare con http:// o https://"
-    
+
     # Basic URL pattern
     url_pattern = re.compile(
         r'^https?://'
@@ -194,10 +195,10 @@ def validate_url(url: str) -> Tuple[bool, str]:
         r'(?::\d+)?'
         r'(?:/?|[/?]\S+)$', re.IGNORECASE
     )
-    
+
     if not url_pattern.match(url):
         return False, "Formato URL non valido"
-    
+
     return True, ""
 
 
@@ -209,23 +210,23 @@ def validate_langsmith_key(key: str) -> bool:
 def validate_file_path(path: str, must_exist: bool = True, extensions: Optional[List[str]] = None) -> Tuple[bool, str]:
     """
     Validate file path.
-    
+
     Returns:
         (is_valid, error_message)
     """
     if not path:
         return False, "Il percorso non può essere vuoto"
-    
+
     expanded = os.path.expanduser(path)
-    
+
     if must_exist and not os.path.exists(expanded):
         return False, "File non trovato"
-    
+
     if extensions:
         ext = os.path.splitext(expanded)[1].lower()
         if ext not in extensions:
             return False, f"Formato non supportato. Usa: {', '.join(extensions)}"
-    
+
     return True, ""
 
 
@@ -234,30 +235,30 @@ def validate_file_path(path: str, must_exist: bool = True, extensions: Optional[
 def check_macos_version() -> Tuple[bool, str]:
     """
     Check macOS version.
-    
+
     Returns:
         (is_ok, version_string)
     """
     if platform.system() != 'Darwin':
         return False, "Non macOS"
-    
+
     version = platform.mac_ver()[0]
     major = int(version.split('.')[0])
-    
+
     return major >= 12, version
 
 
 def check_python_version() -> Tuple[bool, str]:
     """
     Check Python version.
-    
+
     Returns:
         (is_ok, version_string)
     """
     import sys
     version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     is_ok = sys.version_info >= (3, 10)
-    
+
     return is_ok, version
 
 
@@ -269,14 +270,14 @@ def check_homebrew() -> bool:
 def check_git() -> Tuple[bool, str]:
     """
     Check Git installation.
-    
+
     Returns:
         (is_installed, version_string)
     """
     git_path = shutil.which('git')
     if not git_path:
         return False, ""
-    
+
     try:
         result = subprocess.run(['git', '--version'], capture_output=True, text=True)
         version = result.stdout.strip().replace('git version ', '')
@@ -288,13 +289,13 @@ def check_git() -> Tuple[bool, str]:
 def check_disk_space(min_mb: int = 500) -> Tuple[bool, int]:
     """
     Check available disk space.
-    
+
     Returns:
         (is_enough, available_mb)
     """
     stat = os.statvfs(str(PROJECT_ROOT))
     available_mb = (stat.f_bavail * stat.f_frsize) // (1024 * 1024)
-    
+
     return available_mb >= min_mb, available_mb
 
 
@@ -340,7 +341,7 @@ def check_ollama_model(model: str = "mistral") -> bool:
 def test_url_reachable(url: str, timeout: int = 10) -> Tuple[bool, int]:
     """
     Test if a URL is reachable.
-    
+
     Returns:
         (is_reachable, status_code)
     """
@@ -362,13 +363,13 @@ def get_project_dir(project_name: str) -> Path:
 def ensure_project_dirs(project_name: str) -> None:
     """Create project directory structure."""
     project_dir = get_project_dir(project_name)
-    
+
     dirs = [
         project_dir,
         project_dir / "browser-data",
         PROJECT_ROOT / "reports" / project_name,
     ]
-    
+
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)
 
@@ -379,7 +380,7 @@ def save_project_config(state: WizardState) -> None:
     Creates project.yaml in the project directory.
     """
     import yaml
-    
+
     config = {
         'project': {
             'name': state.project_name,
@@ -391,6 +392,7 @@ def save_project_config(state: WizardState) -> None:
             'url': state.chatbot_url,
             'selectors': state.selectors,
             'screenshot_css': '',
+            'skip_screenshot': state.skip_screenshot,
             'timeouts': {
                 'page_load': 30000,
                 'bot_response': 60000
@@ -419,10 +421,10 @@ def save_project_config(state: WizardState) -> None:
             'url': 'http://localhost:11434/api/generate'
         }
     }
-    
+
     project_dir = get_project_dir(state.project_name)
     project_dir.mkdir(parents=True, exist_ok=True)
-    
+
     config_file = project_dir / "project.yaml"
     with open(config_file, 'w') as f:
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -432,7 +434,7 @@ def save_tests(project_name: str, tests: List[Dict[str, Any]]) -> None:
     """Save tests to JSON file."""
     project_dir = get_project_dir(project_name)
     tests_file = project_dir / "tests.json"
-    
+
     with open(tests_file, 'w') as f:
         json.dump(tests, f, indent=2, ensure_ascii=False)
 
@@ -440,16 +442,16 @@ def save_tests(project_name: str, tests: List[Dict[str, Any]]) -> None:
 def load_tests_from_file(file_path: str) -> List[Dict[str, Any]]:
     """
     Load tests from various file formats.
-    
+
     Supports: JSON, CSV, Excel
     """
     path = Path(file_path)
     ext = path.suffix.lower()
-    
+
     if ext == '.json':
         with open(path, 'r') as f:
             return json.load(f)
-    
+
     elif ext == '.csv':
         import csv
         tests = []
@@ -467,7 +469,7 @@ def load_tests_from_file(file_path: str) -> List[Dict[str, Any]]:
                         test['followups'].append(value)
                 tests.append(test)
         return tests
-    
+
     elif ext in ['.xlsx', '.xls']:
         import pandas as pd
         df = pd.read_excel(path)
@@ -483,7 +485,7 @@ def load_tests_from_file(file_path: str) -> List[Dict[str, Any]]:
                     test['followups'].append(str(row[col]))
             tests.append(test)
         return tests
-    
+
     else:
         raise ValueError(f"Unsupported file format: {ext}")
 

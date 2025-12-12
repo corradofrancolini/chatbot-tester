@@ -41,6 +41,7 @@ class ChatbotConfig:
     selectors: SelectorsConfig = field(default_factory=SelectorsConfig)
     timeouts: TimeoutsConfig = field(default_factory=TimeoutsConfig)
     screenshot_css: str = ""
+    skip_screenshot: bool = False  # Skip screenshot capture for faster tests
 
 
 @dataclass
@@ -79,6 +80,52 @@ class OllamaConfig:
 
 
 @dataclass
+class AuthConfig:
+    """Configurazione autenticazione per cloud CI"""
+    type: str = "none"  # none | basic | form | sso
+
+    # Basic Auth
+    basic_username_env: str = ""
+    basic_password_env: str = ""
+
+    # Form Auth
+    form_username_selector: str = ""
+    form_password_selector: str = ""
+    form_submit_selector: str = ""
+    form_username_env: str = ""
+    form_password_env: str = ""
+    form_success_selector: str = ""
+
+    # SSO Auth
+    sso_provider: str = ""  # microsoft | google
+    sso_email_env: str = ""
+    sso_password_env: str = ""
+    sso_success_selector: str = ""
+
+    # Timeout
+    timeout_ms: int = 30000
+
+    def to_dict(self) -> dict:
+        """Convert to dict for auth module"""
+        return {
+            "type": self.type,
+            "basic_username_env": self.basic_username_env,
+            "basic_password_env": self.basic_password_env,
+            "form_username_selector": self.form_username_selector,
+            "form_password_selector": self.form_password_selector,
+            "form_submit_selector": self.form_submit_selector,
+            "form_username_env": self.form_username_env,
+            "form_password_env": self.form_password_env,
+            "form_success_selector": self.form_success_selector,
+            "sso_provider": self.sso_provider,
+            "sso_email_env": self.sso_email_env,
+            "sso_password_env": self.sso_password_env,
+            "sso_success_selector": self.sso_success_selector,
+            "timeout_ms": self.timeout_ms,
+        }
+
+
+@dataclass
 class BrowserConfig:
     """Configurazione browser Playwright"""
     headless: bool = False
@@ -107,6 +154,7 @@ class ProjectConfig:
     google_sheets: GoogleSheetsConfig = field(default_factory=GoogleSheetsConfig)
     langsmith: LangSmithConfig = field(default_factory=LangSmithConfig)
     ollama: OllamaConfig = field(default_factory=OllamaConfig)
+    auth: AuthConfig = field(default_factory=AuthConfig)
 
     # Paths derivati
     project_dir: Path = field(default_factory=Path)
@@ -334,6 +382,7 @@ class ConfigLoader:
         )
 
         config.chatbot.screenshot_css = chatbot.get('screenshot_css', '')
+        config.chatbot.skip_screenshot = chatbot.get('skip_screenshot', False)
 
         # Test defaults
         defaults = data.get('test_defaults', {})
@@ -371,6 +420,25 @@ class ConfigLoader:
             enabled=ollama.get('enabled', False),
             model=ollama.get('model', 'mistral'),
             url=ollama.get('url', 'http://localhost:11434/api/generate')
+        )
+
+        # Auth (for cloud CI)
+        auth = data.get('auth', {})
+        config.auth = AuthConfig(
+            type=auth.get('type', 'none'),
+            basic_username_env=auth.get('basic_username_env', ''),
+            basic_password_env=auth.get('basic_password_env', ''),
+            form_username_selector=auth.get('form_username_selector', ''),
+            form_password_selector=auth.get('form_password_selector', ''),
+            form_submit_selector=auth.get('form_submit_selector', ''),
+            form_username_env=auth.get('form_username_env', ''),
+            form_password_env=auth.get('form_password_env', ''),
+            form_success_selector=auth.get('form_success_selector', ''),
+            sso_provider=auth.get('sso_provider', ''),
+            sso_email_env=auth.get('sso_email_env', ''),
+            sso_password_env=auth.get('sso_password_env', ''),
+            sso_success_selector=auth.get('sso_success_selector', ''),
+            timeout_ms=auth.get('timeout_ms', 30000)
         )
 
         # Paths derivati
@@ -431,7 +499,8 @@ class ConfigLoader:
                     'page_load': config.chatbot.timeouts.page_load,
                     'bot_response': config.chatbot.timeouts.bot_response
                 },
-                'screenshot_css': config.chatbot.screenshot_css
+                'screenshot_css': config.chatbot.screenshot_css,
+                'skip_screenshot': config.chatbot.skip_screenshot
             },
             'test_defaults': {
                 'email': config.test_defaults.email,

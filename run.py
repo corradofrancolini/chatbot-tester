@@ -16,6 +16,7 @@ Usage:
 
 import asyncio
 import argparse
+import os
 import sys
 import yaml
 from pathlib import Path
@@ -530,6 +531,12 @@ def run_health_check(project: ProjectConfig = None, settings = None) -> bool:
     ui = get_ui()
     ui.section("Health Check")
 
+    # Carica .env per avere le variabili d'ambiente
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent / "config" / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+
     # Configura checker
     chatbot_url = project.chatbot.url if project else ""
     langsmith_key = ""
@@ -537,7 +544,16 @@ def run_health_check(project: ProjectConfig = None, settings = None) -> bool:
 
     if settings:
         langsmith_key = getattr(settings, 'langsmith_api_key', '') or ''
-        google_creds = str(getattr(settings, 'google_credentials_file', '') or '')
+
+    # Fallback a variabile d'ambiente se non in settings
+    if not langsmith_key:
+        langsmith_key = os.environ.get('LANGSMITH_API_KEY', '')
+
+    # Leggi credentials path da google_sheets config o da project config
+    if settings and hasattr(settings, 'google_sheets') and hasattr(settings.google_sheets, 'credentials_path'):
+        google_creds = str(settings.google_sheets.credentials_path or '')
+    elif project and hasattr(project, 'google_sheets') and hasattr(project.google_sheets, 'credentials_path'):
+        google_creds = str(project.google_sheets.credentials_path or '')
 
     checker = HealthChecker(
         chatbot_url=chatbot_url,
