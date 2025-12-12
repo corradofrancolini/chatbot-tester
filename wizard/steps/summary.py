@@ -61,6 +61,7 @@ class SummaryStep(BaseStep):
         console.print("  " + "─" * 48)
         console.print(f"    URL:         [bold]{self.state.chatbot_url}[/bold]")
         console.print(f"    Login:       {'Sì' if self.state.needs_login else 'No'}")
+        console.print(f"    Screenshot:  {'Disabilitati' if self.state.skip_screenshot else 'Abilitati'}")
         
         # Selectors section
         console.print(f"\n  {t('step9.section_selectors')}")
