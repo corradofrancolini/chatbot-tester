@@ -153,6 +153,11 @@ Documentazione: https://github.com/user/chatbot-tester
         action='store_true',
         help='Simula senza eseguire (mostra cosa farebbe)'
     )
+    test_group.add_argument(
+        '--single-turn',
+        action='store_true',
+        help='Esegue solo domanda iniziale (no followup)'
+    )
 
     # ═══════════════════════════════════════════════════════════════════
     # Analisi
@@ -2617,7 +2622,8 @@ async def run_test_session(
     test_filter: str = 'pending',
     single_test: str = None,
     force_new_run: bool = False,
-    no_interactive: bool = False
+    no_interactive: bool = False,
+    single_turn: bool = False
 ):
     """Esegue una sessione di test"""
     ui = get_ui()
@@ -2631,6 +2637,10 @@ async def run_test_session(
     # Carica RunConfig
     run_config = RunConfig.load(project.run_config_file)
     run_config.mode = mode.value
+
+    # Override single_turn from CLI flag
+    if single_turn:
+        run_config.single_turn = True
 
     # Se forza nuova RUN o non c'è RUN attiva
     if force_new_run:
@@ -2959,7 +2969,8 @@ async def main_direct(args):
             test_filter=args.tests,
             single_test=args.test,
             force_new_run=args.new_run,
-            no_interactive=args.no_interactive
+            no_interactive=args.no_interactive,
+            single_turn=args.single_turn
         )
 
     except FileNotFoundError:

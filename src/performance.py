@@ -151,6 +151,7 @@ class RunMetrics:
 
     # Servizi esterni - latenze medie
     chatbot_avg_latency_ms: float = 0
+    chatbot_ttfr_avg_ms: float = 0  # Time To First Render (browser)
     sheets_avg_latency_ms: float = 0
     langsmith_avg_latency_ms: float = 0
 
@@ -188,19 +189,24 @@ class RunMetrics:
 
         # Servizi esterni
         chatbot_latencies = []
+        chatbot_ttfr = []
         sheets_latencies = []
         langsmith_latencies = []
 
         for t in self.test_metrics:
             for s in t.external_services:
                 if s.service == "chatbot":
-                    chatbot_latencies.append(s.duration_ms)
+                    if getattr(s, 'operation', 'response') == "ttfr":
+                        chatbot_ttfr.append(s.duration_ms)
+                    else:
+                        chatbot_latencies.append(s.duration_ms)
                 elif s.service == "google_sheets":
                     sheets_latencies.append(s.duration_ms)
                 elif s.service == "langsmith":
                     langsmith_latencies.append(s.duration_ms)
 
         self.chatbot_avg_latency_ms = statistics.mean(chatbot_latencies) if chatbot_latencies else 0
+        self.chatbot_ttfr_avg_ms = statistics.mean(chatbot_ttfr) if chatbot_ttfr else 0
         self.sheets_avg_latency_ms = statistics.mean(sheets_latencies) if sheets_latencies else 0
         self.langsmith_avg_latency_ms = statistics.mean(langsmith_latencies) if langsmith_latencies else 0
 
@@ -399,6 +405,8 @@ class PerformanceReporter:
         lines.append("🌐 SERVIZI ESTERNI (latenza media)")
         if self.metrics.chatbot_avg_latency_ms > 0:
             lines.append(f"   Chatbot: {self._format_duration(self.metrics.chatbot_avg_latency_ms)}")
+        if self.metrics.chatbot_ttfr_avg_ms > 0:
+            lines.append(f"   Chatbot TTFR: {self._format_duration(self.metrics.chatbot_ttfr_avg_ms)} (first render)")
         if self.metrics.sheets_avg_latency_ms > 0:
             lines.append(f"   Google Sheets: {self._format_duration(self.metrics.sheets_avg_latency_ms)}")
         if self.metrics.langsmith_avg_latency_ms > 0:
@@ -719,6 +727,7 @@ class PerformanceHistory:
             tests_per_minute=data.get('tests_per_minute', 0),
             error_rate=data.get('error_rate', 0),
             chatbot_avg_latency_ms=data.get('chatbot_avg_latency_ms', 0),
+            chatbot_ttfr_avg_ms=data.get('chatbot_ttfr_avg_ms', 0),
             sheets_avg_latency_ms=data.get('sheets_avg_latency_ms', 0),
             langsmith_avg_latency_ms=data.get('langsmith_avg_latency_ms', 0),
         )

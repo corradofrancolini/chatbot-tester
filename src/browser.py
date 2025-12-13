@@ -43,6 +43,14 @@ class ChatbotSelectors:
     loading_indicator: str = ""
 
 
+@dataclass
+class ResponseTiming:
+    """Timing metrics for chatbot response"""
+    ttfr_ms: float = 0.0  # Time To First Render (first text visible in browser)
+    total_ms: float = 0.0  # Total time until response complete
+    text: Optional[str] = None
+
+
 class BrowserManager:
     """
     Manager per browser Playwright con sessione persistente.
@@ -80,6 +88,8 @@ class BrowserManager:
         self._is_initialized = False
         self._current_url: str = ""
         self._last_message_count: int = 0
+        self._send_timestamp: float = 0.0  # For TTFR measurement
+        self.last_response_timing: Optional[ResponseTiming] = None  # Timing from last response
 
     async def __aenter__(self):
         await self.start()
@@ -255,6 +265,9 @@ class BrowserManager:
             submit = self._page.locator(self.selectors.submit_button)
             await submit.click()
 
+            # Record timestamp for TTFR measurement
+            self._send_timestamp = asyncio.get_event_loop().time()
+
             return True
         except Exception as e:
             print(f"Errore invio messaggio: {e}")
@@ -279,6 +292,8 @@ class BrowserManager:
             start_time = asyncio.get_event_loop().time()
             initial_count = self._last_message_count
             check_interval = 0.2
+            ttfr_recorded = False
+            ttfr_time: float = 0.0
 
             print(f"  [DEBUG] wait_for_response: initial_count={initial_count}, timeout={timeout}ms")
 
@@ -309,6 +324,13 @@ class BrowserManager:
 
                 # Nuovo messaggio apparso rispetto a quando abbiamo inviato
                 if current_count > initial_count:
+                    # Record TTFR (Time To First Render) - first time message appears
+                    if not ttfr_recorded:
+                        ttfr_time = asyncio.get_event_loop().time()
+                        ttfr_ms = (ttfr_time - self._send_timestamp) * 1000 if self._send_timestamp > 0 else 0
+                        ttfr_recorded = True
+                        print(f"  [DEBUG] TTFR: {ttfr_ms:.0f}ms (first render detected)")
+
                     print(f"  [DEBUG] Nuovo messaggio rilevato! ({current_count} > {initial_count})")
 
                     # Attendi che il messaggio sia completo (testo stabile)
@@ -333,7 +355,20 @@ class BrowserManager:
                     else:
                         text = await last_message.text_content()
 
+                    # Calculate timing metrics
+                    end_time = asyncio.get_event_loop().time()
+                    total_ms = (end_time - self._send_timestamp) * 1000 if self._send_timestamp > 0 else 0
+                    ttfr_ms_final = (ttfr_time - self._send_timestamp) * 1000 if self._send_timestamp > 0 and ttfr_time > 0 else 0
+
+                    # Store timing info
+                    self.last_response_timing = ResponseTiming(
+                        ttfr_ms=ttfr_ms_final,
+                        total_ms=total_ms,
+                        text=text.strip() if text else None
+                    )
+
                     print(f"  [DEBUG] Risposta catturata: {text[:50] if text else 'vuoto'}...")
+                    print(f"  [DEBUG] Timing: TTFR={ttfr_ms_final:.0f}ms, Total={total_ms:.0f}ms")
                     return text.strip() if text else None
 
                 await asyncio.sleep(check_interval)

@@ -92,6 +92,7 @@ class TestResult:
     notes: str = ""  # Vuoto - note del reviewer
     langsmith_report: str = ""  # Report LangSmith (testo)
     langsmith_url: str = ""  # Link al trace LangSmith
+    timing: str = ""  # Timing: "TTFR → Total" (es. "2.3s → 12.0s")
 
 
 class GoogleSheetsClient:
@@ -118,7 +119,7 @@ class GoogleSheetsClient:
             client.append_result(result)
     """
 
-    # Colonne standard del report (14 colonne)
+    # Colonne standard del report (15 colonne)
     COLUMNS = [
         "TEST ID",
         "DATE",
@@ -130,14 +131,15 @@ class GoogleSheetsClient:
         "PROMPT VER",      # Versione prompt (da run config)
         "MODEL VER",       # provider/modello
         "ENV",             # DEV/PROD (dropdown)
+        "TIMING",          # TTFR → Total (es. "2.3s → 12.0s")
         "ESITO",           # Corretto/Non Corretto/Parzialmente corretto (dropdown, compilato da reviewer)
         "NOTES",           # Note del reviewer (campo libero)
         "LS REPORT",       # Report LangSmith (testo)
         "LS TRACE LINK"    # Link al trace LangSmith
     ]
 
-    # Larghezze colonne in pixel (14 colonne)
-    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 200, 200, 100, 100, 60, 100, 200, 300, 350]
+    # Larghezze colonne in pixel (15 colonne)
+    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 200, 200, 100, 100, 60, 110, 100, 200, 300, 350]
 
     def __init__(self,
                  credentials_path: str,
@@ -320,8 +322,8 @@ class GoogleSheetsClient:
             # Aggiungi header
             worksheet.update('A1', [self.COLUMNS])
 
-            # Formatta header (bold, centrato)
-            worksheet.format('A1:L1', {
+            # Formatta header (bold, centrato) - 15 colonne (A-O)
+            worksheet.format('A1:O1', {
                 'textFormat': {'bold': True},
                 'horizontalAlignment': 'CENTER'
             })
@@ -545,8 +547,8 @@ class GoogleSheetsClient:
                 # Legacy: URL singolo (mantieni retrocompatibilità)
                 screenshot_view_url = result.screenshot_url
 
-            # 14 colonne: TEST ID, DATE, MODE, QUESTION, CONVERSATION, SCREENSHOT,
-            # SCREENSHOT URL, PROMPT VER, MODEL VER, ENV, ESITO, NOTES, LS REPORT, LS TRACE LINK
+            # 15 colonne: TEST ID, DATE, MODE, QUESTION, CONVERSATION, SCREENSHOT,
+            # SCREENSHOT URL, PROMPT VER, MODEL VER, ENV, TTFR, ESITO, NOTES, LS REPORT, LS TRACE LINK
             row = [
                 result.test_id,
                 result.date,
@@ -558,6 +560,7 @@ class GoogleSheetsClient:
                 result.prompt_version,                  # PROMPT VER: da run config
                 result.model_version,                   # MODEL VER: provider/modello
                 result.environment or "DEV",            # ENV: default DEV
+                result.timing,                          # TIMING: "TTFR → Total"
                 "",                                     # ESITO: vuoto (compilato dal reviewer)
                 "",                                     # NOTES: vuoto (note del reviewer)
                 escape_formula(result.langsmith_report), # LS REPORT: report LangSmith (escaped)
@@ -617,12 +620,13 @@ class GoogleSheetsClient:
                 elif r.screenshot_url:
                     screenshot_view_url = r.screenshot_url
 
-                # 14 colonne
+                # 15 colonne
                 rows.append([
                     r.test_id, r.date, r.mode, r.question, r.conversation,
                     screenshot_formula, screenshot_view_url,
                     r.prompt_version, r.model_version,
                     r.environment or "DEV",           # ENV: default DEV
+                    r.timing,                         # TIMING: "TTFR → Total"
                     "",                               # ESITO: vuoto (reviewer)
                     "",                               # NOTES: vuoto (reviewer)
                     escape_formula(r.langsmith_report), # LS REPORT (escaped)

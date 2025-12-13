@@ -759,6 +759,14 @@ class ChatbotTester:
                         duration_ms=chatbot_duration_ms,
                         success=response is not None
                     )
+                    # Record TTFR (Time To First Render) if available
+                    if self.browser.last_response_timing:
+                        self.perf_collector.record_service_call(
+                            service="chatbot",
+                            operation="ttfr",
+                            duration_ms=self.browser.last_response_timing.ttfr_ms,
+                            success=True
+                        )
 
                 if not response:
                     self.on_status("! Nessuna risposta dal bot")
@@ -1023,6 +1031,15 @@ class ChatbotTester:
                     result.test_case.id
                 )
 
+            # Build timing string from browser timing if available
+            timing_str = ""
+            if self.browser and self.browser.last_response_timing:
+                timing = self.browser.last_response_timing
+                if timing.ttfr_ms > 0 or timing.total_ms > 0:
+                    ttfr_sec = timing.ttfr_ms / 1000
+                    total_sec = timing.total_ms / 1000
+                    timing_str = f"{ttfr_sec:.1f}s → {total_sec:.1f}s"
+
             self.sheets.append_result(TestResult(
                 test_id=result.test_case.id,
                 date=date_str,
@@ -1036,7 +1053,8 @@ class ChatbotTester:
                 esito="",  # Vuoto - compilato dal reviewer
                 notes="",  # Vuoto - note del reviewer
                 langsmith_report=result.langsmith_report,
-                langsmith_url=result.langsmith_url
+                langsmith_url=result.langsmith_url,
+                timing=timing_str
             ))
 
             # Track Sheets performance - end
