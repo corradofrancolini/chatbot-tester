@@ -269,6 +269,7 @@ workflows:
     when: << pipeline.parameters.manual_trigger >>
     jobs:
       - run-tests:
+          name: "test-<< pipeline.parameters.project >>-<< pipeline.parameters.mode >>"
           project: << pipeline.parameters.project >>
           mode: << pipeline.parameters.mode >>
           tests: << pipeline.parameters.tests >>
