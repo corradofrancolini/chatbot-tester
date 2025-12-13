@@ -2611,7 +2611,8 @@ async def run_test_session(
     single_test: str = None,
     force_new_run: bool = False,
     no_interactive: bool = False,
-    single_turn: bool = False
+    single_turn: bool = False,
+    test_limit: int = 0
 ):
     """Esegue una sessione di test"""
     ui = get_ui()
@@ -2703,6 +2704,11 @@ async def run_test_session(
             # TODO: implementare filtro failed
             pass
         # Se test_filter == 'all', non filtriamo
+
+        # Applica limite se specificato
+        if test_limit > 0 and len(tests) > test_limit:
+            ui.info(f"Limitato a {test_limit} test (di {len(tests)} disponibili)")
+            tests = tests[:test_limit]
 
         if not tests:
             ui.info(t('test_execution.no_tests'))
@@ -2990,7 +2996,8 @@ async def main_direct(args):
             single_test=args.test,
             force_new_run=args.new_run,
             no_interactive=args.no_interactive,
-            single_turn=args.single_turn
+            single_turn=args.single_turn,
+            test_limit=args.test_limit or 0
         )
 
     except FileNotFoundError:
