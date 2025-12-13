@@ -31,7 +31,7 @@ from src.tester import ChatbotTester, TestMode
 from src.ui import ConsoleUI, MenuItem, get_ui
 from src.i18n import get_i18n, set_language, t
 from src.health import HealthChecker, ServiceStatus
-from src.github_actions import GitHubActionsClient
+from src.circleci_client import CircleCIClient
 from src.cli_utils import (
     ExitCode, suggest_project, NextSteps,
     confirm_action, ConfirmLevel, handle_keyboard_interrupt,
@@ -157,6 +157,11 @@ Documentazione: https://github.com/user/chatbot-tester
         '--single-turn',
         action='store_true',
         help='Esegue solo domanda iniziale (no followup)'
+    )
+    test_group.add_argument(
+        '--cloud',
+        action='store_true',
+        help='Esegui test su CircleCI invece che localmente'
     )
 
     # ═══════════════════════════════════════════════════════════════════
@@ -616,10 +621,10 @@ def show_main_menu(ui: ConsoleUI, loader: ConfigLoader) -> str:
 
     project_desc = t('main_menu.open_project_desc').format(count=len(projects)) if projects else t('main_menu.open_project_empty')
 
-    # Verifica disponibilita cloud execution
-    gh_client = GitHubActionsClient()
-    cloud_available = gh_client.is_available()
-    cloud_desc = "Lancia test senza browser locale" if cloud_available else "Richiede: brew install gh"
+    # Verifica disponibilita cloud execution (CircleCI)
+    ci_client = CircleCIClient()
+    cloud_available = ci_client.is_available()
+    cloud_desc = "Lancia test senza browser locale" if cloud_available else "Richiede: export CIRCLECI_TOKEN=..."
 
     items = [
         MenuItem('1', t('main_menu.new_project'), t('main_menu.new_project_desc')),
@@ -970,41 +975,36 @@ def toggle_options_interactive(ui: ConsoleUI, run_config: RunConfig) -> bool:
 
 
 def show_cloud_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
-    """Menu per esecuzione test nel cloud (GitHub Actions)"""
-    gh_client = GitHubActionsClient()
+    """Menu per esecuzione test nel cloud (CircleCI)"""
+    ci_client = CircleCIClient()
 
-    if not gh_client.is_available():
-        ui.error("GitHub CLI non disponibile")
-        ui.print(gh_client.get_install_instructions())
+    if not ci_client.is_available():
+        ui.error("CircleCI non configurato")
+        ui.print(ci_client.get_install_instructions())
         input("\n  Premi INVIO per continuare...")
         return
 
     while True:
         ui.section("Esegui nel Cloud")
-        ui.print("\n  [dim]Test eseguiti su server GitHub, senza browser locale[/dim]\n")
+        ui.print("\n  [dim]Test eseguiti su CircleCI, senza browser locale[/dim]\n")
 
-        # Mostra run recenti
-        runs = gh_client.list_runs(limit=5)
-        if runs:
-            ui.print("  Run recenti:")
-            for run in runs[:3]:
-                status_icon = {
-                    "completed": "[green]OK[/green]" if run.conclusion == "success" else "[red]FAIL[/red]",
-                    "in_progress": "[yellow]RUN[/yellow]",
-                    "queued": "[dim]queue[/dim]"
-                }.get(run.status, "[dim]?[/dim]")
-                ui.print(f"    {status_icon} {run.name[:40]} ({run.created_at[:10]})")
+        # Mostra pipeline recenti
+        pipelines = ci_client.list_pipelines(limit=5)
+        if pipelines:
+            ui.print("  Pipeline recenti:")
+            for pipeline in pipelines[:3]:
+                ui.print(f"    {pipeline.status_icon} #{pipeline.number} [{pipeline.state}] ({pipeline.created_at[:10]})")
             ui.print("")
 
-        # Verifica se c'è un run attivo
-        active_runs = [r for r in runs if r.status in ("in_progress", "queued")]
-        has_active = len(active_runs) > 0
+        # Verifica se c'è una pipeline attiva
+        active_pipelines = [p for p in pipelines if p.is_active]
+        has_active = len(active_pipelines) > 0
 
         items = [
             MenuItem('1', "Lancia test", "Avvia nuova esecuzione nel cloud"),
-            MenuItem('2', "Monitora run", "Barra avanzamento in tempo reale", disabled=not has_active),
-            MenuItem('3', "Stato esecuzioni", "Vedi run in corso e recenti"),
-            MenuItem('4', "Scarica risultati", "Download report e screenshot"),
+            MenuItem('2', "Monitora run", "Segui avanzamento in tempo reale", disabled=not has_active),
+            MenuItem('3', "Stato esecuzioni", "Vedi pipeline in corso e recenti"),
+            MenuItem('4', "Cancella run", "Interrompi esecuzione in corso", disabled=not has_active),
         ]
 
         choice = ui.menu(items, "Azione", allow_back=True)
@@ -1013,90 +1013,74 @@ def show_cloud_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
             return
 
         elif choice == '1':
-            _cloud_launch_test(ui, loader, gh_client)
+            _cloud_launch_test(ui, loader, ci_client)
 
         elif choice == '2':
-            _cloud_monitor_run(ui, gh_client, runs)
+            _cloud_monitor_run(ui, ci_client, pipelines)
 
         elif choice == '3':
-            _cloud_show_status(ui, gh_client)
+            _cloud_show_status(ui, ci_client)
 
         elif choice == '4':
-            _cloud_download_results(ui, gh_client)
+            _cloud_cancel_run(ui, ci_client, pipelines)
 
 
-def _cloud_monitor_run(ui: ConsoleUI, gh_client: GitHubActionsClient, runs: list) -> None:
-    """Monitora run cloud con barra di avanzamento"""
-    from src.github_actions import watch_cloud_run, CloudRunMonitor, create_progress_display
+def _cloud_monitor_run(ui: ConsoleUI, ci_client: CircleCIClient, pipelines: list) -> None:
+    """Monitora run cloud con polling status"""
+    from src.circleci_client import watch_cloud_run
 
-    # Filtra run attivi o recenti
-    active_runs = [r for r in runs if r.status in ("in_progress", "queued")]
-    recent_runs = runs[:5]
+    # Filtra pipeline attive o recenti
+    active_pipelines = [p for p in pipelines if p.is_active]
+    recent_pipelines = pipelines[:5]
 
-    if not active_runs and not recent_runs:
-        ui.warning("Nessun run da monitorare")
+    if not active_pipelines and not recent_pipelines:
+        ui.warning("Nessuna pipeline da monitorare")
         input("\n  Premi INVIO per continuare...")
         return
 
     ui.section("Monitora Run Cloud")
 
     # Mostra opzioni
-    ui.print("\n  Run disponibili:\n")
+    ui.print("\n  Pipeline disponibili:\n")
 
-    display_runs = active_runs if active_runs else recent_runs[:3]
-    for i, run in enumerate(display_runs, 1):
-        if run.status == "in_progress":
-            icon = "[yellow]● IN CORSO[/yellow]"
-        elif run.status == "queued":
-            icon = "[dim]○ IN CODA[/dim]"
-        elif run.status == "completed":
-            icon = "[green]✓ COMPLETATO[/green]" if run.conclusion == "success" else "[red]✗ FALLITO[/red]"
-        else:
-            icon = "[dim]?[/dim]"
-
-        ui.print(f"  [{i}] {icon}")
-        ui.print(f"      ID: {run.id} | {run.created_at[:16].replace('T', ' ')}")
+    display_pipelines = active_pipelines if active_pipelines else recent_pipelines[:3]
+    for i, pipeline in enumerate(display_pipelines, 1):
+        ui.print(f"  [{i}] {pipeline.status_icon} #{pipeline.number} [{pipeline.state}]")
+        ui.print(f"      {pipeline.created_at[:16].replace('T', ' ')}")
         ui.print("")
 
     # Selezione
-    if len(display_runs) == 1:
+    if len(display_pipelines) == 1:
         ui.print("  [dim]Premi INVIO per monitorare, 'q' per tornare[/dim]")
         choice = input("\n  > ").strip().lower()
         if choice == 'q':
             return
-        selected_run = display_runs[0]
+        selected = display_pipelines[0]
     else:
-        choice = input("\n  Numero run da monitorare (INVIO per l'ultimo): ").strip()
+        choice = input("\n  Numero pipeline da monitorare (INVIO per l'ultima): ").strip()
         if choice == '':
-            selected_run = display_runs[0]
-        elif choice.isdigit() and 1 <= int(choice) <= len(display_runs):
-            selected_run = display_runs[int(choice) - 1]
+            selected = display_pipelines[0]
+        elif choice.isdigit() and 1 <= int(choice) <= len(display_pipelines):
+            selected = display_pipelines[int(choice) - 1]
         else:
             return
 
     # Avvia monitoraggio
-    ui.print(f"\n  [cyan]Monitoraggio run #{selected_run.id}[/cyan]")
+    ui.print(f"\n  [cyan]Monitoraggio pipeline #{selected.number}[/cyan]")
+    ui.print(f"  URL: {selected.url}")
     ui.print("  [dim]Premi Ctrl+C per interrompere[/dim]\n")
 
     try:
-        progress = watch_cloud_run(selected_run.id)
+        progress = watch_cloud_run(ci_client, selected.id)
 
         # Riepilogo finale
         ui.print("")
-        if progress.conclusion == "success":
-            ui.success("Run completato con successo!")
-        elif progress.conclusion == "failure":
-            ui.error(f"Run fallito: {progress.error_message or 'errore sconosciuto'}")
-        elif progress.conclusion == "cancelled":
-            ui.warning("Run cancellato")
-
-        if progress.total_tests > 0:
-            ui.print(f"\n  Test eseguiti: {progress.total_tests}")
-            ui.print(f"  Passati: [green]{progress.passed_tests}[/green]")
-            ui.print(f"  Falliti: [red]{progress.failed_tests}[/red]")
-
-        if progress.sheets_run:
-            ui.print(f"\n  [cyan]📊 Risultati su Google Sheets: RUN {progress.sheets_run}[/cyan]")
+        if progress.status == "success":
+            ui.success("Pipeline completata con successo!")
+        elif progress.status in ("failed", "error"):
+            ui.error(f"Pipeline fallita: {progress.error_message or 'errore sconosciuto'}")
+        elif progress.status == "canceled":
+            ui.warning("Pipeline cancellata")
 
     except KeyboardInterrupt:
         ui.print("\n\n  [dim]Monitoraggio interrotto[/dim]")
@@ -1104,8 +1088,8 @@ def _cloud_monitor_run(ui: ConsoleUI, gh_client: GitHubActionsClient, runs: list
     input("\n  Premi INVIO per continuare...")
 
 
-def _cloud_launch_test(ui: ConsoleUI, loader: ConfigLoader, gh_client: GitHubActionsClient) -> None:
-    """Lancia test nel cloud"""
+def _cloud_launch_test(ui: ConsoleUI, loader: ConfigLoader, ci_client: CircleCIClient) -> None:
+    """Lancia test nel cloud via CircleCI"""
     # Seleziona progetto
     project_name = show_project_menu(ui, loader)
     if not project_name:
@@ -1151,122 +1135,119 @@ def _cloud_launch_test(ui: ConsoleUI, loader: ConfigLoader, gh_client: GitHubAct
         ui.info("Annullato")
         return
 
-    # Lancia
-    ui.print("\n  Avvio workflow...")
-    success, message = gh_client.trigger_workflow(project_name, mode, tests, new_run)
+    # Lancia pipeline
+    ui.print("\n  Avvio pipeline CircleCI...")
+    success, data = ci_client.trigger_pipeline(project_name, mode, tests, new_run)
 
     if success:
-        ui.success(message)
+        pipeline_number = data.get('number', '?')
+        pipeline_id = data.get('id', '')
+        ui.success(f"Pipeline #{pipeline_number} avviata!")
+        ui.print(f"\n  URL: https://app.circleci.com/pipelines/gh/corradofrancolini/chatbot-tester-private/{pipeline_number}")
 
         # Chiedi se monitorare
         monitor = input("\n  Vuoi monitorare l'esecuzione? (s/n): ").strip().lower()
         if monitor == 's':
-            ui.print("\n  [dim]Attendo avvio workflow...[/dim]")
+            ui.print("\n  [dim]Attendo avvio pipeline...[/dim]")
             import time
-            time.sleep(3)  # Attendi che il workflow si avvii
+            time.sleep(5)  # Attendi che la pipeline si avvii
 
-            # Ottieni il run appena lanciato
-            from src.github_actions import watch_cloud_run
-            runs = gh_client.list_runs(limit=1)
-            if runs and runs[0].status in ("in_progress", "queued"):
-                ui.print("")
-                try:
-                    progress = watch_cloud_run(runs[0].id)
+            from src.circleci_client import watch_cloud_run
+            try:
+                progress = watch_cloud_run(ci_client, pipeline_id)
 
-                    if progress.conclusion == "success":
-                        ui.success("\nRun completato con successo!")
-                    elif progress.conclusion == "failure":
-                        ui.error(f"\nRun fallito: {progress.error_message or 'errore'}")
+                if progress.status == "success":
+                    ui.success("\nPipeline completata con successo!")
+                elif progress.status in ("failed", "error"):
+                    ui.error(f"\nPipeline fallita: {progress.error_message or 'errore'}")
 
-                    if progress.sheets_run:
-                        ui.print(f"\n  [cyan]📊 Risultati su Google Sheets: RUN {progress.sheets_run}[/cyan]")
-                except KeyboardInterrupt:
-                    ui.print("\n\n  [dim]Monitoraggio interrotto[/dim]")
-            else:
-                ui.warning("Workflow non ancora avviato")
+            except KeyboardInterrupt:
+                ui.print("\n\n  [dim]Monitoraggio interrotto[/dim]")
     else:
-        ui.error(message)
+        error_msg = data.get('error', 'Errore sconosciuto') if data else 'Errore sconosciuto'
+        ui.error(f"Errore: {error_msg}")
 
     input("\n  Premi INVIO per continuare...")
 
 
-def _cloud_show_status(ui: ConsoleUI, gh_client: GitHubActionsClient) -> None:
+def _cloud_show_status(ui: ConsoleUI, ci_client: CircleCIClient) -> None:
     """Mostra stato esecuzioni cloud"""
-    ui.section("Stato Esecuzioni Cloud")
+    ui.section("Stato Pipeline CircleCI")
 
-    runs = gh_client.list_runs(limit=10)
+    pipelines = ci_client.list_pipelines(limit=10)
 
-    if not runs:
-        ui.warning("Nessuna esecuzione trovata")
+    if not pipelines:
+        ui.warning("Nessuna pipeline trovata")
         input("\n  Premi INVIO per continuare...")
         return
 
-    ui.print("\n  Esecuzioni recenti:\n")
+    ui.print("\n  Pipeline recenti:\n")
 
-    for i, run in enumerate(runs, 1):
-        # Icona stato
-        if run.status == "completed":
-            icon = "[green]PASS[/green]" if run.conclusion == "success" else "[red]FAIL[/red]"
-        elif run.status == "in_progress":
-            icon = "[yellow]RUNNING[/yellow]"
-        elif run.status == "queued":
-            icon = "[dim]QUEUED[/dim]"
-        else:
-            icon = "[dim]?[/dim]"
-
-        ui.print(f"  [{i}] {icon} {run.name[:50]}")
-        ui.print(f"      {run.created_at[:19]} | ID: {run.id}")
+    for i, pipeline in enumerate(pipelines, 1):
+        ui.print(f"  [{i}] {pipeline.status_icon} #{pipeline.number} [{pipeline.state}]")
+        ui.print(f"      {pipeline.created_at[:19].replace('T', ' ')}")
         ui.print("")
 
     # Opzioni
-    ui.print("  [dim]Inserisci numero per vedere dettagli, 'w' per watch live, INVIO per tornare[/dim]")
+    ui.print("  [dim]Inserisci numero per vedere dettagli, INVIO per tornare[/dim]")
     choice = input("\n  > ").strip().lower()
 
-    if choice == 'w':
-        ui.print("\n  Avvio watch (Ctrl+C per uscire)...")
-        gh_client.watch_run()
-    elif choice.isdigit():
+    if choice.isdigit():
         idx = int(choice) - 1
-        if 0 <= idx < len(runs):
-            run = runs[idx]
-            ui.print(f"\n  URL: {run.url}")
+        if 0 <= idx < len(pipelines):
+            pipeline = pipelines[idx]
+            ui.print(f"\n  URL: {pipeline.url}")
+
+            # Mostra workflow della pipeline
+            workflows = ci_client.get_pipeline_workflows(pipeline.id)
+            if workflows:
+                ui.print("\n  Workflow:")
+                for wf in workflows:
+                    ui.print(f"    {wf.status_icon} {wf.name}: {wf.status}")
+
             input("\n  Premi INVIO per continuare...")
 
 
-def _cloud_download_results(ui: ConsoleUI, gh_client: GitHubActionsClient) -> None:
-    """Scarica risultati da esecuzione cloud"""
-    ui.section("Scarica Risultati")
+def _cloud_cancel_run(ui: ConsoleUI, ci_client: CircleCIClient, pipelines: list) -> None:
+    """Cancella un run in corso"""
+    active_pipelines = [p for p in pipelines if p.is_active]
 
-    runs = gh_client.list_runs(limit=10)
-    completed_runs = [r for r in runs if r.status == "completed"]
-
-    if not completed_runs:
-        ui.warning("Nessuna esecuzione completata trovata")
+    if not active_pipelines:
+        ui.warning("Nessuna pipeline attiva da cancellare")
         input("\n  Premi INVIO per continuare...")
         return
 
-    ui.print("\n  Esecuzioni completate:\n")
-    for i, run in enumerate(completed_runs[:5], 1):
-        icon = "[green]PASS[/green]" if run.conclusion == "success" else "[red]FAIL[/red]"
-        ui.print(f"  [{i}] {icon} {run.name[:50]} ({run.created_at[:10]})")
+    ui.section("Cancella Pipeline")
+    ui.print("\n  Pipeline attive:\n")
 
-    choice = input("\n  Numero da scaricare (INVIO per annullare): ").strip()
+    for i, pipeline in enumerate(active_pipelines, 1):
+        ui.print(f"  [{i}] {pipeline.status_icon} #{pipeline.number} [{pipeline.state}]")
+
+    choice = input("\n  Numero da cancellare (INVIO per annullare): ").strip()
 
     if not choice.isdigit():
         return
 
     idx = int(choice) - 1
-    if 0 <= idx < len(completed_runs):
-        run = completed_runs[idx]
-        dest = f"downloads/run_{run.id}"
+    if 0 <= idx < len(active_pipelines):
+        pipeline = active_pipelines[idx]
 
-        ui.print(f"\n  Download artifacts in {dest}...")
-        success, message = gh_client.download_artifacts(run.id, dest)
+        # Ottieni workflow attivi
+        workflows = ci_client.get_pipeline_workflows(pipeline.id)
+        active_workflows = [w for w in workflows if w.is_active]
 
-        if success:
-            ui.success(message)
-        else:
-            ui.error(message)
+        if not active_workflows:
+            ui.warning("Nessun workflow attivo trovato")
+            input("\n  Premi INVIO per continuare...")
+            return
+
+        # Cancella i workflow attivi
+        for wf in active_workflows:
+            ui.print(f"\n  Cancellazione workflow {wf.name}...")
+            if ci_client.cancel_workflow(wf.id):
+                ui.success(f"Workflow {wf.name} cancellato")
+            else:
+                ui.error(f"Errore nella cancellazione di {wf.name}")
 
     input("\n  Premi INVIO per continuare...")
 
@@ -2942,6 +2923,35 @@ async def main_direct(args):
 
     if not args.project:
         ui.error("Specifica un progetto con --project=NOME")
+        return
+
+    # --cloud: esegui su CircleCI invece che localmente
+    if args.cloud:
+        ci_client = CircleCIClient()
+        if not ci_client.is_available():
+            ui.error("CircleCI non configurato. Imposta CIRCLECI_TOKEN.")
+            ui.print(ci_client.get_install_instructions())
+            return
+
+        mode = args.mode or 'auto'
+        tests = args.tests or 'pending'
+        new_run = args.new_run
+
+        ui.print(f"\n  Avvio test su CircleCI...")
+        ui.print(f"    Progetto: {args.project}")
+        ui.print(f"    Modalita: {mode}")
+        ui.print(f"    Test: {tests}")
+        ui.print(f"    Nuovo run: {'Si' if new_run else 'No'}\n")
+
+        success, data = ci_client.trigger_pipeline(args.project, mode, tests, new_run)
+
+        if success:
+            pipeline_number = data.get('number', '?')
+            ui.success(f"Pipeline #{pipeline_number} avviata!")
+            ui.print(f"\n  URL: https://app.circleci.com/pipelines/gh/corradofrancolini/chatbot-tester-private/{pipeline_number}")
+        else:
+            error_msg = data.get('error', 'Errore sconosciuto') if data else 'Errore sconosciuto'
+            ui.error(f"Errore: {error_msg}")
         return
 
     try:
