@@ -262,32 +262,34 @@ workflows:
           tests: << pipeline.parameters.tests >>
           new_run: << pipeline.parameters.new_run >>
 
-  # Scheduled: ogni notte alle 2:00 UTC
-  nightly-tests:
-    triggers:
-      - schedule:
-          cron: "0 2 * * *"
-          filters:
-            branches:
-              only:
-                - main
-    jobs:
-      - test-silicon-b:
-          name: "Nightly Silicon-B"
-      - test-silicon-prod:
-          name: "Nightly Silicon-Prod"
-          requires:
-            - "Nightly Silicon-B"
-
-  # Scheduled: ogni lunedi alle 6:00 UTC (full run)
-  weekly-full-run:
-    triggers:
-      - schedule:
-          cron: "0 6 * * 1"
-          filters:
-            branches:
-              only:
-                - main
-    jobs:
-      - test-all-parallel:
-          name: "Weekly Full Run"
+  # DISABLED - Scheduled workflows (riattivare quando necessario)
+  #
+  # # Scheduled: ogni notte alle 2:00 UTC
+  # nightly-tests:
+  #   triggers:
+  #     - schedule:
+  #         cron: "0 2 * * *"
+  #         filters:
+  #           branches:
+  #             only:
+  #               - main
+  #   jobs:
+  #     - test-silicon-b:
+  #         name: "Nightly Silicon-B"
+  #     - test-silicon-prod:
+  #         name: "Nightly Silicon-Prod"
+  #         requires:
+  #           - "Nightly Silicon-B"
+  #
+  # # Scheduled: ogni lunedi alle 6:00 UTC (full run)
+  # weekly-full-run:
+  #   triggers:
+  #     - schedule:
+  #         cron: "0 6 * * 1"
+  #         filters:
+  #           branches:
+  #             only:
+  #               - main
+  #   jobs:
+  #     - test-all-parallel:
+  #         name: "Weekly Full Run"
