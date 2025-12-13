@@ -163,6 +163,13 @@ Documentazione: https://github.com/user/chatbot-tester
         action='store_true',
         help='Esegui test su CircleCI invece che localmente'
     )
+    test_group.add_argument(
+        '--test-limit',
+        type=int,
+        default=0,
+        metavar='N',
+        help='Limita a N test (0 = tutti)'
+    )
 
     # ═══════════════════════════════════════════════════════════════════
     # Analisi
@@ -2936,14 +2943,17 @@ async def main_direct(args):
         mode = args.mode or 'auto'
         tests = args.tests or 'pending'
         new_run = args.new_run
+        test_limit = args.test_limit or 0
 
         ui.print(f"\n  Avvio test su CircleCI...")
         ui.print(f"    Progetto: {args.project}")
         ui.print(f"    Modalita: {mode}")
         ui.print(f"    Test: {tests}")
+        if test_limit > 0:
+            ui.print(f"    Limite: {test_limit} test")
         ui.print(f"    Nuovo run: {'Si' if new_run else 'No'}\n")
 
-        success, data = ci_client.trigger_pipeline(args.project, mode, tests, new_run)
+        success, data = ci_client.trigger_pipeline(args.project, mode, tests, new_run, test_limit)
 
         if success:
             pipeline_number = data.get('number', '?')
