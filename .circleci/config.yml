@@ -1,0 +1,293 @@
+# Chatbot Tester - CircleCI Configuration
+# Esegue test automatici su chatbot web nel cloud
+
+version: 2.1
+
+# Orbs per funzionalità comuni
+orbs:
+  python: circleci/python@2.1.1
+  browser-tools: circleci/browser-tools@1.4.8
+
+# Parametri per trigger manuale via API
+parameters:
+  project:
+    type: string
+    default: "silicon-b"
+  mode:
+    type: enum
+    enum: ["auto", "assisted", "train"]
+    default: "auto"
+  tests:
+    type: enum
+    enum: ["all", "pending", "failed"]
+    default: "pending"
+  new_run:
+    type: boolean
+    default: false
+  manual_trigger:
+    type: boolean
+    default: false
+
+# Esecutori
+executors:
+  python-browser:
+    docker:
+      - image: cimg/python:3.11-browsers
+    resource_class: medium
+    environment:
+      PLAYWRIGHT_BROWSERS_PATH: /home/circleci/.cache/ms-playwright
+
+# Comandi riutilizzabili
+commands:
+  setup-environment:
+    description: "Setup Python environment and dependencies"
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip
+          pip-dependency-file: requirements.txt
+      - run:
+          name: Install Playwright
+          command: |
+            pip install playwright
+            playwright install chromium
+            playwright install-deps chromium
+
+  setup-credentials:
+    description: "Setup Google and LangSmith credentials"
+    steps:
+      - run:
+          name: Setup credentials
+          command: |
+            mkdir -p config
+
+            # LangSmith API Key
+            if [ -n "$LANGSMITH_API_KEY" ]; then
+              echo "LANGSMITH_API_KEY=$LANGSMITH_API_KEY" > config/.env
+              echo "✓ LangSmith configured"
+            fi
+
+            # Google OAuth credentials
+            if [ -n "$GOOGLE_OAUTH_CREDENTIALS" ]; then
+              echo "$GOOGLE_OAUTH_CREDENTIALS" > config/oauth_credentials.json
+              echo "✓ Google OAuth credentials configured"
+            fi
+
+            # Google token (with refresh token)
+            if [ -n "$GOOGLE_TOKEN_JSON" ]; then
+              echo "$GOOGLE_TOKEN_JSON" > config/token.json
+              echo "✓ Google token configured"
+            fi
+
+  setup-browser-auth:
+    description: "Setup browser authentication state"
+    parameters:
+      project:
+        type: string
+    steps:
+      - run:
+          name: Setup browser auth state
+          command: |
+            if [ -n "$BROWSER_AUTH_STATE" ]; then
+              mkdir -p projects/<< parameters.project >>/browser-data
+              echo "$BROWSER_AUTH_STATE" | base64 -d > projects/<< parameters.project >>/browser-data/state.json
+              echo "✓ Browser auth state loaded for << parameters.project >>"
+            else
+              echo "⚠ No browser auth state configured"
+            fi
+
+# Jobs
+jobs:
+  run-tests:
+    executor: python-browser
+    parameters:
+      project:
+        type: string
+        default: "silicon-b"
+      mode:
+        type: string
+        default: "auto"
+      tests:
+        type: string
+        default: "pending"
+      new_run:
+        type: boolean
+        default: false
+    steps:
+      - setup-environment
+      - setup-credentials
+      - setup-browser-auth:
+          project: << parameters.project >>
+
+      - run:
+          name: Verify project exists
+          command: |
+            if [ ! -d "projects/<< parameters.project >>" ]; then
+              echo "ERROR: Project << parameters.project >> not found"
+              exit 1
+            fi
+            echo "✓ Project << parameters.project >> found"
+            ls -la projects/<< parameters.project >>/
+
+      - run:
+          name: Health check
+          command: |
+            python run.py --health-check -p << parameters.project >> || true
+
+      - run:
+          name: Execute tests
+          no_output_timeout: 30m
+          command: |
+            NEW_RUN_FLAG=""
+            if [ "<< parameters.new_run >>" == "true" ]; then
+              NEW_RUN_FLAG="--new-run"
+            fi
+
+            python run.py \
+              -p << parameters.project >> \
+              -m << parameters.mode >> \
+              --tests << parameters.tests >> \
+              --no-interactive \
+              --headless \
+              --skip-health-check \
+              $NEW_RUN_FLAG
+
+      - store_artifacts:
+          path: reports
+          destination: test-reports
+
+      - run:
+          name: Generate summary
+          when: always
+          command: |
+            echo "=== Test Summary ==="
+            echo "Project: << parameters.project >>"
+            echo "Mode: << parameters.mode >>"
+            echo "Tests: << parameters.tests >>"
+            if [ -d "reports" ]; then
+              echo "Reports generated:"
+              find reports -name "*.html" -o -name "*.json" | head -20
+            fi
+
+  # Job per test specifici di ogni progetto
+  test-silicon-a:
+    executor: python-browser
+    steps:
+      - setup-environment
+      - setup-credentials
+      - setup-browser-auth:
+          project: silicon-a
+      - run:
+          name: Run Silicon-A tests
+          no_output_timeout: 30m
+          command: |
+            python run.py -p silicon-a -m auto --tests pending --no-interactive --headless
+      - store_artifacts:
+          path: reports/silicon-a
+          destination: silicon-a-reports
+
+  test-silicon-b:
+    executor: python-browser
+    steps:
+      - setup-environment
+      - setup-credentials
+      - setup-browser-auth:
+          project: silicon-b
+      - run:
+          name: Run Silicon-B tests
+          no_output_timeout: 30m
+          command: |
+            python run.py -p silicon-b -m auto --tests pending --no-interactive --headless
+      - store_artifacts:
+          path: reports/silicon-b
+          destination: silicon-b-reports
+
+  test-silicon-prod:
+    executor: python-browser
+    steps:
+      - setup-environment
+      - setup-credentials
+      - setup-browser-auth:
+          project: silicon-prod
+      - run:
+          name: Run Silicon-Prod tests
+          no_output_timeout: 30m
+          command: |
+            python run.py -p silicon-prod -m auto --tests pending --no-interactive --headless
+      - store_artifacts:
+          path: reports/silicon-prod
+          destination: silicon-prod-reports
+
+  # Job parallelo per tutti i progetti
+  test-all-parallel:
+    executor: python-browser
+    parallelism: 3
+    steps:
+      - setup-environment
+      - setup-credentials
+      - run:
+          name: Determine project
+          command: |
+            PROJECTS=("silicon-a" "silicon-b" "silicon-prod")
+            PROJECT=${PROJECTS[$CIRCLE_NODE_INDEX]}
+            echo "export PROJECT=$PROJECT" >> $BASH_ENV
+            echo "Running tests for: $PROJECT"
+      - run:
+          name: Setup browser auth
+          command: |
+            if [ -n "$BROWSER_AUTH_STATE" ]; then
+              mkdir -p projects/$PROJECT/browser-data
+              echo "$BROWSER_AUTH_STATE" | base64 -d > projects/$PROJECT/browser-data/state.json
+            fi
+      - run:
+          name: Execute tests
+          no_output_timeout: 30m
+          command: |
+            python run.py -p $PROJECT -m auto --tests pending --no-interactive --headless
+      - store_artifacts:
+          path: reports
+          destination: reports
+
+# Workflows
+workflows:
+  version: 2
+
+  # Trigger manuale via API
+  manual-test:
+    when: << pipeline.parameters.manual_trigger >>
+    jobs:
+      - run-tests:
+          project: << pipeline.parameters.project >>
+          mode: << pipeline.parameters.mode >>
+          tests: << pipeline.parameters.tests >>
+          new_run: << pipeline.parameters.new_run >>
+
+  # Scheduled: ogni notte alle 2:00 UTC
+  nightly-tests:
+    triggers:
+      - schedule:
+          cron: "0 2 * * *"
+          filters:
+            branches:
+              only:
+                - main
+    jobs:
+      - test-silicon-b:
+          name: "Nightly Silicon-B"
+      - test-silicon-prod:
+          name: "Nightly Silicon-Prod"
+          requires:
+            - "Nightly Silicon-B"
+
+  # Scheduled: ogni lunedi alle 6:00 UTC (full run)
+  weekly-full-run:
+    triggers:
+      - schedule:
+          cron: "0 6 * * 1"
+          filters:
+            branches:
+              only:
+                - main
+    jobs:
+      - test-all-parallel:
+          name: "Weekly Full Run"
