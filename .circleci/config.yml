@@ -26,7 +26,7 @@ parameters:
     default: false
   manual_trigger:
     type: boolean
-    default: false
+    default: true  # Default true so UI trigger works
 
 # Esecutori
 executors:
