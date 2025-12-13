@@ -24,6 +24,9 @@ parameters:
   new_run:
     type: boolean
     default: false
+  test_limit:
+    type: integer
+    default: 0  # 0 = no limit, otherwise limit to N tests
   manual_trigger:
     type: boolean
     default: false  # Only runs when triggered via API with manual_trigger=true
@@ -113,6 +116,9 @@ jobs:
       new_run:
         type: boolean
         default: false
+      test_limit:
+        type: integer
+        default: 0
     steps:
       - setup-environment
       - setup-credentials
@@ -143,6 +149,11 @@ jobs:
               NEW_RUN_FLAG="--new-run"
             fi
 
+            TEST_LIMIT_FLAG=""
+            if [ "<< parameters.test_limit >>" != "0" ]; then
+              TEST_LIMIT_FLAG="--test-limit << parameters.test_limit >>"
+            fi
+
             python run.py \
               -p << parameters.project >> \
               -m << parameters.mode >> \
@@ -150,7 +161,8 @@ jobs:
               --no-interactive \
               --headless \
               --skip-health-check \
-              $NEW_RUN_FLAG
+              $NEW_RUN_FLAG \
+              $TEST_LIMIT_FLAG
 
       - store_artifacts:
           path: reports
@@ -261,6 +273,7 @@ workflows:
           mode: << pipeline.parameters.mode >>
           tests: << pipeline.parameters.tests >>
           new_run: << pipeline.parameters.new_run >>
+          test_limit: << pipeline.parameters.test_limit >>
 
   # DISABLED - Scheduled workflows (riattivare quando necessario)
   #
