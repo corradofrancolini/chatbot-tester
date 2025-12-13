@@ -29,7 +29,7 @@ test_defaults:
 
 google_sheets:
   enabled: true
-  credentials_path: "/Users/corradofrancolini/chatbot-tester-private/config/oauth_credentials.json"
+  credentials_path: "config/oauth_credentials.json"
   spreadsheet_id: '1nUQd_HPlbef-jZeZV_gjdZdxYVwxgWSUZb1PfnRQYOw'
   drive_folder_id: '1cW66dNsxmIoctww5E7Wu03KoTp8b9k7L'
 
