@@ -616,10 +616,16 @@ step8:
     Un test è semplicemente una domanda (e opzionalmente delle
     domande di followup) da fare al chatbot.
 
-  options_title: "Come vuoi procedere?"
+  options_title: "Scegli come importare i test:"
+  option_file: "File locale (JSON/CSV/Excel)"
+  option_gsheets: "Google Sheets"
+  option_url: "URL/API"
+  option_template: "Template predefinito"
+  option_create: "Creazione manuale"
+  option_skip: "Salta (aggiungi test in seguito)"
+
+  # Legacy (for backward compatibility)
   option_import: "Importa da file (JSON, CSV, Excel)"
-  option_create: "Crea test manualmente"
-  option_skip: "Inizio senza test (li aggiungo durante l'uso)"
 
   skip_message: |
     Nessun test pre-configurato.
@@ -637,6 +643,36 @@ step8:
   import_confirm: "Importo questi test?"
   import_success: "Test importati correttamente"
   import_fail: "Errore durante l'importazione: {error}"
+
+  # Google Sheets import
+  gsheets_title: "Import da Google Sheets"
+  gsheets_option_project: "Usa spreadsheet del progetto"
+  gsheets_option_external: "Specifica spreadsheet esterno"
+  gsheets_not_configured: "Google Sheets non configurato per questo progetto"
+  gsheets_sheet_name: "Nome foglio (tab)"
+  gsheets_loading: "Caricamento da Google Sheets..."
+
+  # URL import
+  url_title: "Import da URL/API"
+  url_endpoint: "URL endpoint"
+  url_headers: "Aggiungere headers HTTP?"
+  url_header_name: "Header name"
+  url_loading: "Caricamento da URL..."
+
+  # Validation
+  validation_valid: "{count} test validi"
+  validation_errors: "{count} test con errori:"
+  validation_continue: "Continuare con i test validi?"
+
+  # Conflicts
+  conflict_found: "{count} conflitti con test esistenti"
+  conflict_existing: "Esistente"
+  conflict_new: "Nuovo"
+  conflict_overwrite: "Sovrascrivi"
+  conflict_keep: "Mantieni esistente"
+  conflict_rename: "Rinomina nuovo"
+  conflict_overwrite_all: "Sovrascrivi TUTTI"
+  conflict_keep_all: "Mantieni TUTTI"
 
   # Creazione manuale
   create_title: "Creazione Test"
