@@ -1,0 +1,23 @@
+[
+  {
+    "id": "TEST_001",
+    "question": "How do I reset my password?",
+    "category": "account",
+    "expected": "Should explain password reset process",
+    "expected_topics": ["password", "reset", "email"],
+    "followups": ["I didn't receive the email"],
+    "tags": ["security", "account"]
+  },
+  {
+    "id": "TEST_002",
+    "question": "What are your opening hours?",
+    "category": "info",
+    "expected_topics": ["hours", "open"],
+    "followups": []
+  },
+  {
+    "id": "TEST_003",
+    "question": "Hello!",
+    "category": "greeting"
+  }
+]

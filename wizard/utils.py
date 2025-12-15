@@ -444,29 +444,50 @@ def load_tests_from_file(file_path: str) -> List[Dict[str, Any]]:
     Load tests from various file formats.
 
     Supports: JSON, CSV, Excel
+
+    Note: For advanced import with field mapping and validation,
+    use src.test_importer.TestImporter instead.
     """
     path = Path(file_path)
     ext = path.suffix.lower()
 
     if ext == '.json':
-        with open(path, 'r') as f:
-            return json.load(f)
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            # Handle both array and object with 'tests' key
+            if isinstance(data, list):
+                return data
+            elif isinstance(data, dict):
+                return data.get('tests', data.get('data', []))
+            return []
 
     elif ext == '.csv':
         import csv
         tests = []
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 test = {
                     'id': row.get('id', f"TEST-{len(tests)+1:03d}"),
                     'question': row.get('question', ''),
+                    'category': row.get('category', ''),
+                    'expected': row.get('expected', ''),
                     'followups': []
                 }
                 # Collect followup columns
                 for key, value in row.items():
                     if key.startswith('followup') and value:
                         test['followups'].append(value)
+                # Handle expected_topics
+                if 'expected_topics' in row and row['expected_topics']:
+                    test['expected_topics'] = [
+                        t.strip() for t in row['expected_topics'].split(',') if t.strip()
+                    ]
+                # Handle tags
+                if 'tags' in row and row['tags']:
+                    test['tags'] = [
+                        t.strip() for t in row['tags'].split(',') if t.strip()
+                    ]
                 tests.append(test)
         return tests
 
@@ -478,16 +499,76 @@ def load_tests_from_file(file_path: str) -> List[Dict[str, Any]]:
             test = {
                 'id': str(row.get('id', f"TEST-{len(tests)+1:03d}")),
                 'question': str(row.get('question', '')),
+                'category': str(row.get('category', '')) if pd.notna(row.get('category')) else '',
+                'expected': str(row.get('expected', '')) if pd.notna(row.get('expected')) else '',
                 'followups': []
             }
             for col in df.columns:
                 if col.startswith('followup') and pd.notna(row[col]):
                     test['followups'].append(str(row[col]))
+            # Handle expected_topics
+            if 'expected_topics' in df.columns and pd.notna(row.get('expected_topics')):
+                topics = str(row['expected_topics'])
+                test['expected_topics'] = [t.strip() for t in topics.split(',') if t.strip()]
+            # Handle tags
+            if 'tags' in df.columns and pd.notna(row.get('tags')):
+                tags = str(row['tags'])
+                test['tags'] = [t.strip() for t in tags.split(',') if t.strip()]
             tests.append(test)
         return tests
 
     else:
         raise ValueError(f"Unsupported file format: {ext}")
+
+
+def load_existing_tests(project_name: str) -> List[Dict[str, Any]]:
+    """
+    Load existing tests from project's tests.json.
+
+    Args:
+        project_name: Name of the project
+
+    Returns:
+        List of test dicts, or empty list if no tests exist
+    """
+    project_dir = get_project_dir(project_name)
+    tests_file = project_dir / "tests.json"
+
+    if not tests_file.exists():
+        return []
+
+    try:
+        with open(tests_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+            return []
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def extract_spreadsheet_id(url_or_id: str) -> str:
+    """
+    Extract Google Sheets spreadsheet ID from URL or return as-is.
+
+    Args:
+        url_or_id: Spreadsheet ID or full Google Sheets URL
+
+    Returns:
+        Spreadsheet ID string
+    """
+    import re
+
+    # If it's already just an ID
+    if re.match(r'^[\w\-]+$', url_or_id) and 'google.com' not in url_or_id:
+        return url_or_id
+
+    # Extract from URL
+    match = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', url_or_id)
+    if match:
+        return match.group(1)
+
+    return url_or_id
 
 
 # CSS Selector patterns for auto-detection
