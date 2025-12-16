@@ -2845,11 +2845,7 @@ async def run_test_session(
                         except Exception as e:
                             print(f"  Screenshot upload error for {result.test_case.id}: {e}")
 
-                    # Build timing string
-                    timing_str = ""
-                    # timing_str viene già costruito nel parallel runner se disponibile
-
-                    # Converti TestExecution -> TestResult
+                    # Converti TestExecution -> TestResult (identico al sequenziale)
                     test_result = TestResult(
                         test_id=result.test_case.id,
                         date=date_str,
@@ -2857,14 +2853,14 @@ async def run_test_session(
                         question=result.test_case.question,
                         conversation=conv_str[:5000],
                         screenshot_urls=screenshot_urls,
-                        prompt_version=result.prompt_version if result.prompt_version else "",
-                        model_version=result.model_version if result.model_version else "",
+                        prompt_version=result.prompt_version,
+                        model_version=result.model_version,
                         environment=run_config.env if run_config else "DEV",
-                        esito="",  # Compilato dal reviewer
-                        notes=result.notes if result.notes else "",
-                        langsmith_report=result.langsmith_report if result.langsmith_report else "",
-                        langsmith_url=result.langsmith_url if result.langsmith_url else "",
-                        timing=timing_str
+                        esito="",  # Vuoto - compilato dal reviewer
+                        notes="",  # Vuoto - note del reviewer
+                        langsmith_report=result.langsmith_report,
+                        langsmith_url=result.langsmith_url,
+                        timing=""  # Timing non disponibile in parallelo (browser diversi)
                     )
                     safe_sheets.queue_result(test_result)
 
