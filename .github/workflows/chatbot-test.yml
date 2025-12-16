@@ -1,0 +1,121 @@
+name: Chatbot Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Project name'
+        required: true
+        type: choice
+        options:
+          - silicon-a
+          - silicon-b
+          - silicon-prod
+      mode:
+        description: 'Test mode'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - assisted
+          - train
+      tests:
+        description: 'Tests to run'
+        required: true
+        default: 'pending'
+        type: choice
+        options:
+          - pending
+          - failed
+          - all
+      new_run:
+        description: 'Force new RUN'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+  BROWSER_AUTH_STATE: ${{ secrets.BROWSER_AUTH_STATE }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test ${{ inputs.project }} (${{ inputs.mode }})
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Setup credentials
+        run: |
+          mkdir -p config
+          echo '${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}' > config/oauth_credentials.json
+          echo '${{ secrets.GOOGLE_TOKEN_JSON }}' > config/token.json
+
+      - name: Run tests
+        id: tests
+        run: |
+          python run.py \
+            -p ${{ inputs.project }} \
+            -m ${{ inputs.mode }} \
+            --tests ${{ inputs.tests }} \
+            ${{ inputs.new_run && '--new-run' || '' }} \
+            --no-interactive \
+            --headless
+        continue-on-error: true
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports-${{ inputs.project }}
+          path: reports/${{ inputs.project }}/
+          retention-days: 30
+
+      - name: Send Teams notification
+        if: always() && vars.TEAMS_NOTIFICATIONS_ENABLED == 'true'
+        uses: jdcargile/ms-teams-notification@v1.4
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          notification-summary: "Chatbot Tests - ${{ inputs.project }}"
+          notification-color: ${{ steps.tests.outcome == 'success' && '28a745' || 'dc3545' }}
+          timezone: Europe/Rome
+
+      - name: Send email notification
+        if: always() && vars.EMAIL_NOTIFICATIONS_ENABLED == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[${{ steps.tests.outcome == 'success' && 'PASS' || 'FAIL' }}] Chatbot Tests - ${{ inputs.project }}"
+          to: ${{ vars.EMAIL_RECIPIENTS }}
+          from: ${{ secrets.SMTP_USER }}
+          body: |
+            Chatbot Test Run Completed
+
+            Project: ${{ inputs.project }}
+            Mode: ${{ inputs.mode }}
+            Tests: ${{ inputs.tests }}
+            Status: ${{ steps.tests.outcome }}
+
+            View run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Fail if tests failed
+        if: steps.tests.outcome == 'failure'
+        run: exit 1

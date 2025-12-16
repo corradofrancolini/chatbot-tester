@@ -1,0 +1,144 @@
+name: Scheduled Tests
+
+on:
+  schedule:
+    # Daily at 6:00 UTC (7:00 Rome winter, 8:00 Rome summer)
+    - cron: '0 6 * * *'
+    # Weekly on Monday at 2:00 UTC
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      run_type:
+        description: 'Run type'
+        required: true
+        default: 'daily'
+        type: choice
+        options:
+          - daily
+          - weekly
+
+env:
+  LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+  BROWSER_AUTH_STATE: ${{ secrets.BROWSER_AUTH_STATE }}
+
+jobs:
+  determine-run-type:
+    runs-on: ubuntu-latest
+    outputs:
+      run_type: ${{ steps.check.outputs.run_type }}
+    steps:
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "run_type=${{ inputs.run_type }}" >> $GITHUB_OUTPUT
+          elif [ "$(date +%u)" == "1" ] && [ "$(date +%H)" == "02" ]; then
+            echo "run_type=weekly" >> $GITHUB_OUTPUT
+          else
+            echo "run_type=daily" >> $GITHUB_OUTPUT
+          fi
+
+  test:
+    needs: determine-run-type
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [silicon-a, silicon-b, silicon-prod]
+
+    name: ${{ matrix.project }} (${{ needs.determine-run-type.outputs.run_type }})
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Setup credentials
+        run: |
+          mkdir -p config
+          echo '${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}' > config/oauth_credentials.json
+          echo '${{ secrets.GOOGLE_TOKEN_JSON }}' > config/token.json
+
+      - name: Run tests (daily - pending only)
+        if: needs.determine-run-type.outputs.run_type == 'daily'
+        id: tests_daily
+        run: |
+          python run.py \
+            -p ${{ matrix.project }} \
+            -m auto \
+            --tests pending \
+            --no-interactive \
+            --headless
+        continue-on-error: true
+
+      - name: Run tests (weekly - all with new run)
+        if: needs.determine-run-type.outputs.run_type == 'weekly'
+        id: tests_weekly
+        run: |
+          python run.py \
+            -p ${{ matrix.project }} \
+            -m auto \
+            --tests all \
+            --new-run \
+            --no-interactive \
+            --headless
+        continue-on-error: true
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports-${{ matrix.project }}
+          path: reports/${{ matrix.project }}/
+          retention-days: 30
+
+  notify:
+    needs: [determine-run-type, test]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Collect results
+        id: results
+        run: |
+          # Count successes and failures from matrix jobs
+          echo "run_type=${{ needs.determine-run-type.outputs.run_type }}" >> $GITHUB_OUTPUT
+
+      - name: Send Teams notification
+        if: vars.TEAMS_NOTIFICATIONS_ENABLED == 'true'
+        uses: jdcargile/ms-teams-notification@v1.4
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          notification-summary: "Scheduled Tests (${{ needs.determine-run-type.outputs.run_type }})"
+          notification-color: ${{ needs.test.result == 'success' && '28a745' || 'dc3545' }}
+          timezone: Europe/Rome
+
+      - name: Send email notification
+        if: vars.EMAIL_NOTIFICATIONS_ENABLED == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[${{ needs.test.result == 'success' && 'PASS' || 'FAIL' }}] Scheduled Tests (${{ needs.determine-run-type.outputs.run_type }})"
+          to: ${{ vars.EMAIL_RECIPIENTS }}
+          from: ${{ secrets.SMTP_USER }}
+          body: |
+            Scheduled Test Run Completed
+
+            Type: ${{ needs.determine-run-type.outputs.run_type }}
+            Projects: silicon-a, silicon-b, silicon-prod
+            Status: ${{ needs.test.result }}
+
+            View run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

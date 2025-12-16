@@ -554,12 +554,11 @@ pyinstaller chatbot-tester.spec
 ## TODO / Backlog
 
 ### UX
-- [ ] **Improved progress bar**: Estimated ETA, tests/minute speed, detailed indicator
-- [ ] **Local web dashboard**: Flask server, real-time view, run history with charts
+- [x] **Improved progress bar**: ETA, tests/minute, phase indicator (v1.7.0)
 
 ### Automation
-- [ ] **Remote notifications**: Add notifications (Email/Teams) to GitHub Actions workflow using secrets
-- [ ] **Parallel execution**: Implement multi-browser (config in settings.yaml exists)
+- [x] **Remote notifications**: GitHub Actions workflows with Email/Teams (v1.7.0)
+- [x] **Parallel execution**: Multi-browser via --parallel --workers N (v1.7.0)
 
 ### Internationalization
 - [ ] **Complete i18n**: Integrate src/i18n.py in all modules
