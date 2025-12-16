@@ -2778,13 +2778,21 @@ async def run_test_session(
             def on_parallel_progress(completed, total, test_id):
                 ui.print(f"  [{completed}/{total}] {test_id}", "dim")
 
+            # Report directory per screenshots
+            report_dir = None
+            if tester.report:
+                report_dir = tester.report.run_dir
+
             runner = ParallelTestRunner(
                 browser_settings=browser_settings,
                 selectors=selectors,
                 config=parallel_config,
                 ollama_client=tester.ollama,
                 langsmith_client=tester.langsmith,
-                on_progress=on_parallel_progress
+                on_progress=on_parallel_progress,
+                report_dir=report_dir,
+                run_config=run_config,
+                screenshot_css=getattr(project.chatbot, 'screenshot_css', '')
             )
 
             parallel_result = await runner.run(
@@ -2806,6 +2814,7 @@ async def run_test_session(
             if safe_sheets:
                 from src.sheets_client import TestResult
                 from datetime import datetime
+                from pathlib import Path
 
                 print(f"DEBUG: writing {len(results)} results to sheets")
                 date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -2817,6 +2826,21 @@ async def run_test_session(
                         conv_parts.append(f"👤 {turn.role}: {turn.content}")
                     conv_str = "\n".join(conv_parts)
 
+                    # Upload screenshot se presente
+                    screenshot_urls = None
+                    if result.screenshot_path:
+                        try:
+                            screenshot_urls = safe_sheets.client.upload_screenshot(
+                                Path(result.screenshot_path),
+                                result.test_case.id
+                            )
+                        except Exception as e:
+                            print(f"  Screenshot upload error for {result.test_case.id}: {e}")
+
+                    # Build timing string
+                    timing_str = ""
+                    # timing_str viene già costruito nel parallel runner se disponibile
+
                     # Converti TestExecution -> TestResult
                     test_result = TestResult(
                         test_id=result.test_case.id,
@@ -2824,14 +2848,15 @@ async def run_test_session(
                         mode=mode.value.upper(),
                         question=result.test_case.question,
                         conversation=conv_str[:5000],
-                        prompt_version=getattr(result, 'prompt_version', ''),
-                        model_version=getattr(result, 'model_version', ''),
+                        screenshot_urls=screenshot_urls,
+                        prompt_version=result.prompt_version if result.prompt_version else "",
+                        model_version=result.model_version if result.model_version else "",
                         environment=run_config.env if run_config else "DEV",
                         esito="",  # Compilato dal reviewer
                         notes=result.notes if result.notes else "",
-                        langsmith_report=getattr(result, 'langsmith_report', ''),
-                        langsmith_url=getattr(result, 'langsmith_url', ''),
-                        timing=""
+                        langsmith_report=result.langsmith_report if result.langsmith_report else "",
+                        langsmith_url=result.langsmith_url if result.langsmith_url else "",
+                        timing=timing_str
                     )
                     safe_sheets.queue_result(test_result)
 
