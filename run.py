@@ -2802,11 +2802,39 @@ async def run_test_session(
             results = parallel_result.results
             print(f"DEBUG: results count={len(results)}")
 
-            # Scrivi risultati su Sheets
+            # Scrivi risultati su Sheets (converti TestExecution -> TestResult)
             if safe_sheets:
+                from src.sheets_client import TestResult
+                from datetime import datetime
+
                 print(f"DEBUG: writing {len(results)} results to sheets")
+                date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
                 for result in results:
-                    safe_sheets.queue_result(result)
+                    # Formatta conversazione
+                    conv_parts = []
+                    for turn in result.conversation:
+                        conv_parts.append(f"👤 {turn.role}: {turn.content}")
+                    conv_str = "\n".join(conv_parts)
+
+                    # Converti TestExecution -> TestResult
+                    test_result = TestResult(
+                        test_id=result.test_case.id,
+                        date=date_str,
+                        mode=mode.value.upper(),
+                        question=result.test_case.question,
+                        conversation=conv_str[:5000],
+                        prompt_version=getattr(result, 'prompt_version', ''),
+                        model_version=getattr(result, 'model_version', ''),
+                        environment=run_config.env if run_config else "DEV",
+                        esito="",  # Compilato dal reviewer
+                        notes=result.notes if result.notes else "",
+                        langsmith_report=getattr(result, 'langsmith_report', ''),
+                        langsmith_url=getattr(result, 'langsmith_url', ''),
+                        timing=""
+                    )
+                    safe_sheets.queue_result(test_result)
+
                 safe_sheets.flush()
                 print("DEBUG: flush completed")
 
