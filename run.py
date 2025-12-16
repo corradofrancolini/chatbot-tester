@@ -2780,7 +2780,7 @@ async def run_test_session(
 
             # Crea report per screenshots (normalmente creato in run_auto_session)
             from src.config_loader import ConfigLoader
-            from src.report import ReportGenerator
+            from src.report_local import ReportGenerator
 
             loader = ConfigLoader()
             reports_base_dir = loader.get_report_dir(project.name)
