@@ -2778,10 +2778,18 @@ async def run_test_session(
             def on_parallel_progress(completed, total, test_id):
                 ui.print(f"  [{completed}/{total}] {test_id}", "dim")
 
-            # Report directory per screenshots
-            report_dir = None
-            if tester.report:
-                report_dir = tester.report.run_dir
+            # Crea report per screenshots (normalmente creato in run_auto_session)
+            from src.config_loader import ConfigLoader
+            from src.report import ReportGenerator
+
+            loader = ConfigLoader()
+            reports_base_dir = loader.get_report_dir(project.name)
+            tester.report = ReportGenerator(reports_base_dir, project.name)
+            tester.report.mode = "AUTO"
+            tester.report.start_new_run(run_config.active_run if run_config else 1)
+
+            report_dir = tester.report.run_dir
+            print(f"DEBUG: report_dir={report_dir}")
 
             runner = ParallelTestRunner(
                 browser_settings=browser_settings,
