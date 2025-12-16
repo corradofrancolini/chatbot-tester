@@ -515,8 +515,7 @@ class ParallelTestRunner:
                     success = await browser.take_conversation_screenshot(
                         path=ss_path,
                         hide_elements=['.llm__prompt', '.llm__footer', '.llm__busyIndicator', '.llm__scrollDown'],
-                        expand_elements=['.llm__scroller', '.llm__thread', '.llm__products'],
-                        inject_css=self.screenshot_css
+                        thread_selector='.llm__thread'
                     )
                 else:
                     success = await browser.take_screenshot(ss_path)
