@@ -532,27 +532,6 @@ Documentazione: https://github.com/user/chatbot-tester
         version='%(prog)s v1.6.0'
     )
 
-    # ═══════════════════════════════════════════════════════════════════
-    # Natural Language Interface
-    # ═══════════════════════════════════════════════════════════════════
-    nl_group = parser.add_argument_group('Natural Language')
-    nl_group.add_argument(
-        '--ask',
-        type=str,
-        metavar='COMMAND',
-        help='Esegui comando in linguaggio naturale (es: --ask "lancia test silicon-b")'
-    )
-    nl_group.add_argument(
-        '--chat',
-        action='store_true',
-        help='Avvia sessione chat interattiva'
-    )
-    nl_group.add_argument(
-        '--agent',
-        action='store_true',
-        help='Avvia agente conversazionale avanzato (memoria, multi-step, conferma)'
-    )
-
     args = parser.parse_args()
 
     # Supporto NO_COLOR env var (clig.dev standard)
@@ -4142,28 +4121,6 @@ def run_visualize_commands(args):
         return
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Natural Language Interface
-# ═══════════════════════════════════════════════════════════════════════════════
-
-async def run_nl_ask(command: str):
-    """Execute single natural language command"""
-    from src.nl_chat import run_single_command
-    await run_single_command(command)
-
-
-async def run_nl_chat():
-    """Start interactive chat session"""
-    from src.nl_chat import run_chat_mode
-    await run_chat_mode()
-
-
-async def run_nl_agent():
-    """Start conversational agent session"""
-    from src.nl_agent import run_agent_mode
-    await run_agent_mode()
-
-
 def main():
     """Entry point - clig.dev compliant"""
     import signal
@@ -4187,21 +4144,6 @@ def main():
     if args.project and not args.new_project:
         if not validate_project(args.project, ui):
             sys.exit(ExitCode.PROJECT_NOT_FOUND)
-
-    # ═══════════════════════════════════════════════════════════════════
-    # Natural Language Commands
-    # ═══════════════════════════════════════════════════════════════════
-    if args.ask:
-        asyncio.run(run_nl_ask(args.ask))
-        sys.exit(ExitCode.SUCCESS)
-
-    if args.chat:
-        asyncio.run(run_nl_chat())
-        sys.exit(ExitCode.SUCCESS)
-
-    if args.agent:
-        asyncio.run(run_nl_agent())
-        sys.exit(ExitCode.SUCCESS)
 
     # Comandi scheduler da CLI
     if args.scheduler or args.add_schedule or args.list_schedules:
