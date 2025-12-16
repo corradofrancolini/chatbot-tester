@@ -220,7 +220,8 @@ Per configurare CircleCI:
         mode: str = "auto",
         tests: str = "pending",
         new_run: bool = False,
-        test_limit: int = 0
+        test_limit: int = 0,
+        test_ids: str = ""
     ) -> Tuple[bool, dict]:
         """
         Trigger a new pipeline.
@@ -231,6 +232,7 @@ Per configurare CircleCI:
             tests: Which tests ("all", "pending", "failed")
             new_run: Whether to create new Google Sheets run
             test_limit: Limit to N tests (0 = no limit)
+            test_ids: Comma-separated list of test IDs to run
 
         Returns:
             Tuple of (success, response_data)
@@ -243,7 +245,8 @@ Per configurare CircleCI:
                 "mode": mode,
                 "tests": tests,
                 "new_run": new_run,
-                "test_limit": test_limit
+                "test_limit": test_limit,
+                "test_ids": test_ids
             }
         }
 
