@@ -2734,6 +2734,9 @@ async def run_test_session(
 
         ui.section(t('test_execution.running').format(count=len(tests), mode=mode.value))
 
+        # DEBUG: log stato esecuzione
+        print(f"DEBUG: parallel={parallel}, workers={workers}, mode={mode}, tests_count={len(tests)}")
+
         # Esegui (parallelo o sequenziale)
         if parallel and mode == TestMode.AUTO:
             # Esecuzione parallela con multi-browser
@@ -2790,14 +2793,22 @@ async def run_test_session(
                 single_turn=run_config.single_turn
             )
 
+            # DEBUG: risultati parallel
+            print(f"DEBUG: parallel_result.completed={parallel_result.completed}, "
+                  f"passed={parallel_result.passed}, failed={parallel_result.failed}, "
+                  f"errors={parallel_result.errors}")
+
             # Converti ParallelResult in lista TestExecution per compatibilità
             results = parallel_result.results
+            print(f"DEBUG: results count={len(results)}")
 
             # Scrivi risultati su Sheets
             if safe_sheets:
+                print(f"DEBUG: writing {len(results)} results to sheets")
                 for result in results:
                     safe_sheets.queue_result(result)
                 safe_sheets.flush()
+                print("DEBUG: flush completed")
 
         elif mode == TestMode.TRAIN:
             results = await tester.run_train_session(tests, skip_completed=False)
