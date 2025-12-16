@@ -8,6 +8,26 @@ Automated testing tool for web chatbots with multi-project support, local AI, an
 
 ---
 
+## Getting Started
+
+| New here? | Start with |
+|-----------|------------|
+| **5-minute setup** | [**Quick Start Guide**](docs/QUICKSTART.md) |
+| **Detailed configuration** | [New Project Guide](docs/NEW_PROJECT.md) |
+| **All options** | [Configuration Reference](docs/CONFIGURATION.md) |
+
+```bash
+# Clone and install
+git clone https://github.com/corradofrancolini/chatbot-tester.git
+cd chatbot-tester && python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt && playwright install chromium
+
+# Create your first project
+python run.py --new-project
+```
+
+---
+
 ## Features
 
 - **Multi-project**: Test different chatbots from the same installation
@@ -350,8 +370,11 @@ python run.py --health-check -p my-chatbot
 
 | Guide | Description |
 |-------|-------------|
+| [**QUICKSTART.md**](docs/QUICKSTART.md) | **5-minute setup guide** |
+| [NEW_PROJECT.md](docs/NEW_PROJECT.md) | Detailed project configuration |
 | [CONFIGURATION.md](docs/CONFIGURATION.md) | Complete guide to all options |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploy on Docker, GitHub Actions, PyPI |
+| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and solutions |
 | [CLAUDE.md](CLAUDE.md) | Development notes for Claude Code |
 
 ---
@@ -381,4 +404,3 @@ python run.py -p <name>
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-# Test

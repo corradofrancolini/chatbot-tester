@@ -1,0 +1,19 @@
+[
+  {
+    "id": "TEST_001",
+    "question": "Valid question"
+  },
+  {
+    "id": "TEST_002",
+    "category": "no_question"
+  },
+  {
+    "id": "INVALID@ID",
+    "question": "Invalid ID format"
+  },
+  {
+    "id": "TEST_004",
+    "question": "Bad expected_topics",
+    "expected_topics": "should be array"
+  }
+]

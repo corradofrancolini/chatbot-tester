@@ -8,11 +8,12 @@ Welcome to the Chatbot Tester documentation!
 
 | Document | Description |
 |----------|-------------|
-| [README](../README.md) | Quick start and overview |
+| [README](../README.md) | Project overview |
+| [**QUICKSTART**](QUICKSTART.md) | **5-minute setup guide** |
 | [SETUP](SETUP.md) | Detailed installation guide |
+| [NEW_PROJECT](NEW_PROJECT.md) | How to create a new project |
 | [CONFIGURATION](CONFIGURATION.md) | Complete configuration reference |
 | [DEPLOYMENT](DEPLOYMENT.md) | Docker, GitHub Actions, PyPI |
-| [NEW_PROJECT](NEW_PROJECT.md) | How to create a new project |
 | [TROUBLESHOOTING](TROUBLESHOOTING.md) | Problem solving |
 
 ---
@@ -46,10 +47,11 @@ Welcome to the Chatbot Tester documentation!
 ```
 docs/
 ├── README.md           # This file
+├── QUICKSTART.md       # 5-minute setup guide
 ├── SETUP.md            # Detailed setup
+├── NEW_PROJECT.md      # Project creation
 ├── CONFIGURATION.md    # Configuration reference
 ├── DEPLOYMENT.md       # Deployment options
-├── NEW_PROJECT.md      # Project creation
 ├── TROUBLESHOOTING.md  # Problems and solutions
 └── images/             # Screenshots for guides
 ```
