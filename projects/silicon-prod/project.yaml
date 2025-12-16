@@ -1,0 +1,46 @@
+project:
+  name: silicon-prod
+  description: Chatbot Silicon Search PROD (app-silicon-search-2)
+  created: '2025-12-12'
+  language: it
+
+chatbot:
+  url: https://platform.websolute.ai/api/llm/app-silicon-search-2/it
+  selectors:
+    textarea: '#llm-prompt-textarea'
+    submit_button: button.llm__prompt-submit
+    bot_messages: .llm__message--assistant
+    thread_container: .llm__scroller
+    loading_indicator: .llm__busyIndicator
+  screenshot_css: ''
+  timeouts:
+    page_load: 30000
+    bot_response: 60000
+
+test_defaults:
+  email: test@example.com
+  countries:
+    - Italy
+    - Germany
+    - France
+  confirmations:
+    - 'yes'
+    - 'no'
+
+google_sheets:
+  enabled: true
+  credentials_path: "config/oauth_credentials.json"
+  spreadsheet_id: '1CZzDUVYE6lP7-aUKlHDwjtx9607dmHMf745RGauBKFs'
+  drive_folder_id: '1kXxv8qDqvYgpidBXdA9qkHZS8yjAxG31'
+
+langsmith:
+  enabled: true
+  api_key_env: LANGSMITH_API_KEY
+  project_id: '63b0e246-e936-4faf-8445-b46310848b55'
+  org_id: ''
+  tool_names: []
+
+ollama:
+  enabled: true
+  model: llama3.2:3b
+  url: http://localhost:11434/api/generate

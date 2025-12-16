@@ -1,0 +1,71 @@
+{
+  "patterns": [
+    {
+      "id": "country",
+      "name": "country",
+      "bot_patterns": [
+        "which country",
+        "what country",
+        "country are you",
+        "where are you (based|located)",
+        "your (location|country)",
+        "select.{0,20}country"
+      ],
+      "responses": []
+    },
+    {
+      "id": "email",
+      "name": "email",
+      "bot_patterns": [
+        "(your )?(e-?mail|email address)",
+        "contact.{0,10}(address|info)",
+        "send.{0,10}(to|email)",
+        "provide.{0,10}email"
+      ],
+      "responses": []
+    },
+    {
+      "id": "confirmation",
+      "name": "yes/no",
+      "bot_patterns": [
+        "(yes|no)\\??$",
+        "would you like",
+        "do you want",
+        "shall i",
+        "confirm",
+        "proceed\\?",
+        "is (this|that) correct"
+      ],
+      "responses": []
+    },
+    {
+      "id": "date",
+      "name": "date",
+      "bot_patterns": [
+        "which date",
+        "what date",
+        "when (do|would|did)",
+        "(start|end|from|to) date",
+        "select.{0,10}date"
+      ],
+      "responses": []
+    },
+    {
+      "id": "name",
+      "name": "name",
+      "bot_patterns": [
+        "(your |the )?(full )?name",
+        "who (is|are)",
+        "employee.{0,10}name"
+      ],
+      "responses": []
+    }
+  ],
+  "conversations": [],
+  "meta": {
+    "version": "2.0",
+    "updated": "2025-12-12T16:16:41.371986",
+    "total_patterns": 5,
+    "total_conversations": 0
+  }
+}
