@@ -56,6 +56,13 @@ ollama:
   base_url: http://localhost:11434
   model: llama3.2:3b
   timeout_seconds: 30
+# Natural Language Interface (--ask / --chat)
+natural_language:
+  provider: ollama              # ollama | anthropic | openai
+  model: llama3.2:3b            # Model to use
+  api_key_env: ANTHROPIC_API_KEY  # Env var for API key (anthropic/openai only)
+  ollama_url: http://localhost:11434
+  temperature: 0.1              # Lower = more deterministic
 notifications:
   email:
     enabled: false
