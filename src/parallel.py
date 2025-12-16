@@ -304,34 +304,37 @@ class ParallelTestRunner:
             )
 
         try:
-            # Crea task per ogni test
-            tasks = []
-            for test in tests:
-                task = asyncio.create_task(
-                    self._run_single_test(test, chatbot_url, single_turn)
-                )
-                tasks.append(task)
-
-            # Attendi completamento con semaforo per limitare parallelismo
+            # Semaforo per limitare parallelismo PRIMA di creare i task
             semaphore = asyncio.Semaphore(self.config.max_workers)
 
-            async def run_with_semaphore(task):
+            async def run_with_semaphore(test):
+                """Esegue test con controllo semaforo"""
                 async with semaphore:
-                    return await task
+                    return await self._run_single_test(test, chatbot_url, single_turn)
 
-            # Esegui tutti i task
+            # Esegui tutti i test con parallelismo controllato
+            print(f"Avvio {len(tests)} test con {self.config.max_workers} worker paralleli...")
             completed_results = await asyncio.gather(
-                *[run_with_semaphore(t) for t in tasks],
+                *[run_with_semaphore(test) for test in tests],
                 return_exceptions=True
             )
 
             # Processa risultati
-            for result in completed_results:
+            for i, result in enumerate(completed_results):
                 if isinstance(result, Exception):
-                    # Errore non gestito
-                    continue
-                if isinstance(result, TestExecution):
+                    # Log errore e crea risultato ERROR
+                    print(f"  Test {tests[i].id}: EXCEPTION - {result}")
+                    results.append(TestExecution(
+                        test_case=tests[i],
+                        conversation=[],
+                        esito="ERROR",
+                        duration_ms=0,
+                        notes=f"Exception: {result}"
+                    ))
+                elif isinstance(result, TestExecution):
                     results.append(result)
+                else:
+                    print(f"  Test {tests[i].id}: risultato inatteso - {type(result)}")
 
         finally:
             await self._pool.shutdown()
