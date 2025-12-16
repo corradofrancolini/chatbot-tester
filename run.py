@@ -2783,12 +2783,11 @@ async def run_test_session(
             from src.report_local import ReportGenerator
 
             loader = ConfigLoader()
-            reports_base_dir = loader.get_report_dir(project.name)
-            tester.report = ReportGenerator(reports_base_dir, project.name)
+            run_number = run_config.active_run if run_config else 1
+            report_dir = loader.get_report_dir(project.name, run_number)
+            tester.report = ReportGenerator(report_dir, project.name)
             tester.report.mode = "AUTO"
-            tester.report.start_new_run(run_config.active_run if run_config else 1)
 
-            report_dir = tester.report.run_dir
             print(f"DEBUG: report_dir={report_dir}")
 
             runner = ParallelTestRunner(
