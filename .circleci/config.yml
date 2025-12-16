@@ -27,6 +27,9 @@ parameters:
   test_limit:
     type: integer
     default: 0  # 0 = no limit, otherwise limit to N tests
+  test_ids:
+    type: string
+    default: ""  # Comma-separated test IDs (e.g., "TEST_006,TEST_007,TEST_008")
   manual_trigger:
     type: boolean
     default: false  # Only runs when triggered via API with manual_trigger=true
@@ -119,6 +122,9 @@ jobs:
       test_limit:
         type: integer
         default: 0
+      test_ids:
+        type: string
+        default: ""
     steps:
       - setup-environment
       - setup-credentials
@@ -154,6 +160,11 @@ jobs:
               TEST_LIMIT_FLAG="--test-limit << parameters.test_limit >>"
             fi
 
+            TEST_IDS_FLAG=""
+            if [ -n "<< parameters.test_ids >>" ]; then
+              TEST_IDS_FLAG="--test-ids << parameters.test_ids >>"
+            fi
+
             python run.py \
               -p << parameters.project >> \
               -m << parameters.mode >> \
@@ -162,7 +173,8 @@ jobs:
               --headless \
               --skip-health-check \
               $NEW_RUN_FLAG \
-              $TEST_LIMIT_FLAG
+              $TEST_LIMIT_FLAG \
+              $TEST_IDS_FLAG
 
       - store_artifacts:
           path: reports
@@ -275,6 +287,7 @@ workflows:
           tests: << pipeline.parameters.tests >>
           new_run: << pipeline.parameters.new_run >>
           test_limit: << pipeline.parameters.test_limit >>
+          test_ids: << pipeline.parameters.test_ids >>
 
   # DISABLED - Scheduled workflows (riattivare quando necessario)
   #

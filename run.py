@@ -170,6 +170,13 @@ Documentazione: https://github.com/user/chatbot-tester
         metavar='N',
         help='Limita a N test (0 = tutti)'
     )
+    test_group.add_argument(
+        '--test-ids',
+        type=str,
+        default='',
+        metavar='IDS',
+        help='Lista test specifici separati da virgola (es: TEST_006,TEST_007)'
+    )
 
     # ═══════════════════════════════════════════════════════════════════
     # Analisi
@@ -2612,7 +2619,8 @@ async def run_test_session(
     force_new_run: bool = False,
     no_interactive: bool = False,
     single_turn: bool = False,
-    test_limit: int = 0
+    test_limit: int = 0,
+    test_ids: str = ''
 ):
     """Esegue una sessione di test"""
     ui = get_ui()
@@ -2686,6 +2694,14 @@ async def run_test_session(
             if not tests:
                 ui.error(t('test_execution.test_not_found').format(id=single_test))
                 return
+        elif test_ids:
+            # Lista test specifici da CLI (es: TEST_006,TEST_007,TEST_008)
+            test_id_list = [tid.strip() for tid in test_ids.split(',')]
+            tests = [tc for tc in all_tests if tc.id in test_id_list]
+            if not tests:
+                ui.error(f"Nessun test trovato per gli ID specificati: {test_ids}")
+                return
+            ui.info(f"Esecuzione di {len(tests)} test specifici")
         elif test_filter == 'select':
             # Selezione interattiva
             tests = show_test_selection(ui, all_tests)
@@ -2950,16 +2966,20 @@ async def main_direct(args):
         tests = args.tests or 'pending'
         new_run = args.new_run
         test_limit = args.test_limit or 0
+        test_ids = args.test_ids or ''
 
         ui.print(f"\n  Avvio test su CircleCI...")
         ui.print(f"    Progetto: {args.project}")
         ui.print(f"    Modalita: {mode}")
         ui.print(f"    Test: {tests}")
+        if test_ids:
+            test_count = len(test_ids.split(','))
+            ui.print(f"    Test specifici: {test_count} test")
         if test_limit > 0:
             ui.print(f"    Limite: {test_limit} test")
         ui.print(f"    Nuovo run: {'Si' if new_run else 'No'}\n")
 
-        success, data = ci_client.trigger_pipeline(args.project, mode, tests, new_run, test_limit)
+        success, data = ci_client.trigger_pipeline(args.project, mode, tests, new_run, test_limit, test_ids)
 
         if success:
             pipeline_number = data.get('number', '?')
@@ -2997,7 +3017,8 @@ async def main_direct(args):
             force_new_run=args.new_run,
             no_interactive=args.no_interactive,
             single_turn=args.single_turn,
-            test_limit=args.test_limit or 0
+            test_limit=args.test_limit or 0,
+            test_ids=args.test_ids or ''
         )
 
     except FileNotFoundError:
