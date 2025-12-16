@@ -2825,7 +2825,7 @@ async def run_test_session(
                 from pathlib import Path
 
                 print(f"DEBUG: writing {len(results)} results to sheets")
-                date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                date_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
                 for result in results:
                     # Formatta conversazione (identico al sequenziale)
