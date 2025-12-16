@@ -91,6 +91,9 @@ class BrowserPool:
 
     async def initialize(self) -> bool:
         """Inizializza il pool di browser"""
+        import shutil
+        from pathlib import Path
+
         if self._initialized:
             return True
 
@@ -99,13 +102,26 @@ class BrowserPool:
         for i in range(self.size):
             worker = WorkerState(worker_id=i)
 
+            # Crea directory worker e copia auth state se presente
+            worker_data_dir = None
+            if self.settings.user_data_dir:
+                worker_data_dir = Path(self.settings.user_data_dir) / f"worker_{i}"
+                worker_data_dir.mkdir(parents=True, exist_ok=True)
+
+                # Copia state.json (auth) nella directory worker
+                parent_state = Path(self.settings.user_data_dir) / "state.json"
+                if parent_state.exists():
+                    worker_state = worker_data_dir / "state.json"
+                    shutil.copy2(parent_state, worker_state)
+                    print(f"  Worker {i}: auth state copiato")
+
             # Crea una copia delle settings con user_data_dir univoco
             worker_settings = BrowserSettings(
                 headless=self.settings.headless,
                 viewport_width=self.settings.viewport_width,
                 viewport_height=self.settings.viewport_height,
                 device_scale_factor=self.settings.device_scale_factor,
-                user_data_dir=self.settings.user_data_dir / f"worker_{i}" if self.settings.user_data_dir else None,
+                user_data_dir=worker_data_dir,
                 timeout_page_load=self.settings.timeout_page_load,
                 timeout_bot_response=self.settings.timeout_bot_response
             )
