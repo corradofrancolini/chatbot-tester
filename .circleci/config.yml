@@ -48,6 +48,7 @@ executors:
     resource_class: medium
     environment:
       PLAYWRIGHT_BROWSERS_PATH: /home/circleci/.cache/ms-playwright
+      TZ: Europe/Rome
 
 # Comandi riutilizzabili
 commands:
