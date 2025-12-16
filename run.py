@@ -2789,7 +2789,7 @@ async def run_test_session(
 
             parallel_result = await runner.run(
                 tests=tests,
-                chatbot_url=project.chatbot_url,
+                chatbot_url=project.chatbot.url,
                 single_turn=run_config.single_turn
             )
 
