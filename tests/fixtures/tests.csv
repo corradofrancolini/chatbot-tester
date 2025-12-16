@@ -1,0 +1,4 @@
+id,question,category,expected_topics,followup1,followup2
+TEST_001,"How do I reset my password?",account,"password,reset,email","I didn't receive the email",
+TEST_002,"What are your opening hours?",info,"hours,open",,
+TEST_003,"Hello!",greeting,,,
