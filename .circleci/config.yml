@@ -30,6 +30,12 @@ parameters:
   test_ids:
     type: string
     default: ""  # Comma-separated test IDs (e.g., "TEST_006,TEST_007,TEST_008")
+  single_turn:
+    type: boolean
+    default: false  # Only initial question, no follow-ups
+  repeat:
+    type: integer
+    default: 1  # Number of parallel runs (1-5) for variance analysis
   manual_trigger:
     type: boolean
     default: false  # Only runs when triggered via API with manual_trigger=true
@@ -125,6 +131,12 @@ jobs:
       test_ids:
         type: string
         default: ""
+      single_turn:
+        type: boolean
+        default: false
+      run_label:
+        type: string
+        default: ""  # Optional label for repeated runs (e.g., "run-1")
     steps:
       - setup-environment
       - setup-credentials
@@ -165,6 +177,11 @@ jobs:
               TEST_IDS_FLAG="--test-ids << parameters.test_ids >>"
             fi
 
+            SINGLE_TURN_FLAG=""
+            if [ "<< parameters.single_turn >>" == "true" ]; then
+              SINGLE_TURN_FLAG="--single-turn"
+            fi
+
             python run.py \
               -p << parameters.project >> \
               -m << parameters.mode >> \
@@ -174,7 +191,8 @@ jobs:
               --skip-health-check \
               $NEW_RUN_FLAG \
               $TEST_LIMIT_FLAG \
-              $TEST_IDS_FLAG
+              $TEST_IDS_FLAG \
+              $SINGLE_TURN_FLAG
 
       - store_artifacts:
           path: reports
@@ -276,9 +294,12 @@ jobs:
 workflows:
   version: 2
 
-  # Trigger manuale via API
+  # Trigger manuale via API (singola run)
   manual-test:
-    when: << pipeline.parameters.manual_trigger >>
+    when:
+      and:
+        - << pipeline.parameters.manual_trigger >>
+        - equal: [1, << pipeline.parameters.repeat >>]
     jobs:
       - run-tests:
           name: "test-<< pipeline.parameters.project >>-<< pipeline.parameters.mode >>"
@@ -288,6 +309,71 @@ workflows:
           new_run: << pipeline.parameters.new_run >>
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
+          single_turn: << pipeline.parameters.single_turn >>
+
+  # Trigger manuale con repeat (multiple run parallele per analisi varianza)
+  repeated-test:
+    when:
+      and:
+        - << pipeline.parameters.manual_trigger >>
+        - not:
+            equal: [1, << pipeline.parameters.repeat >>]
+    jobs:
+      # Run 1 - sempre eseguito se repeat >= 1
+      - run-tests:
+          name: "run-1-<< pipeline.parameters.project >>"
+          project: << pipeline.parameters.project >>
+          mode: << pipeline.parameters.mode >>
+          tests: << pipeline.parameters.tests >>
+          new_run: true
+          test_limit: << pipeline.parameters.test_limit >>
+          test_ids: << pipeline.parameters.test_ids >>
+          single_turn: << pipeline.parameters.single_turn >>
+          run_label: "run-1"
+      # Run 2
+      - run-tests:
+          name: "run-2-<< pipeline.parameters.project >>"
+          project: << pipeline.parameters.project >>
+          mode: << pipeline.parameters.mode >>
+          tests: << pipeline.parameters.tests >>
+          new_run: true
+          test_limit: << pipeline.parameters.test_limit >>
+          test_ids: << pipeline.parameters.test_ids >>
+          single_turn: << pipeline.parameters.single_turn >>
+          run_label: "run-2"
+      # Run 3
+      - run-tests:
+          name: "run-3-<< pipeline.parameters.project >>"
+          project: << pipeline.parameters.project >>
+          mode: << pipeline.parameters.mode >>
+          tests: << pipeline.parameters.tests >>
+          new_run: true
+          test_limit: << pipeline.parameters.test_limit >>
+          test_ids: << pipeline.parameters.test_ids >>
+          single_turn: << pipeline.parameters.single_turn >>
+          run_label: "run-3"
+      # Run 4
+      - run-tests:
+          name: "run-4-<< pipeline.parameters.project >>"
+          project: << pipeline.parameters.project >>
+          mode: << pipeline.parameters.mode >>
+          tests: << pipeline.parameters.tests >>
+          new_run: true
+          test_limit: << pipeline.parameters.test_limit >>
+          test_ids: << pipeline.parameters.test_ids >>
+          single_turn: << pipeline.parameters.single_turn >>
+          run_label: "run-4"
+      # Run 5
+      - run-tests:
+          name: "run-5-<< pipeline.parameters.project >>"
+          project: << pipeline.parameters.project >>
+          mode: << pipeline.parameters.mode >>
+          tests: << pipeline.parameters.tests >>
+          new_run: true
+          test_limit: << pipeline.parameters.test_limit >>
+          test_ids: << pipeline.parameters.test_ids >>
+          single_turn: << pipeline.parameters.single_turn >>
+          run_label: "run-5"
 
   # DISABLED - Scheduled workflows (riattivare quando necessario)
   #
