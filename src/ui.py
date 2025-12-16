@@ -21,7 +21,8 @@ try:
     from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn, TimeRemainingColumn, ProgressColumn
+    from rich.text import Text as RichText
     from rich.prompt import Prompt, Confirm
     from rich.text import Text
     from rich.style import Style
@@ -422,8 +423,31 @@ class ConsoleUI:
             print("\033[H\033[J", end="")
 
 
+class SpeedColumn(ProgressColumn):
+    """Custom column showing tests/minute speed"""
+
+    def render(self, task) -> RichText:
+        """Render speed as tests/min"""
+        elapsed = task.elapsed
+        if elapsed and elapsed > 0 and task.completed > 0:
+            speed = (task.completed / elapsed) * 60  # tests per minute
+            return RichText(f"{speed:.1f} test/min", style="cyan")
+        return RichText("-- test/min", style="dim")
+
+
+class PhaseColumn(ProgressColumn):
+    """Custom column showing current phase"""
+
+    def render(self, task) -> RichText:
+        """Render current phase"""
+        phase = task.fields.get("phase", "")
+        if phase:
+            return RichText(f"[{phase}]", style="yellow")
+        return RichText("")
+
+
 class ProgressContext:
-    """Context manager for progress bar"""
+    """Context manager for enhanced progress bar with ETA, speed, and phase"""
 
     def __init__(self, ui: ConsoleUI, total: int, description: str):
         self.ui = ui
@@ -432,6 +456,7 @@ class ProgressContext:
         self.current = 0
         self._progress = None
         self._task = None
+        self._phase = ""
 
     def __enter__(self):
         if self.ui.console:
@@ -440,10 +465,18 @@ class ProgressContext:
                 TextColumn("[progress.description]{task.description}"),
                 BarColumn(),
                 TaskProgressColumn(),
-                console=self.ui.console
+                TextColumn("•"),
+                TimeElapsedColumn(),
+                TextColumn("/"),
+                TimeRemainingColumn(),
+                TextColumn("•"),
+                SpeedColumn(),
+                PhaseColumn(),
+                console=self.ui.console,
+                refresh_per_second=2
             )
             self._progress.start()
-            self._task = self._progress.add_task(self.description, total=self.total)
+            self._task = self._progress.add_task(self.description, total=self.total, phase="")
         return self
 
     def __exit__(self, *args):
@@ -461,10 +494,21 @@ class ProgressContext:
             if self.current >= self.total:
                 print()
 
-    def update(self, description: str) -> None:
-        """Update description"""
+    def update(self, description: str = None, phase: str = None) -> None:
+        """Update description and/or phase"""
         if self._progress and self._task is not None:
-            self._progress.update(self._task, description=description)
+            updates = {}
+            if description is not None:
+                updates["description"] = description
+            if phase is not None:
+                self._phase = phase
+                updates["phase"] = phase
+            if updates:
+                self._progress.update(self._task, **updates)
+
+    def set_phase(self, phase: str) -> None:
+        """Set current phase (e.g., 'sending', 'waiting', 'screenshot')"""
+        self.update(phase=phase)
 
 
 class SpinnerContext:

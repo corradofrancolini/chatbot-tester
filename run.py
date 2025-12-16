@@ -2620,9 +2620,11 @@ async def run_test_session(
     no_interactive: bool = False,
     single_turn: bool = False,
     test_limit: int = 0,
-    test_ids: str = ''
+    test_ids: str = '',
+    parallel: bool = False,
+    workers: int = 3
 ):
-    """Esegue una sessione di test"""
+    """Esegue una sessione di test (sequenziale o parallela)"""
     ui = get_ui()
 
     def on_status(msg):
@@ -2732,8 +2734,72 @@ async def run_test_session(
 
         ui.section(t('test_execution.running').format(count=len(tests), mode=mode.value))
 
-        # Esegui
-        if mode == TestMode.TRAIN:
+        # Esegui (parallelo o sequenziale)
+        if parallel and mode == TestMode.AUTO:
+            # Esecuzione parallela con multi-browser
+            ui.info(f"Esecuzione parallela con {workers} browser")
+            from src.parallel import ParallelTestRunner, ParallelConfig
+            from src.browser import BrowserSettings, ChatbotSelectors
+            from src.sheets_client import ThreadSafeSheetsClient
+
+            # Wrap sheets client per thread safety
+            safe_sheets = ThreadSafeSheetsClient(tester.sheets) if tester.sheets else None
+
+            # Crea settings browser per parallel runner
+            browser_settings = BrowserSettings(
+                headless=settings.browser.headless,
+                viewport_width=settings.browser.viewport_width,
+                viewport_height=settings.browser.viewport_height,
+                device_scale_factor=settings.browser.device_scale_factor,
+                user_data_dir=project.browser_data_dir,
+                timeout_page_load=project.chatbot.timeouts.page_load,
+                timeout_bot_response=project.chatbot.timeouts.bot_response
+            )
+
+            selectors = ChatbotSelectors(
+                textarea=project.chatbot.selectors.textarea,
+                submit_button=project.chatbot.selectors.submit_button,
+                bot_messages=project.chatbot.selectors.bot_messages,
+                thread_container=project.chatbot.selectors.thread_container,
+                loading_indicator=project.chatbot.selectors.loading_indicator
+            )
+
+            parallel_config = ParallelConfig(
+                max_workers=workers,
+                retry_strategy=settings.get('parallel', {}).get('retry_strategy', 'exponential') if hasattr(settings, 'get') else 'exponential',
+                max_retries=settings.get('parallel', {}).get('max_retries', 2) if hasattr(settings, 'get') else 2,
+                base_delay_ms=settings.get('parallel', {}).get('base_delay_ms', 1000) if hasattr(settings, 'get') else 1000,
+                rate_limit_per_minute=settings.get('parallel', {}).get('rate_limit_per_minute', 60) if hasattr(settings, 'get') else 60
+            )
+
+            def on_parallel_progress(completed, total, test_id):
+                ui.print(f"  [{completed}/{total}] {test_id}", "dim")
+
+            runner = ParallelTestRunner(
+                browser_settings=browser_settings,
+                selectors=selectors,
+                config=parallel_config,
+                ollama_client=tester.ollama,
+                langsmith_client=tester.langsmith,
+                on_progress=on_parallel_progress
+            )
+
+            parallel_result = await runner.run(
+                tests=tests,
+                chatbot_url=project.chatbot_url,
+                single_turn=run_config.single_turn
+            )
+
+            # Converti ParallelResult in lista TestExecution per compatibilità
+            results = parallel_result.results
+
+            # Scrivi risultati su Sheets
+            if safe_sheets:
+                for result in results:
+                    safe_sheets.queue_result(result)
+                safe_sheets.flush()
+
+        elif mode == TestMode.TRAIN:
             results = await tester.run_train_session(tests, skip_completed=False)
         elif mode == TestMode.ASSISTED:
             results = await tester.run_assisted_session(tests, skip_completed=False)
@@ -3018,7 +3084,9 @@ async def main_direct(args):
             no_interactive=args.no_interactive,
             single_turn=args.single_turn,
             test_limit=args.test_limit or 0,
-            test_ids=args.test_ids or ''
+            test_ids=args.test_ids or '',
+            parallel=args.parallel,
+            workers=args.workers
         )
 
     except FileNotFoundError:
