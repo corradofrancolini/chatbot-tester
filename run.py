@@ -2860,7 +2860,7 @@ async def run_test_session(
                         notes="",  # Vuoto - note del reviewer
                         langsmith_report=result.langsmith_report,
                         langsmith_url=result.langsmith_url,
-                        timing=""  # Timing non disponibile in parallelo (browser diversi)
+                        timing=result.timing
                     )
                     safe_sheets.queue_result(test_result)
 

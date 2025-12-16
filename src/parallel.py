@@ -577,7 +577,8 @@ class ParallelTestRunner:
             langsmith_report=langsmith_report,
             llm_evaluation=evaluation,
             model_version=model_version,
-            prompt_version=prompt_version
+            prompt_version=prompt_version,
+            timing=timing_str
         )
 
     def _decide_next(self,
