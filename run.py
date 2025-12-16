@@ -547,6 +547,11 @@ Documentazione: https://github.com/user/chatbot-tester
         action='store_true',
         help='Avvia sessione chat interattiva'
     )
+    nl_group.add_argument(
+        '--agent',
+        action='store_true',
+        help='Avvia agente conversazionale avanzato (memoria, multi-step, conferma)'
+    )
 
     args = parser.parse_args()
 
@@ -4153,6 +4158,12 @@ async def run_nl_chat():
     await run_chat_mode()
 
 
+async def run_nl_agent():
+    """Start conversational agent session"""
+    from src.nl_agent import run_agent_mode
+    await run_agent_mode()
+
+
 def main():
     """Entry point - clig.dev compliant"""
     import signal
@@ -4186,6 +4197,10 @@ def main():
 
     if args.chat:
         asyncio.run(run_nl_chat())
+        sys.exit(ExitCode.SUCCESS)
+
+    if args.agent:
+        asyncio.run(run_nl_agent())
         sys.exit(ExitCode.SUCCESS)
 
     # Comandi scheduler da CLI
