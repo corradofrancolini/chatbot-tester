@@ -2825,14 +2825,14 @@ async def run_test_session(
                 from pathlib import Path
 
                 print(f"DEBUG: writing {len(results)} results to sheets")
-                date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+                date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                 for result in results:
-                    # Formatta conversazione
-                    conv_parts = []
-                    for turn in result.conversation:
-                        conv_parts.append(f"👤 {turn.role}: {turn.content}")
-                    conv_str = "\n".join(conv_parts)
+                    # Formatta conversazione (identico al sequenziale)
+                    conv_str = "\n".join([
+                        f"{'USER' if t.role == 'user' else 'BOT'}: {t.content}"
+                        for t in result.conversation
+                    ])
 
                     # Upload screenshot se presente
                     screenshot_urls = None
