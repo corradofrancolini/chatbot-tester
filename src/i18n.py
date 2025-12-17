@@ -209,6 +209,24 @@ TRANSLATIONS = {
         'error_invalid_config': 'Configurazione non valida',
         'error_browser': 'Errore browser',
         'error_auth': 'Errore autenticazione',
+
+        # Intestazioni colonne Google Sheets
+        'col.test_id': 'ID TEST',
+        'col.date': 'DATA',
+        'col.mode': 'MODALITÀ',
+        'col.question': 'DOMANDA',
+        'col.conversation': 'CONVERSAZIONE',
+        'col.screenshot': 'SCREENSHOT',
+        'col.screenshot_url': 'URL SCREENSHOT',
+        'col.prompt_ver': 'VERSIONE PROMPT',
+        'col.model_ver': 'VERSIONE MODELLO',
+        'col.vector_store': 'VECTOR STORE',
+        'col.env': 'AMBIENTE',
+        'col.timing': 'TIMING',
+        'col.esito': 'ESITO',
+        'col.notes': 'NOTE',
+        'col.ls_report': 'REPORT LS',
+        'col.ls_trace': 'LINK TRACE LS',
     },
     
     'en': {
@@ -405,6 +423,24 @@ TRANSLATIONS = {
         'error_invalid_config': 'Invalid configuration',
         'error_browser': 'Browser error',
         'error_auth': 'Authentication error',
+
+        # Google Sheets column headers
+        'col.test_id': 'TEST ID',
+        'col.date': 'DATE',
+        'col.mode': 'MODE',
+        'col.question': 'QUESTION',
+        'col.conversation': 'CONVERSATION',
+        'col.screenshot': 'SCREENSHOT',
+        'col.screenshot_url': 'SCREENSHOT URL',
+        'col.prompt_ver': 'PROMPT VER',
+        'col.model_ver': 'MODEL VER',
+        'col.vector_store': 'VECTOR STORE',
+        'col.env': 'ENV',
+        'col.timing': 'TIMING',
+        'col.esito': 'RESULT',
+        'col.notes': 'NOTES',
+        'col.ls_report': 'LS REPORT',
+        'col.ls_trace': 'LS TRACE LINK',
     }
 }
 

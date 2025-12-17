@@ -242,11 +242,29 @@ class ChatbotTester:
             self.on_status("> Google Sheets disabilitato (dry run)")
         elif self.project.google_sheets.enabled:
             try:
+                # Ottieni configurazione colonne
+                columns_config = self.project.google_sheets.columns
+                column_preset = columns_config.preset if columns_config else "standard"
+                column_list = columns_config.custom if columns_config and columns_config.preset == "custom" else None
+
                 self.sheets = GoogleSheetsClient(
                     credentials_path=self.project.google_sheets.credentials_path,
                     spreadsheet_id=self.project.google_sheets.spreadsheet_id,
-                    drive_folder_id=self.project.google_sheets.drive_folder_id
+                    drive_folder_id=self.project.google_sheets.drive_folder_id,
+                    column_preset=column_preset,
+                    column_list=column_list
                 )
+
+                # Applica configurazione colonne per test file specifico se configurato
+                if columns_config and columns_config.by_test_file:
+                    test_file_name = self.project.tests_file.name if self.project.tests_file else 'tests.json'
+                    self.sheets.set_columns_for_test_file(
+                        test_file_name,
+                        columns_config.by_test_file,
+                        column_preset,
+                        column_list
+                    )
+
                 if self.sheets.authenticate():
                     self.on_status("✓ Google Sheets autenticato")
                     # Il foglio RUN e i test completati vengono configurati

@@ -12,7 +12,7 @@ import os
 import json
 import yaml
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
@@ -53,12 +53,21 @@ class TestDefaultsConfig:
 
 
 @dataclass
+class ColumnsConfig:
+    """Configurazione colonne Google Sheets"""
+    preset: str = "standard"  # standard | minimal | paraphrase | custom
+    custom: List[str] = field(default_factory=list)  # Lista ID colonne per preset custom
+    by_test_file: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # Override per test file specifici
+
+
+@dataclass
 class GoogleSheetsConfig:
     """Configurazione Google Sheets"""
     enabled: bool = False
     spreadsheet_id: str = ""
     drive_folder_id: str = ""
     credentials_path: str = ""
+    columns: ColumnsConfig = field(default_factory=ColumnsConfig)
 
 
 @dataclass
@@ -396,11 +405,21 @@ class ConfigLoader:
         sheets = data.get('google_sheets', {})
         # credentials_path: usa valore yaml, poi env var, poi default vuoto
         creds_path = sheets.get('credentials_path', '') or os.getenv('GOOGLE_OAUTH_CREDENTIALS', '')
+
+        # Parse columns config
+        columns_data = sheets.get('columns', {})
+        columns_config = ColumnsConfig(
+            preset=columns_data.get('preset', 'standard'),
+            custom=columns_data.get('custom', []),
+            by_test_file=columns_data.get('by_test_file', {})
+        )
+
         config.google_sheets = GoogleSheetsConfig(
             enabled=sheets.get('enabled', False),
             spreadsheet_id=sheets.get('spreadsheet_id', ''),
             drive_folder_id=sheets.get('drive_folder_id', ''),
-            credentials_path=creds_path
+            credentials_path=creds_path,
+            columns=columns_config
         )
 
         # LangSmith
