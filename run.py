@@ -2856,7 +2856,7 @@ async def run_test_session(
                         model_version=result.model_version,
                         environment=run_config.env if run_config else "DEV",
                         esito="",  # Vuoto - compilato dal reviewer
-                        notes="",  # Vuoto - note del reviewer
+                        notes=result.test_case.notes,  # Note predefinite (es. intent)
                         langsmith_report=result.langsmith_report,
                         langsmith_url=result.langsmith_url,
                         timing=result.timing

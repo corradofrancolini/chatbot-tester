@@ -59,6 +59,7 @@ class TestCase:
     followups: List[str] = field(default_factory=list)
     data: Dict[str, Any] = field(default_factory=dict)  # email, country, etc.
     tags: List[str] = field(default_factory=list)
+    notes: str = ""  # Note predefinite (es. intent per paraphrase testing)
 
 
 @dataclass
@@ -310,7 +311,8 @@ class ChatbotTester:
                 expected=t.get('expected', ''),
                 followups=t.get('followups', []),
                 data=t.get('data', {}),
-                tags=t.get('tags', [])
+                tags=t.get('tags', []),
+                notes=t.get('notes', '')
             ))
 
         return tests
