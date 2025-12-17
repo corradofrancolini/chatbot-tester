@@ -85,6 +85,7 @@ class TestExecution:
     model_version: str = ""
     prompt_version: str = ""  # Versione prompt da run config
     timing: str = ""  # Timing TTFR → Total (es. "2.3s → 12.0s")
+    vector_store: str = ""  # Vector store provider (es. Qdrant, FAISS)
 
 
 class ChatbotTester:

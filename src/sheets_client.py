@@ -87,6 +87,7 @@ class TestResult:
     screenshot_urls: Optional[ScreenshotUrls] = None  # Nuovo: entrambi gli URL
     prompt_version: str = ""
     model_version: str = ""
+    vector_store: str = ""  # Vector store provider (es. Qdrant, FAISS)
     environment: str = "DEV"  # Default DEV
     esito: str = ""  # Vuoto - compilato dal reviewer (Corretto/Non Corretto/Parzialmente corretto)
     notes: str = ""  # Vuoto - note del reviewer
@@ -119,7 +120,7 @@ class GoogleSheetsClient:
             client.append_result(result)
     """
 
-    # Colonne standard del report (15 colonne)
+    # Colonne standard del report (16 colonne)
     COLUMNS = [
         "TEST ID",
         "DATE",
@@ -130,6 +131,7 @@ class GoogleSheetsClient:
         "SCREENSHOT URL",  # Link alta risoluzione
         "PROMPT VER",      # Versione prompt (da run config)
         "MODEL VER",       # provider/modello
+        "VECTOR STORE",    # Vector store provider (es. Qdrant, FAISS)
         "ENV",             # DEV/PROD (dropdown)
         "TIMING",          # TTFR → Total (es. "2.3s → 12.0s")
         "ESITO",           # Corretto/Non Corretto/Parzialmente corretto (dropdown, compilato da reviewer)
@@ -138,8 +140,8 @@ class GoogleSheetsClient:
         "LS TRACE LINK"    # Link al trace LangSmith
     ]
 
-    # Larghezze colonne in pixel (15 colonne)
-    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 200, 200, 100, 100, 60, 110, 100, 200, 300, 350]
+    # Larghezze colonne in pixel (16 colonne)
+    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 200, 200, 100, 100, 100, 60, 110, 100, 200, 300, 350]
 
     def __init__(self,
                  credentials_path: str,
@@ -547,8 +549,8 @@ class GoogleSheetsClient:
                 # Legacy: URL singolo (mantieni retrocompatibilità)
                 screenshot_view_url = result.screenshot_url
 
-            # 15 colonne: TEST ID, DATE, MODE, QUESTION, CONVERSATION, SCREENSHOT,
-            # SCREENSHOT URL, PROMPT VER, MODEL VER, ENV, TTFR, ESITO, NOTES, LS REPORT, LS TRACE LINK
+            # 16 colonne: TEST ID, DATE, MODE, QUESTION, CONVERSATION, SCREENSHOT,
+            # SCREENSHOT URL, PROMPT VER, MODEL VER, VECTOR STORE, ENV, TIMING, ESITO, NOTES, LS REPORT, LS TRACE LINK
             row = [
                 result.test_id,
                 result.date,
@@ -559,6 +561,7 @@ class GoogleSheetsClient:
                 screenshot_view_url,                    # SCREENSHOT URL: link alta risoluzione
                 result.prompt_version,                  # PROMPT VER: da run config
                 result.model_version,                   # MODEL VER: provider/modello
+                result.vector_store,                    # VECTOR STORE: es. Qdrant, FAISS
                 result.environment or "DEV",            # ENV: default DEV
                 result.timing,                          # TIMING: "TTFR → Total"
                 "",                                     # ESITO: vuoto (compilato dal reviewer)
@@ -620,11 +623,11 @@ class GoogleSheetsClient:
                 elif r.screenshot_url:
                     screenshot_view_url = r.screenshot_url
 
-                # 15 colonne
+                # 16 colonne
                 rows.append([
                     r.test_id, r.date, r.mode, r.question, r.conversation,
                     screenshot_formula, screenshot_view_url,
-                    r.prompt_version, r.model_version,
+                    r.prompt_version, r.model_version, r.vector_store,
                     r.environment or "DEV",           # ENV: default DEV
                     r.timing,                         # TIMING: "TTFR → Total"
                     "",                               # ESITO: vuoto (reviewer)

@@ -2861,6 +2861,7 @@ async def run_test_session(
                         screenshot_urls=screenshot_urls,
                         prompt_version=result.prompt_version,
                         model_version=result.model_version,
+                        vector_store=result.vector_store,
                         environment=run_config.env if run_config else "DEV",
                         esito="",  # Vuoto - compilato dal reviewer
                         notes=result.test_case.notes,  # Note predefinite (es. intent)

@@ -72,6 +72,7 @@ class LangSmithReport:
     status: str = ""
     model: str = ""
     model_provider: str = ""
+    vector_store: str = ""  # Vector store provider (es. Qdrant, FAISS)
     tokens_input: int = 0
     tokens_output: int = 0
     tokens_total: int = 0
@@ -574,6 +575,9 @@ class LangSmithClient:
         # Estrai sources/documenti consultati
         sources = self._extract_sources(trace.id)
 
+        # Estrai vector store provider
+        vector_store = self._extract_vector_store(trace.id)
+
         # Calcola metriche di timing dal waterfall
         timing_metrics = self._calculate_timing_metrics(waterfall)
 
@@ -590,6 +594,7 @@ class LangSmithClient:
             status=analysis['status'],
             model=model_info.get('model', '') or analysis.get('model', ''),
             model_provider=model_info.get('provider', ''),
+            vector_store=vector_store,
             tokens_input=model_info.get('tokens_input', 0),
             tokens_output=tokens_output,
             tokens_total=analysis['tokens_used'] or model_info.get('tokens_total', 0),
@@ -941,6 +946,49 @@ class LangSmithClient:
                             ))
 
         return sources
+
+    def _extract_vector_store(self, trace_id: str) -> str:
+        """
+        Estrae il vector store provider dai retriever runs.
+
+        Cerca nei run di tipo 'retriever' il campo metadata ls_vector_store_provider.
+
+        Args:
+            trace_id: ID del trace
+
+        Returns:
+            Nome del vector store (es. "Qdrant", "FAISS") o stringa vuota
+        """
+        child_runs = self.get_child_runs(trace_id)
+
+        for run in child_runs:
+            run_type = run.get('run_type', '')
+            run_name = run.get('name', '').lower()
+
+            # Cerca nei retriever runs
+            if run_type == 'retriever' or 'retriev' in run_name or 'vectorstore' in run_name:
+                extra = run.get('extra', {})
+                metadata = extra.get('metadata', {})
+
+                # Cerca ls_vector_store_provider
+                vector_store = metadata.get('ls_vector_store_provider', '')
+                if vector_store:
+                    # Pulisci il nome (es. "QdrantVectorStore" -> "Qdrant")
+                    vector_store = vector_store.replace('VectorStore', '').replace('vectorstore', '')
+                    return vector_store
+
+                # Fallback: cerca ls_retriever_name
+                retriever_name = metadata.get('ls_retriever_name', '')
+                if retriever_name and 'qdrant' in retriever_name.lower():
+                    return 'Qdrant'
+                elif retriever_name and 'faiss' in retriever_name.lower():
+                    return 'FAISS'
+                elif retriever_name and 'chroma' in retriever_name.lower():
+                    return 'Chroma'
+                elif retriever_name and 'pinecone' in retriever_name.lower():
+                    return 'Pinecone'
+
+        return ""
 
     def _guess_provider(self, model_name: str) -> str:
         """Indovina il provider dal nome del modello"""

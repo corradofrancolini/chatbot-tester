@@ -529,6 +529,7 @@ class ParallelTestRunner:
         langsmith_url = ""
         langsmith_report = ""
         model_version = ""
+        vector_store = ""
         if self.langsmith:
             try:
                 report = self.langsmith.get_report_for_question(test.question)
@@ -536,6 +537,7 @@ class ParallelTestRunner:
                     langsmith_url = report.trace_url
                     langsmith_report = report.format_for_sheets()
                     model_version = report.get_model_version()
+                    vector_store = report.vector_store
             except Exception as e:
                 print(f"  LangSmith error for {test.id}: {e}")
 
@@ -577,7 +579,8 @@ class ParallelTestRunner:
             llm_evaluation=evaluation,
             model_version=model_version,
             prompt_version=prompt_version,
-            timing=timing_str
+            timing=timing_str,
+            vector_store=vector_store
         )
 
     def _decide_next(self,
