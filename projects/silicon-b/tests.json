@@ -1,302 +1,272 @@
 [
   {
-    "id": "PARA_001_A",
+    "id": "TEST_001",
+    "question": "Puoi mostrarmi prima le novità e i bestsellers nei risultati di ricerca?",
+    "followups": []
+  },
+  {
+    "id": "TEST_002",
+    "question": "La mia azienda opera nel commercio di caffè; abbiamo un evento di presentazione di una nuova cialda. Che gadget posso proporre?",
+    "followups": []
+  },
+  {
+    "id": "TEST_003",
     "question": "Puoi mostrarmi prodotti a basso costo?",
-    "followups": [],
-    "notes": "Ricerca prodotti economici"
+    "followups": []
   },
   {
-    "id": "PARA_001_B",
-    "question": "Cerco articoli economici",
-    "followups": [],
-    "notes": "Ricerca prodotti economici"
-  },
-  {
-    "id": "PARA_001_C",
-    "question": "Avete gadget che costano poco?",
-    "followups": [],
-    "notes": "Ricerca prodotti economici"
-  },
-  {
-    "id": "PARA_001_D",
-    "question": "Mostrami le opzioni più convenienti",
-    "followups": [],
-    "notes": "Ricerca prodotti economici"
-  },
-  {
-    "id": "PARA_002_A",
+    "id": "TEST_004",
     "question": "Trova i dettagli del prodotto con il codice articolo K18040",
-    "followups": [],
-    "notes": "Ricerca prodotto per codice"
+    "followups": []
   },
   {
-    "id": "PARA_002_B",
-    "question": "Dammi il K18040",
-    "followups": [],
-    "notes": "Ricerca prodotto per codice"
+    "id": "TEST_005",
+    "question": "Quali penne avete a meno di 1 euro?",
+    "followups": []
   },
   {
-    "id": "PARA_002_C",
-    "question": "Cerco l'articolo K18040",
-    "followups": [],
-    "notes": "Ricerca prodotto per codice"
+    "id": "TEST_006",
+    "question": "Puoi mostrarmi delle penne con prezzo inferiore a 1 euro?",
+    "followups": []
   },
   {
-    "id": "PARA_002_D",
-    "question": "Informazioni sul codice K18040",
-    "followups": [],
-    "notes": "Ricerca prodotto per codice"
+    "id": "TEST_007",
+    "question": "Quali sono le tecniche di personalizzazione che offrite?",
+    "followups": []
   },
   {
-    "id": "PARA_002_E",
-    "question": "K18040",
-    "followups": [],
-    "notes": "Ricerca prodotto per codice"
+    "id": "TEST_008",
+    "question": "Quali sono le vostre condizioni commerciali?",
+    "followups": []
   },
   {
-    "id": "PARA_003_A",
+    "id": "TEST_009",
     "question": "Quali sono i vostri prodotti best seller?",
-    "followups": [],
-    "notes": "Richiesta best seller"
+    "followups": []
   },
   {
-    "id": "PARA_003_B",
-    "question": "Cosa va per la maggiore?",
-    "followups": [],
-    "notes": "Richiesta best seller"
+    "id": "TEST_010",
+    "question": "Puoi trovare dei prodotti per me se ti chiedo “sinali”, “fratino”, “parananza” o “grembiule”?",
+    "followups": []
   },
   {
-    "id": "PARA_003_C",
-    "question": "Quali articoli vendete di più?",
-    "followups": [],
-    "notes": "Richiesta best seller"
+    "id": "TEST_011",
+    "question": "Trova grembiuli",
+    "followups": []
   },
   {
-    "id": "PARA_003_D",
-    "question": "Mostrami i più venduti",
-    "followups": [],
-    "notes": "Richiesta best seller"
+    "id": "TEST_012",
+    "question": "Trova sinali",
+    "followups": []
   },
   {
-    "id": "PARA_004_A",
+    "id": "TEST_013",
+    "question": "Trova parananze",
+    "followups": []
+  },
+  {
+    "id": "TEST_014",
+    "question": "Fammi vedere tutti i prodotti in rpet disponibili",
+    "followups": []
+  },
+  {
+    "id": "TEST_015",
+    "question": "Puoi propormi un kit di diversi prodotti tutti di colore verde?",
+    "followups": []
+  },
+  {
+    "id": "TEST_016",
+    "question": "Mi fai vedere dei prodotti verdi?",
+    "followups": []
+  },
+  {
+    "id": "TEST_017",
     "question": "Ho un budget di 1000 euro per 1500 pezzi di prodotti per ufficio: cosa mi proponi?",
-    "followups": [],
-    "notes": "Richiesta con vincoli budget e quantità"
+    "followups": []
   },
   {
-    "id": "PARA_004_B",
-    "question": "Devo comprare 1500 articoli da ufficio senza superare i 1000€, cosa avete?",
-    "followups": [],
-    "notes": "Richiesta con vincoli budget e quantità"
+    "id": "TEST_018",
+    "question": "Quali sono i prodotti di fine serie?",
+    "followups": []
   },
   {
-    "id": "PARA_004_C",
-    "question": "Prodotti per ufficio, quantità 1500, budget massimo 1000 euro",
-    "followups": [],
-    "notes": "Richiesta con vincoli budget e quantità"
+    "id": "TEST_019",
+    "question": "Mi fai vedere i cappelli più venduti?",
+    "followups": []
   },
   {
-    "id": "PARA_004_D",
-    "question": "Mi servono 1500 gadget da ufficio e ho mille euro da spendere",
-    "followups": [],
-    "notes": "Richiesta con vincoli budget e quantità"
-  },
-  {
-    "id": "PARA_005_A",
+    "id": "TEST_020",
     "question": "Puoi consigliarmi dei gadget ideali per Natale?",
-    "followups": [],
-    "notes": "Richiesta gadget natalizi"
+    "followups": []
   },
   {
-    "id": "PARA_005_B",
-    "question": "Cosa mi suggerisci per le feste natalizie?",
-    "followups": [],
-    "notes": "Richiesta gadget natalizi"
+    "id": "TEST_021",
+    "question": "Puoi suggerirmi dei gadget che rappresentino il mio brand di scarpe?",
+    "followups": []
   },
   {
-    "id": "PARA_005_C",
-    "question": "Idee regalo aziendali per il periodo natalizio",
-    "followups": [],
-    "notes": "Richiesta gadget natalizi"
+    "id": "TEST_022",
+    "question": "Devo promuovere un evento di un’agenzia creativa: quali gadget mi consigli? Me ne servono 2000 a meno di un euro ciascuno",
+    "followups": []
   },
   {
-    "id": "PARA_005_D",
-    "question": "Articoli a tema Natale?",
-    "followups": [],
-    "notes": "Richiesta gadget natalizi"
+    "id": "TEST_023",
+    "question": "Puoi elencarmi le tecniche disponibili per la customizzazione e la stampa?",
+    "followups": []
   },
   {
-    "id": "PARA_006_A",
+    "id": "TEST_024",
+    "question": "Quali attaccapanni avete a catalogo?",
+    "followups": []
+  },
+  {
+    "id": "TEST_025",
+    "question": "Quali categorie di prodotto offrite?",
+    "followups": []
+  },
+  {
+    "id": "TEST_026",
     "question": "Mi consigli degli articoli per promuovere il mio centro estetico?",
-    "followups": [],
-    "notes": "Consulenza per settore specifico"
+    "followups": []
   },
   {
-    "id": "PARA_006_B",
-    "question": "Gadget promozionali per un centro benessere",
-    "followups": [],
-    "notes": "Consulenza per settore specifico"
+    "id": "TEST_027",
+    "question": "Mi fai vedere gli scaldacolli disponibili?",
+    "followups": []
   },
   {
-    "id": "PARA_006_C",
-    "question": "Lavoro nel settore beauty, cosa mi consigliate?",
-    "followups": [],
-    "notes": "Consulenza per settore specifico"
+    "id": "TEST_028",
+    "question": "Mi puoi proporre dei cappelli rossi?",
+    "followups": []
   },
   {
-    "id": "PARA_006_D",
-    "question": "Ho un salone di bellezza e cerco gadget adatti",
-    "followups": [],
-    "notes": "Consulenza per settore specifico"
+    "id": "TEST_029",
+    "question": "Puoi fornirmi un elenco di penne gialle o verdi che siano novità e che abbiano un prezzo inferiore ai 2,5 euro?",
+    "followups": []
   },
   {
-    "id": "PARA_007_A",
+    "id": "TEST_030",
+    "question": "Quali poncho avete disponibili?",
+    "followups": []
+  },
+  {
+    "id": "TEST_031",
+    "question": "Avete prodotti simili a questo? (da immagine caricata, \"cappellino camo\")",
+    "followups": []
+  },
+  {
+    "id": "TEST_032",
+    "question": "Quali categorie di prodotto offrite?",
+    "followups": []
+  },
+  {
+    "id": "TEST_033",
     "question": "Dove si trova la vostra sede principale?",
-    "followups": [],
-    "notes": "Informazioni sede aziendale"
+    "followups": []
   },
   {
-    "id": "PARA_007_B",
-    "question": "Qual è il vostro indirizzo?",
-    "followups": [],
-    "notes": "Informazioni sede aziendale"
+    "id": "TEST_034",
+    "question": "Quali sono gli articoli di fine serie?",
+    "followups": []
   },
   {
-    "id": "PARA_007_C",
-    "question": "Dove siete?",
-    "followups": [],
-    "notes": "Informazioni sede aziendale"
-  },
-  {
-    "id": "PARA_007_D",
-    "question": "In che città avete sede?",
-    "followups": [],
-    "notes": "Informazioni sede aziendale"
-  },
-  {
-    "id": "PARA_008_A",
+    "id": "TEST_035",
     "question": "Avete prodotti sostenibili?",
-    "followups": [],
-    "notes": "Ricerca prodotti sostenibili"
+    "followups": []
   },
   {
-    "id": "PARA_008_B",
-    "question": "Cerco gadget ecologici",
-    "followups": [],
-    "notes": "Ricerca prodotti sostenibili"
+    "id": "TEST_036",
+    "question": "Trova articoli \"Save the Planet\", portachiavi che costino meno di € 2,00",
+    "followups": []
   },
   {
-    "id": "PARA_008_C",
-    "question": "Articoli eco-friendly?",
-    "followups": [],
-    "notes": "Ricerca prodotti sostenibili"
+    "id": "TEST_037",
+    "question": "Quali sono le categorie principali del sito Silicon? Le conosci? Mi puoi fornire i rispettivi link?",
+    "followups": []
   },
   {
-    "id": "PARA_008_D",
-    "question": "Avete qualcosa di green?",
-    "followups": [],
-    "notes": "Ricerca prodotti sostenibili"
-  },
-  {
-    "id": "PARA_008_E",
-    "question": "Prodotti a basso impatto ambientale",
-    "followups": [],
-    "notes": "Ricerca prodotti sostenibili"
-  },
-  {
-    "id": "PARA_009_A",
+    "id": "TEST_038",
     "question": "Vorrei scegliere un supporto smartphone",
-    "followups": [],
-    "notes": "Ricerca supporto smartphone"
+    "followups": []
   },
   {
-    "id": "PARA_009_B",
-    "question": "Avete porta cellulari?",
-    "followups": [],
-    "notes": "Ricerca supporto smartphone"
+    "id": "TEST_039",
+    "question": "Sono una startup e vorrei promuovere il mio progetto con dei gadget economici e sostenibili. Mi consigli qualcosa?",
+    "followups": []
   },
   {
-    "id": "PARA_009_C",
-    "question": "Cerco un sostegno per telefono",
-    "followups": [],
-    "notes": "Ricerca supporto smartphone"
+    "id": "TEST_040",
+    "question": "Prodotti arcobaleno",
+    "followups": []
   },
   {
-    "id": "PARA_009_D",
-    "question": "Stand per smartphone",
-    "followups": [],
-    "notes": "Ricerca supporto smartphone"
-  },
-  {
-    "id": "PARA_010_A",
+    "id": "TEST_041",
     "question": "Mi fai vedere degli zaini?",
-    "followups": [],
-    "notes": "Ricerca categoria prodotto"
+    "followups": []
   },
   {
-    "id": "PARA_010_B",
-    "question": "Zaini",
-    "followups": [],
-    "notes": "Ricerca categoria prodotto"
-  },
-  {
-    "id": "PARA_010_C",
-    "question": "Avete zaini?",
-    "followups": [],
-    "notes": "Ricerca categoria prodotto"
-  },
-  {
-    "id": "PARA_010_D",
-    "question": "Mostrami gli zaini disponibili",
-    "followups": [],
-    "notes": "Ricerca categoria prodotto"
-  },
-  {
-    "id": "PARA_011_A",
+    "id": "TEST_042",
     "question": "Cosa vendete?",
-    "followups": [],
-    "notes": "Informazioni catalogo generale"
+    "followups": []
   },
   {
-    "id": "PARA_011_B",
-    "question": "Che prodotti avete?",
-    "followups": [],
-    "notes": "Informazioni catalogo generale"
+    "id": "TEST_043",
+    "question": "Mi fai vedere gli scaldacolli?",
+    "followups": []
   },
   {
-    "id": "PARA_011_C",
-    "question": "Qual è la vostra offerta?",
-    "followups": [],
-    "notes": "Informazioni catalogo generale"
+    "id": "TEST_044",
+    "question": "Dammi il S26042",
+    "followups": []
   },
   {
-    "id": "PARA_011_D",
-    "question": "Cosa trovo nel vostro catalogo?",
-    "followups": [],
-    "notes": "Informazioni catalogo generale"
+    "id": "TEST_045",
+    "question": "Vorrei delle penne con prezzo inferiore a 2,5 Euro",
+    "followups": []
   },
   {
-    "id": "PARA_012_A",
+    "id": "TEST_046",
     "question": "Qualcosa di estivo e divertente",
-    "followups": [],
-    "notes": "Query evocativa stagionale"
+    "followups": []
   },
   {
-    "id": "PARA_012_B",
-    "question": "Gadget per l'estate, qualcosa di allegro",
-    "followups": [],
-    "notes": "Query evocativa stagionale"
+    "id": "TEST_047",
+    "question": "Ricerca per immagini -> zaino blu",
+    "followups": []
   },
   {
-    "id": "PARA_012_C",
-    "question": "Articoli spiritosi per la bella stagione",
-    "followups": [],
-    "notes": "Query evocativa stagionale"
+    "id": "TEST_048",
+    "question": "La la mia azienda opera nel commercio di caffè; abbiamo un evento di presentazione di una nuova cialda. Che gadget posso proporre?",
+    "followups": []
   },
   {
-    "id": "PARA_012_D",
-    "question": "Idee fresche e simpatiche per l'estate",
-    "followups": [],
-    "notes": "Query evocativa stagionale"
+    "id": "TEST_049",
+    "question": "Dammi tutti i best seller",
+    "followups": []
+  },
+  {
+    "id": "TEST_050",
+    "question": "Cappelli rossi",
+    "followups": []
+  },
+  {
+    "id": "TEST_051",
+    "question": "Quali tecniche di stampa sono effettivamente applicabili al K18097?",
+    "followups": []
+  },
+  {
+    "id": "TEST_052",
+    "question": "Puoi darmi i trend?",
+    "followups": []
+  },
+  {
+    "id": "TEST_053",
+    "question": "Vorrei fare una campagna che cosa mi consigli?",
+    "followups": []
+  },
+  {
+    "id": "TEST_054",
+    "question": "Vorrei scegliere dei gadget per una campagna pubblicitaria. Cosa mi consigli?",
+    "followups": []
   }
 ]

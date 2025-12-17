@@ -177,6 +177,13 @@ Documentazione: https://github.com/user/chatbot-tester
         metavar='IDS',
         help='Lista test specifici separati da virgola (es: TEST_006,TEST_007)'
     )
+    test_group.add_argument(
+        '--tests-file',
+        type=str,
+        default='tests.json',
+        metavar='FILE',
+        help='File test set da usare (default: tests.json)'
+    )
 
     # ═══════════════════════════════════════════════════════════════════
     # Analisi
@@ -3126,6 +3133,16 @@ async def main_direct(args):
     try:
         project = loader.load_project(args.project)
         settings = loader.load_global_settings()
+
+        # Override tests file se specificato
+        if args.tests_file and args.tests_file != 'tests.json':
+            custom_tests_file = project.project_dir / args.tests_file
+            if custom_tests_file.exists():
+                project.tests_file = custom_tests_file
+                ui.print(f"  Test set: [cyan]{args.tests_file}[/cyan]")
+            else:
+                ui.error(f"Test file '{args.tests_file}' non trovato in {project.project_dir}")
+                return
 
         # Health check pre-esecuzione (skip con --skip-health-check)
         if not args.skip_health_check:

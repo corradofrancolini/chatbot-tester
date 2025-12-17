@@ -33,6 +33,9 @@ parameters:
   single_turn:
     type: boolean
     default: false  # Only initial question, no follow-ups
+  tests_file:
+    type: string
+    default: "tests.json"  # Test set file to use (e.g., "tests_paraphrase.json")
   repeat:
     type: integer
     default: 1  # Number of parallel runs (1-5) for variance analysis
@@ -141,6 +144,9 @@ jobs:
       single_turn:
         type: boolean
         default: false
+      tests_file:
+        type: string
+        default: "tests.json"
       parallel_browsers:
         type: integer
         default: 0  # 0 = sequential, 1-5 = parallel with N browsers
@@ -192,6 +198,11 @@ jobs:
               SINGLE_TURN_FLAG="--single-turn"
             fi
 
+            TESTS_FILE_FLAG=""
+            if [ "<< parameters.tests_file >>" != "tests.json" ]; then
+              TESTS_FILE_FLAG="--tests-file << parameters.tests_file >>"
+            fi
+
             PARALLEL_FLAG=""
             if [ "<< parameters.parallel_browsers >>" != "0" ]; then
               PARALLEL_FLAG="--parallel --workers << parameters.parallel_browsers >>"
@@ -208,6 +219,7 @@ jobs:
               $TEST_LIMIT_FLAG \
               $TEST_IDS_FLAG \
               $SINGLE_TURN_FLAG \
+              $TESTS_FILE_FLAG \
               $PARALLEL_FLAG
 
       - store_artifacts:
@@ -414,6 +426,7 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
 
   # Trigger manuale con native parallelism (split tests across N containers)
@@ -452,6 +465,7 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-1"
       # Run 2
@@ -464,6 +478,7 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-2"
       # Run 3
@@ -476,6 +491,7 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-3"
       # Run 4
@@ -488,6 +504,7 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-4"
       # Run 5
@@ -500,6 +517,7 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-5"
 
