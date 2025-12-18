@@ -21,7 +21,7 @@ reports:
     keep_last_n: 50
   cleanup:
     enabled: true                    # Abilita cleanup automatico
-    auto_cleanup: false               # false = chiede conferma, true = automatico
+    auto_cleanup: true                # true = automatico (silenzioso)
     max_age_days: 30                  # Cancella RUN più vecchie di 30 giorni
     compress_instead_delete: false    # true = comprimi invece di cancellare
     keep_screenshots: true            # Mantieni screenshot anche se cancelli report
