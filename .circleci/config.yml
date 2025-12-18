@@ -331,6 +331,8 @@ jobs:
           destination: reports
 
   # Job con parallelismo nativo CircleCI per splitting test
+  # NOTA: Non usare con new_run=true se vuoi RUN separate per A/B testing
+  # Ogni container creerebbe una RUN diversa. Per A/B, usa repeat nel workflow.
   run-tests-native-parallel:
     executor: python-browser
     parallelism: << parameters.parallelism >>
@@ -352,6 +354,12 @@ jobs:
       single_turn:
         type: boolean
         default: false
+      tests_file:
+        type: string
+        default: "tests.json"
+      prompt_version:
+        type: string
+        default: ""
       parallelism:
         type: integer
         default: 3
@@ -387,9 +395,16 @@ jobs:
           name: Execute tests
           no_output_timeout: 30m
           command: |
+            # Solo il primo container crea new_run per evitare RUN multiple
             NEW_RUN_FLAG=""
-            if [ "<< parameters.new_run >>" == "true" ]; then
+            if [ "<< parameters.new_run >>" == "true" ] && [ "$CIRCLE_NODE_INDEX" == "0" ]; then
               NEW_RUN_FLAG="--new-run"
+              echo "Container 0: Creating new RUN"
+            elif [ "<< parameters.new_run >>" == "true" ]; then
+              # Aspetta che container 0 crei la RUN prima di procedere
+              echo "Container $CIRCLE_NODE_INDEX: Waiting 30s for container 0 to create RUN..."
+              sleep 30
+              echo "Container $CIRCLE_NODE_INDEX: Proceeding to write to latest RUN"
             fi
 
             SINGLE_TURN_FLAG=""
@@ -402,6 +417,16 @@ jobs:
               TEST_IDS_FLAG="--test-ids $MY_TEST_IDS"
             fi
 
+            TESTS_FILE_FLAG=""
+            if [ "<< parameters.tests_file >>" != "tests.json" ]; then
+              TESTS_FILE_FLAG="--tests-file << parameters.tests_file >>"
+            fi
+
+            PROMPT_VERSION_FLAG=""
+            if [ -n "<< parameters.prompt_version >>" ]; then
+              PROMPT_VERSION_FLAG="--prompt-version << parameters.prompt_version >>"
+            fi
+
             python run.py \
               -p << parameters.project >> \
               -m << parameters.mode >> \
@@ -411,7 +436,9 @@ jobs:
               --skip-health-check \
               $NEW_RUN_FLAG \
               $SINGLE_TURN_FLAG \
-              $TEST_IDS_FLAG
+              $TEST_IDS_FLAG \
+              $TESTS_FILE_FLAG \
+              $PROMPT_VERSION_FLAG
 
       - store_artifacts:
           path: reports
@@ -443,6 +470,7 @@ workflows:
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
 
   # Trigger manuale con native parallelism (split tests across N containers)
+  # Nota: con new_run=true, solo container 0 crea la RUN, gli altri scrivono sulla stessa
   native-parallel-test:
     when:
       and:
@@ -451,13 +479,15 @@ workflows:
             equal: [0, << pipeline.parameters.native_parallelism >>]
     jobs:
       - run-tests-native-parallel:
-          name: "parallel-<< pipeline.parameters.project >>-<< pipeline.parameters.mode >>"
+          name: "<< pipeline.parameters.project >>-<< pipeline.parameters.mode >>-parallel"
           project: << pipeline.parameters.project >>
           mode: << pipeline.parameters.mode >>
           tests: << pipeline.parameters.tests >>
           new_run: << pipeline.parameters.new_run >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
           parallelism: << pipeline.parameters.native_parallelism >>
 
   # Trigger manuale con repeat (multiple run parallele per analisi varianza)
