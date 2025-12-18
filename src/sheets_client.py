@@ -100,6 +100,13 @@ AVAILABLE_COLUMNS: Dict[str, Dict[str, Any]] = {
     'notes':          {'header': 'NOTES',          'width': 200, 'header_key': 'col.notes'},
     'ls_report':      {'header': 'LS REPORT',      'width': 300, 'header_key': 'col.ls_report'},
     'ls_trace':       {'header': 'LS TRACE LINK',  'width': 350, 'header_key': 'col.ls_trace'},
+    # Colonne GGP (Grounding, Guardrail, Probing)
+    'section':        {'header': 'SECTION',        'width': 100, 'header_key': 'col.section'},
+    'target':         {'header': 'TARGET',         'width': 200, 'header_key': 'col.target'},
+    'sources':        {'header': 'SOURCES',        'width': 200, 'header_key': 'col.sources'},
+    'run':            {'header': 'RUN',            'width': 60,  'header_key': 'col.run'},
+    'answer':         {'header': 'ANSWER',         'width': 400, 'header_key': 'col.answer'},
+    'outcome':        {'header': 'OUTCOME',        'width': 100, 'header_key': 'col.outcome'},
 }
 
 # Presets colonne predefiniti
@@ -115,6 +122,11 @@ COLUMN_PRESETS: Dict[str, List[str]] = {
     ],
     'paraphrase': [
         'test_id', 'date', 'question', 'notes', 'esito'
+    ],
+    'ggp': [
+        'test_id', 'section', 'date', 'mode', 'model_ver', 'prompt_ver',
+        'question', 'answer', 'outcome', 'target', 'sources', 'notes',
+        'screenshot', 'screenshot_url', 'run'
     ],
 }
 
@@ -182,6 +194,11 @@ class TestResult:
     langsmith_report: str = ""  # Report LangSmith (testo)
     langsmith_url: str = ""  # Link al trace LangSmith
     timing: str = ""  # Timing: "TTFR → Total" (es. "2.3s → 12.0s")
+    # Campi GGP (Grounding, Guardrail, Probing)
+    section: str = ""  # Sezione test: GROUNDING, GUARDRAIL, PROBING
+    target: str = ""   # Target del test (test_target dal JSON)
+    sources: str = ""  # Fonti citate nella risposta
+    run_number: int = 0  # Numero della RUN
 
 
 class GoogleSheetsClient:
@@ -412,6 +429,13 @@ class GoogleSheetsClient:
             'notes': result.notes,
             'ls_report': escape_formula(result.langsmith_report),
             'ls_trace': result.langsmith_url,
+            # Campi GGP
+            'section': result.section,
+            'target': result.target,
+            'sources': result.sources,
+            'run': str(result.run_number) if result.run_number else "",
+            'answer': result.conversation,  # Alias per conversation
+            'outcome': "",  # Compilato dal reviewer (come esito)
         }
         return mapping.get(col_id, "")
 

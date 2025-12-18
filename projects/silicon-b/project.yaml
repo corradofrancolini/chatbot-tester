@@ -32,6 +32,11 @@ google_sheets:
   credentials_path: "config/oauth_credentials.json"
   spreadsheet_id: '1nUQd_HPlbef-jZeZV_gjdZdxYVwxgWSUZb1PfnRQYOw'
   drive_folder_id: '1cW66dNsxmIoctww5E7Wu03KoTp8b9k7L'
+  columns:
+    preset: standard
+    by_test_file:
+      tests_ggp.json:
+        preset: ggp
 
 langsmith:
   enabled: true

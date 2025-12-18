@@ -60,6 +60,9 @@ class TestCase:
     data: Dict[str, Any] = field(default_factory=dict)  # email, country, etc.
     tags: List[str] = field(default_factory=list)
     notes: str = ""  # Note predefinite (es. intent per paraphrase testing)
+    # Campi GGP (Grounding, Guardrail, Probing)
+    section: str = ""  # GROUNDING, GUARDRAIL, PROBING
+    test_target: str = ""  # Target del test
 
 
 @dataclass
@@ -331,7 +334,10 @@ class ChatbotTester:
                 followups=t.get('followups', []),
                 data=t.get('data', {}),
                 tags=t.get('tags', []),
-                notes=t.get('notes', '')
+                notes=t.get('notes', ''),
+                # Campi GGP
+                section=t.get('section', ''),
+                test_target=t.get('test_target', '')
             ))
 
         return tests
@@ -1078,7 +1084,11 @@ class ChatbotTester:
                 notes="",  # Vuoto - note del reviewer
                 langsmith_report=result.langsmith_report,
                 langsmith_url=result.langsmith_url,
-                timing=timing_str
+                timing=timing_str,
+                # Campi GGP
+                section=result.test_case.section,
+                target=result.test_case.test_target,
+                run_number=self.run_config.active_run if self.run_config else 0
             ))
 
             # Track Sheets performance - end
