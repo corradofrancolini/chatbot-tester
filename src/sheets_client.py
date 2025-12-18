@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 try:
     import gspread
     from google.oauth2.credentials import Credentials
+    from google.oauth2.service_account import Credentials as ServiceAccountCredentials
     from google.auth.transport.requests import Request
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
@@ -439,7 +440,11 @@ class GoogleSheetsClient:
 
     def authenticate(self) -> bool:
         """
-        Esegue autenticazione OAuth.
+        Esegue autenticazione Google (Service Account o OAuth).
+
+        Priorità:
+        1. Service Account (se esiste service_account.json) - nessuna scadenza
+        2. OAuth token (token.json) - scade dopo 1 ora
 
         Returns:
             True se autenticazione riuscita
@@ -447,31 +452,41 @@ class GoogleSheetsClient:
         try:
             creds = None
 
-            # Prova a caricare token esistente
-            if self.token_path.exists():
-                creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
-
-            # Refresh se scaduto
-            if creds and creds.expired and creds.refresh_token:
-                try:
-                    creds.refresh(Request())
-                except:
-                    creds = None
-
-            # Nuovo login se necessario
-            if not creds or not creds.valid:
-                if not self.credentials_path.exists():
-                    print(f"✗ File credentials non trovato: {self.credentials_path}")
-                    return False
-
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    str(self.credentials_path), SCOPES
+            # 1. Prova Service Account (priorità - nessuna scadenza)
+            service_account_path = self.credentials_path.parent / "service_account.json"
+            if service_account_path.exists():
+                creds = ServiceAccountCredentials.from_service_account_file(
+                    str(service_account_path), scopes=SCOPES
                 )
-                creds = flow.run_local_server(port=0)
+                # Service Account credentials sono sempre valide (no expiry)
 
-                # Salva token
-                with open(self.token_path, 'w') as f:
-                    f.write(creds.to_json())
+            # 2. Fallback a OAuth
+            if not creds:
+                # Prova a caricare token esistente
+                if self.token_path.exists():
+                    creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
+
+                # Refresh se scaduto
+                if creds and creds.expired and creds.refresh_token:
+                    try:
+                        creds.refresh(Request())
+                    except:
+                        creds = None
+
+                # Nuovo login se necessario
+                if not creds or not creds.valid:
+                    if not self.credentials_path.exists():
+                        print(f"✗ File credentials non trovato: {self.credentials_path}")
+                        return False
+
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        str(self.credentials_path), SCOPES
+                    )
+                    creds = flow.run_local_server(port=0)
+
+                    # Salva token
+                    with open(self.token_path, 'w') as f:
+                        f.write(creds.to_json())
 
             self._credentials = creds
 

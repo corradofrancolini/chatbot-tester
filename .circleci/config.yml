@@ -98,10 +98,16 @@ commands:
               echo "✓ Google OAuth credentials configured"
             fi
 
-            # Google token (with refresh token)
+            # Google Service Account (priorità - nessuna scadenza!)
+            if [ -n "$GOOGLE_SERVICE_ACCOUNT" ]; then
+              echo "$GOOGLE_SERVICE_ACCOUNT" | base64 -d > config/service_account.json
+              echo "✓ Google Service Account configured (no expiry)"
+            fi
+
+            # Google token (fallback - scade dopo 1 ora)
             if [ -n "$GOOGLE_TOKEN_JSON" ]; then
-              echo "$GOOGLE_TOKEN_JSON" > config/token.json
-              echo "✓ Google token configured"
+              echo "$GOOGLE_TOKEN_JSON" | base64 -d > config/token.json
+              echo "✓ Google token configured (expires in 1h)"
             fi
 
   setup-browser-auth:
