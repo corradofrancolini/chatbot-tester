@@ -381,6 +381,12 @@ jobs:
       parallelism:
         type: integer
         default: 3
+      sheet_prefix:
+        type: string
+        default: "Run"
+      skip_screenshots:
+        type: boolean
+        default: false
     steps:
       - setup-environment
       - setup-credentials
@@ -519,6 +525,8 @@ workflows:
           tests_file: << pipeline.parameters.tests_file >>
           prompt_version: << pipeline.parameters.prompt_version >>
           parallelism: << pipeline.parameters.native_parallelism >>
+          sheet_prefix: << pipeline.parameters.sheet_prefix >>
+          skip_screenshots: << pipeline.parameters.skip_screenshots >>
 
   # Trigger manuale con repeat (multiple run parallele per analisi varianza)
   repeated-test:
