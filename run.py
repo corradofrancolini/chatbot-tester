@@ -2812,6 +2812,31 @@ async def run_test_session(
             run_config.last_test_id = results[-1].test_case.id
         run_config.save(project.run_config_file)
 
+        # Cleanup automatico dei vecchi report
+        cleanup_cfg = settings.get('reports', {}).get('cleanup', {})
+        if cleanup_cfg.get('enabled', False):
+            from src.cleanup import ReportCleanup, CleanupConfig, cleanup_interactive
+
+            cleanup_config = CleanupConfig(
+                enabled=True,
+                auto_cleanup=cleanup_cfg.get('auto_cleanup', False),
+                max_age_days=cleanup_cfg.get('max_age_days', 30),
+                keep_last_n=settings.get('reports', {}).get('local', {}).get('keep_last_n', 50),
+                compress_instead_delete=cleanup_cfg.get('compress_instead_delete', False),
+                keep_screenshots=cleanup_cfg.get('keep_screenshots', True)
+            )
+
+            cleanup = ReportCleanup(cleanup_config, Path("reports"))
+
+            if cleanup.should_run_cleanup(project.name):
+                if cleanup_config.auto_cleanup:
+                    result = cleanup.cleanup(project.name)
+                    if result.runs_deleted or result.runs_compressed:
+                        ui.muted(f"Cleanup: liberati {result.space_freed_human}")
+                    cleanup.mark_cleanup_done(project.name)
+                else:
+                    cleanup_interactive(project.name, Path("reports"), cleanup_config)
+
         # Riepilogo
         ui.section(t('test_execution.summary'))
         passed = sum(1 for r in results if r.esito == 'PASS')

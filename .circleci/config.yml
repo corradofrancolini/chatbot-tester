@@ -7,12 +7,13 @@ version: 2.1
 orbs:
   python: circleci/python@2.1.1
   browser-tools: circleci/browser-tools@1.4.8
+  ms-teams: cloudradar-monitoring/ms-teams@0.0.1
 
 # Parametri per trigger manuale via API
 parameters:
   project:
     type: string
-    default: "silicon-b"
+    default: "my-chatbot"
   mode:
     type: enum
     enum: ["auto", "assisted", "train"]
@@ -33,12 +34,30 @@ parameters:
   single_turn:
     type: boolean
     default: false  # Only initial question, no follow-ups
+  tests_file:
+    type: string
+    default: "tests.json"  # Test set file to use (e.g., "tests_paraphrase.json")
+  prompt_version:
+    type: string
+    default: ""  # Prompt version to use (e.g., "v12")
   repeat:
     type: integer
     default: 1  # Number of parallel runs (1-5) for variance analysis
+  parallel_browsers:
+    type: integer
+    default: 0  # 0 = sequential, 1-5 = parallel with N browsers (Python-level)
+  native_parallelism:
+    type: integer
+    default: 0  # 0 = disabled, 2-5 = split tests across N CircleCI containers
   manual_trigger:
     type: boolean
     default: false  # Only runs when triggered via API with manual_trigger=true
+  sheet_prefix:
+    type: string
+    default: "Run"  # Prefix for sheet name (e.g., "GGP" for "GGP 001")
+  skip_screenshots:
+    type: boolean
+    default: false  # Skip screenshot capture
 
 # Esecutori
 executors:
@@ -56,15 +75,44 @@ commands:
     description: "Setup Python environment and dependencies"
     steps:
       - checkout
+      # Cache pip dependencies
+      - restore_cache:
+          keys:
+            - pip-v1-{{ checksum "requirements.txt" }}
+            - pip-v1-
       - python/install-packages:
           pkg-manager: pip
           pip-dependency-file: requirements.txt
+      - save_cache:
+          key: pip-v1-{{ checksum "requirements.txt" }}
+          paths:
+            - ~/.cache/pip
+            - ~/.local/lib/python3.11/site-packages
+      # Cache Playwright browsers
+      - restore_cache:
+          keys:
+            - playwright-v1-chromium
       - run:
           name: Install Playwright
           command: |
             pip install playwright
             playwright install chromium
             playwright install-deps chromium
+      - save_cache:
+          key: playwright-v1-chromium
+          paths:
+            - /home/circleci/.cache/ms-playwright
+
+  notify-teams:
+    description: "Send notification to Microsoft Teams"
+    parameters:
+      status:
+        type: string
+        default: "completed"
+    steps:
+      - ms-teams/report:
+          only_on_fail: false
+          webhook_url: ${MS_TEAMS_WEBHOOK_URL}
 
   setup-credentials:
     description: "Setup Google and LangSmith credentials"
@@ -86,10 +134,16 @@ commands:
               echo "✓ Google OAuth credentials configured"
             fi
 
-            # Google token (with refresh token)
+            # Google Service Account (priorità - nessuna scadenza!)
+            if [ -n "$GOOGLE_SERVICE_ACCOUNT" ]; then
+              echo "$GOOGLE_SERVICE_ACCOUNT" > config/service_account.json
+              echo "✓ Google Service Account configured (no expiry)"
+            fi
+
+            # Google OAuth Token (per upload screenshot su Drive personale)
             if [ -n "$GOOGLE_TOKEN_JSON" ]; then
               echo "$GOOGLE_TOKEN_JSON" > config/token.json
-              echo "✓ Google token configured"
+              echo "✓ Google OAuth token configured"
             fi
 
   setup-browser-auth:
@@ -116,7 +170,7 @@ jobs:
     parameters:
       project:
         type: string
-        default: "silicon-b"
+        default: "my-chatbot"
       mode:
         type: string
         default: "auto"
@@ -135,6 +189,15 @@ jobs:
       single_turn:
         type: boolean
         default: false
+      tests_file:
+        type: string
+        default: "tests.json"
+      prompt_version:
+        type: string
+        default: ""
+      parallel_browsers:
+        type: integer
+        default: 0  # 0 = sequential, 1-5 = parallel with N browsers
       run_label:
         type: string
         default: ""  # Optional label for repeated runs (e.g., "run-1")
@@ -183,6 +246,31 @@ jobs:
               SINGLE_TURN_FLAG="--single-turn"
             fi
 
+            TESTS_FILE_FLAG=""
+            if [ "<< parameters.tests_file >>" != "tests.json" ]; then
+              TESTS_FILE_FLAG="--tests-file << parameters.tests_file >>"
+            fi
+
+            PARALLEL_FLAG=""
+            if [ "<< parameters.parallel_browsers >>" != "0" ]; then
+              PARALLEL_FLAG="--parallel --workers << parameters.parallel_browsers >>"
+            fi
+
+            PROMPT_VERSION_FLAG=""
+            if [ -n "<< parameters.prompt_version >>" ]; then
+              PROMPT_VERSION_FLAG="--prompt-version << parameters.prompt_version >>"
+            fi
+
+            SHEET_PREFIX_FLAG=""
+            if [ "<< parameters.sheet_prefix >>" != "Run" ]; then
+              SHEET_PREFIX_FLAG="--sheet-prefix << parameters.sheet_prefix >>"
+            fi
+
+            SKIP_SCREENSHOTS_FLAG=""
+            if [ "<< parameters.skip_screenshots >>" == "true" ]; then
+              SKIP_SCREENSHOTS_FLAG="--skip-screenshots"
+            fi
+
             python run.py \
               -p << parameters.project >> \
               -m << parameters.mode >> \
@@ -193,7 +281,12 @@ jobs:
               $NEW_RUN_FLAG \
               $TEST_LIMIT_FLAG \
               $TEST_IDS_FLAG \
-              $SINGLE_TURN_FLAG
+              $SINGLE_TURN_FLAG \
+              $TESTS_FILE_FLAG \
+              $PARALLEL_FLAG \
+              $PROMPT_VERSION_FLAG \
+              $SHEET_PREFIX_FLAG \
+              $SKIP_SCREENSHOTS_FLAG
 
       - store_artifacts:
           path: reports
@@ -212,54 +305,58 @@ jobs:
               find reports -name "*.html" -o -name "*.json" | head -20
             fi
 
+      - ms-teams/report:
+          only_on_fail: false
+          webhook_url: ${MS_TEAMS_WEBHOOK_URL}
+
   # Job per test specifici di ogni progetto
-  test-silicon-a:
+  test-example-chatbot-a:
     executor: python-browser
     steps:
       - setup-environment
       - setup-credentials
       - setup-browser-auth:
-          project: silicon-a
+          project: example-chatbot-a
       - run:
           name: Run Silicon-A tests
           no_output_timeout: 30m
           command: |
-            python run.py -p silicon-a -m auto --tests pending --no-interactive --headless
+            python run.py -p example-chatbot-a -m auto --tests pending --no-interactive --headless
       - store_artifacts:
-          path: reports/silicon-a
-          destination: silicon-a-reports
+          path: reports/example-chatbot-a
+          destination: example-chatbot-a-reports
 
-  test-silicon-b:
+  test-example-chatbot-b:
     executor: python-browser
     steps:
       - setup-environment
       - setup-credentials
       - setup-browser-auth:
-          project: silicon-b
+          project: example-chatbot-b
       - run:
           name: Run Silicon-B tests
           no_output_timeout: 30m
           command: |
-            python run.py -p silicon-b -m auto --tests pending --no-interactive --headless
+            python run.py -p example-chatbot-b -m auto --tests pending --no-interactive --headless
       - store_artifacts:
-          path: reports/silicon-b
-          destination: silicon-b-reports
+          path: reports/example-chatbot-b
+          destination: example-chatbot-b-reports
 
-  test-silicon-prod:
+  test-example-chatbot-prod:
     executor: python-browser
     steps:
       - setup-environment
       - setup-credentials
       - setup-browser-auth:
-          project: silicon-prod
+          project: example-chatbot-prod
       - run:
           name: Run Silicon-Prod tests
           no_output_timeout: 30m
           command: |
-            python run.py -p silicon-prod -m auto --tests pending --no-interactive --headless
+            python run.py -p example-chatbot-prod -m auto --tests pending --no-interactive --headless
       - store_artifacts:
-          path: reports/silicon-prod
-          destination: silicon-prod-reports
+          path: reports/example-chatbot-prod
+          destination: example-chatbot-prod-reports
 
   # Job parallelo per tutti i progetti
   test-all-parallel:
@@ -271,7 +368,7 @@ jobs:
       - run:
           name: Determine project
           command: |
-            PROJECTS=("silicon-a" "silicon-b" "silicon-prod")
+            PROJECTS=("example-chatbot-a" "example-chatbot-b" "example-chatbot-prod")
             PROJECT=${PROJECTS[$CIRCLE_NODE_INDEX]}
             echo "export PROJECT=$PROJECT" >> $BASH_ENV
             echo "Running tests for: $PROJECT"
@@ -291,16 +388,153 @@ jobs:
           path: reports
           destination: reports
 
+  # Job con parallelismo nativo CircleCI per splitting test
+  # NOTA: Non usare con new_run=true se vuoi RUN separate per A/B testing
+  # Ogni container creerebbe una RUN diversa. Per A/B, usa repeat nel workflow.
+  run-tests-native-parallel:
+    executor: python-browser
+    parallelism: << parameters.parallelism >>
+    parameters:
+      project:
+        type: string
+      mode:
+        type: string
+        default: "auto"
+      tests:
+        type: string
+        default: "pending"
+      new_run:
+        type: boolean
+        default: false
+      test_ids:
+        type: string
+        default: ""
+      single_turn:
+        type: boolean
+        default: false
+      tests_file:
+        type: string
+        default: "tests.json"
+      prompt_version:
+        type: string
+        default: ""
+      parallelism:
+        type: integer
+        default: 3
+      sheet_prefix:
+        type: string
+        default: "Run"
+      skip_screenshots:
+        type: boolean
+        default: false
+    steps:
+      - setup-environment
+      - setup-credentials
+      - setup-browser-auth:
+          project: << parameters.project >>
+
+      - run:
+          name: Split tests across containers
+          command: |
+            # Se test_ids è specificato, splitta quelli
+            if [ -n "<< parameters.test_ids >>" ]; then
+              # Converti comma-separated in newline-separated
+              echo "<< parameters.test_ids >>" | tr ',' '\n' > /tmp/all_tests.txt
+
+              # Usa circleci tests split per distribuire
+              cat /tmp/all_tests.txt | circleci tests split > /tmp/my_tests.txt
+
+              # Converti back to comma-separated
+              MY_TEST_IDS=$(cat /tmp/my_tests.txt | tr '\n' ',' | sed 's/,$//')
+              echo "export MY_TEST_IDS=$MY_TEST_IDS" >> $BASH_ENV
+
+              echo "Container $CIRCLE_NODE_INDEX of $CIRCLE_NODE_TOTAL"
+              echo "My tests: $MY_TEST_IDS"
+            else
+              echo "No test_ids specified, will run << parameters.tests >> tests"
+              echo "export MY_TEST_IDS=" >> $BASH_ENV
+            fi
+
+      - run:
+          name: Execute tests
+          no_output_timeout: 30m
+          command: |
+            # Solo il primo container crea new_run per evitare RUN multiple
+            NEW_RUN_FLAG=""
+            if [ "<< parameters.new_run >>" == "true" ] && [ "$CIRCLE_NODE_INDEX" == "0" ]; then
+              NEW_RUN_FLAG="--new-run"
+              echo "Container 0: Creating new RUN"
+            elif [ "<< parameters.new_run >>" == "true" ]; then
+              # Aspetta che container 0 crei la RUN prima di procedere
+              echo "Container $CIRCLE_NODE_INDEX: Waiting 30s for container 0 to create RUN..."
+              sleep 30
+              echo "Container $CIRCLE_NODE_INDEX: Proceeding to write to latest RUN"
+            fi
+
+            SINGLE_TURN_FLAG=""
+            if [ "<< parameters.single_turn >>" == "true" ]; then
+              SINGLE_TURN_FLAG="--single-turn"
+            fi
+
+            TEST_IDS_FLAG=""
+            if [ -n "$MY_TEST_IDS" ]; then
+              TEST_IDS_FLAG="--test-ids $MY_TEST_IDS"
+            fi
+
+            TESTS_FILE_FLAG=""
+            if [ "<< parameters.tests_file >>" != "tests.json" ]; then
+              TESTS_FILE_FLAG="--tests-file << parameters.tests_file >>"
+            fi
+
+            PROMPT_VERSION_FLAG=""
+            if [ -n "<< parameters.prompt_version >>" ]; then
+              PROMPT_VERSION_FLAG="--prompt-version << parameters.prompt_version >>"
+            fi
+
+            SHEET_PREFIX_FLAG=""
+            if [ "<< parameters.sheet_prefix >>" != "Run" ]; then
+              SHEET_PREFIX_FLAG="--sheet-prefix << parameters.sheet_prefix >>"
+            fi
+
+            SKIP_SCREENSHOTS_FLAG=""
+            if [ "<< parameters.skip_screenshots >>" == "true" ]; then
+              SKIP_SCREENSHOTS_FLAG="--skip-screenshots"
+            fi
+
+            python run.py \
+              -p << parameters.project >> \
+              -m << parameters.mode >> \
+              --tests << parameters.tests >> \
+              --no-interactive \
+              --headless \
+              --skip-health-check \
+              $NEW_RUN_FLAG \
+              $SINGLE_TURN_FLAG \
+              $TEST_IDS_FLAG \
+              $TESTS_FILE_FLAG \
+              $PROMPT_VERSION_FLAG \
+              $SHEET_PREFIX_FLAG \
+              $SKIP_SCREENSHOTS_FLAG
+
+      - store_artifacts:
+          path: reports
+          destination: test-reports-node-$CIRCLE_NODE_INDEX
+
+      - ms-teams/report:
+          only_on_fail: false
+          webhook_url: ${MS_TEAMS_WEBHOOK_URL}
+
 # Workflows
 workflows:
   version: 2
 
-  # Trigger manuale via API (singola run)
+  # Trigger manuale via API (singola run, senza native parallelism)
   manual-test:
     when:
       and:
         - << pipeline.parameters.manual_trigger >>
         - equal: [1, << pipeline.parameters.repeat >>]
+        - equal: [0, << pipeline.parameters.native_parallelism >>]
     jobs:
       - run-tests:
           name: "test-<< pipeline.parameters.project >>-<< pipeline.parameters.mode >>"
@@ -311,6 +545,32 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
+          parallel_browsers: << pipeline.parameters.parallel_browsers >>
+
+  # Trigger manuale con native parallelism (split tests across N containers)
+  # Nota: con new_run=true, solo container 0 crea la RUN, gli altri scrivono sulla stessa
+  native-parallel-test:
+    when:
+      and:
+        - << pipeline.parameters.manual_trigger >>
+        - not:
+            equal: [0, << pipeline.parameters.native_parallelism >>]
+    jobs:
+      - run-tests-native-parallel:
+          name: "<< pipeline.parameters.project >>-<< pipeline.parameters.mode >>-parallel"
+          project: << pipeline.parameters.project >>
+          mode: << pipeline.parameters.mode >>
+          tests: << pipeline.parameters.tests >>
+          new_run: << pipeline.parameters.new_run >>
+          test_ids: << pipeline.parameters.test_ids >>
+          single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
+          parallelism: << pipeline.parameters.native_parallelism >>
+          sheet_prefix: << pipeline.parameters.sheet_prefix >>
+          skip_screenshots: << pipeline.parameters.skip_screenshots >>
 
   # Trigger manuale con repeat (multiple run parallele per analisi varianza)
   repeated-test:
@@ -330,6 +590,9 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
+          parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-1"
       # Run 2
       - run-tests:
@@ -341,6 +604,9 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
+          parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-2"
       # Run 3
       - run-tests:
@@ -352,6 +618,9 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
+          parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-3"
       # Run 4
       - run-tests:
@@ -363,6 +632,9 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
+          parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-4"
       # Run 5
       - run-tests:
@@ -374,6 +646,9 @@ workflows:
           test_limit: << pipeline.parameters.test_limit >>
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
+          tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
+          parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-5"
 
   # DISABLED - Scheduled workflows (riattivare quando necessario)
@@ -388,9 +663,9 @@ workflows:
   #             only:
   #               - main
   #   jobs:
-  #     - test-silicon-b:
+  #     - test-example-chatbot-b:
   #         name: "Nightly Silicon-B"
-  #     - test-silicon-prod:
+  #     - test-example-chatbot-prod:
   #         name: "Nightly Silicon-Prod"
   #         requires:
   #           - "Nightly Silicon-B"
