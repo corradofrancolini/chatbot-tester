@@ -440,65 +440,80 @@ class GoogleSheetsClient:
 
     def authenticate(self) -> bool:
         """
-        Esegue autenticazione Google (Service Account o OAuth).
+        Esegue autenticazione Google.
 
-        Priorità:
-        1. Service Account (se esiste service_account.json) - nessuna scadenza
-        2. OAuth token (token.json) - scade dopo 1 ora
+        Per Sheets:
+        - Service Account (priorità) o OAuth
+
+        Per Drive (upload screenshot):
+        - OAuth SOLO (Service Account non ha quota su Drive personale)
 
         Returns:
             True se autenticazione riuscita
         """
         try:
-            creds = None
+            sheets_creds = None
+            drive_creds = None
 
-            # 1. Prova Service Account (priorità - nessuna scadenza)
+            # 1. Prova Service Account per Sheets (priorità - nessuna scadenza)
             service_account_path = self.credentials_path.parent / "service_account.json"
             if service_account_path.exists():
-                creds = ServiceAccountCredentials.from_service_account_file(
+                sheets_creds = ServiceAccountCredentials.from_service_account_file(
                     str(service_account_path), scopes=SCOPES
                 )
-                # Service Account credentials sono sempre valide (no expiry)
 
-            # 2. Fallback a OAuth
-            if not creds:
-                # Prova a caricare token esistente
-                if self.token_path.exists():
-                    creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
+            # 2. OAuth per Drive (e fallback per Sheets se no Service Account)
+            oauth_creds = None
+            if self.token_path.exists():
+                oauth_creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
 
                 # Refresh se scaduto
-                if creds and creds.expired and creds.refresh_token:
+                if oauth_creds and oauth_creds.expired and oauth_creds.refresh_token:
                     try:
-                        creds.refresh(Request())
-                    except:
-                        creds = None
+                        oauth_creds.refresh(Request())
+                        # Salva token aggiornato
+                        with open(self.token_path, 'w') as f:
+                            f.write(oauth_creds.to_json())
+                    except Exception as e:
+                        print(f"⚠ Impossibile refreshare OAuth token: {e}")
+                        oauth_creds = None
 
-                # Nuovo login se necessario
-                if not creds or not creds.valid:
-                    if not self.credentials_path.exists():
-                        print(f"✗ File credentials non trovato: {self.credentials_path}")
-                        return False
+            # Se no OAuth valido e serve interattivo
+            if not oauth_creds or not oauth_creds.valid:
+                if self.credentials_path.exists():
+                    # Solo in ambiente interattivo (non CI)
+                    import os
+                    if os.environ.get('CI') != 'true' and os.isatty(0):
+                        flow = InstalledAppFlow.from_client_secrets_file(
+                            str(self.credentials_path), SCOPES
+                        )
+                        oauth_creds = flow.run_local_server(port=0)
+                        with open(self.token_path, 'w') as f:
+                            f.write(oauth_creds.to_json())
 
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        str(self.credentials_path), SCOPES
-                    )
-                    creds = flow.run_local_server(port=0)
+            # Usa Service Account per Sheets se disponibile, altrimenti OAuth
+            if not sheets_creds:
+                sheets_creds = oauth_creds
 
-                    # Salva token
-                    with open(self.token_path, 'w') as f:
-                        f.write(creds.to_json())
+            if not sheets_creds:
+                print("✗ Nessuna credenziale valida per Google Sheets")
+                return False
 
-            self._credentials = creds
+            # Drive usa SEMPRE OAuth (Service Account non ha quota)
+            drive_creds = oauth_creds
+
+            self._credentials = sheets_creds
 
             # Inizializza clients
-            self._gspread_client = gspread.authorize(creds)
+            self._gspread_client = gspread.authorize(sheets_creds)
             self._spreadsheet = self._gspread_client.open_by_key(self.spreadsheet_id)
 
-            # Drive service per upload
-            if self.drive_folder_id:
-                self._drive_service = build('drive', 'v3', credentials=creds)
+            # Drive service per upload (solo con OAuth)
+            if self.drive_folder_id and drive_creds:
+                self._drive_service = build('drive', 'v3', credentials=drive_creds)
+            elif self.drive_folder_id:
+                print("⚠ OAuth non disponibile: screenshot non verranno uploadati su Drive")
 
-            pass  # Feedback gestito dal chiamante
             return True
 
         except Exception as e:

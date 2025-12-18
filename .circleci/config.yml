@@ -110,6 +110,12 @@ commands:
               echo "✓ Google Service Account configured (no expiry)"
             fi
 
+            # Google OAuth Token (per upload screenshot su Drive personale)
+            if [ -n "$GOOGLE_TOKEN_JSON" ]; then
+              echo "$GOOGLE_TOKEN_JSON" > config/token.json
+              echo "✓ Google OAuth token configured"
+            fi
+
   setup-browser-auth:
     description: "Setup browser authentication state"
     parameters:
