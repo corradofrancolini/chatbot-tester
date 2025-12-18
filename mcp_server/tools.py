@@ -185,7 +185,7 @@ def register_tools(server: Server):
                         },
                         "test_set": {
                             "type": "string",
-                            "description": "Nome del set di test (corrisponde al file tests_{name}.json). Default: 'standard'"
+                            "description": "Set di test da usare. Esempi: 'paraphrase' per test di parafrasi (PARA_*), 'standard' per test normali (TEST_*). Corrisponde al file tests_{name}.json. Default: 'standard'"
                         },
                         "mode": {
                             "type": "string",
@@ -221,6 +221,13 @@ def register_tools(server: Server):
                             "type": "boolean",
                             "description": "Abilita parallelismo per esecuzione veloce. Usa questo se l'utente chiede 'veloce', 'parallelo', 'il prima possibile'.",
                             "default": False
+                        },
+                        "repeat": {
+                            "type": "integer",
+                            "description": "Numero di RUN da creare (1-5). Usa questo se l'utente chiede 'lancia 2 run', '3 esecuzioni', etc. Ogni RUN crea un foglio separato su Google Sheets.",
+                            "default": 1,
+                            "minimum": 1,
+                            "maximum": 5
                         }
                     },
                     "required": ["project"]
@@ -749,9 +756,13 @@ async def handle_trigger_circleci(arguments: dict) -> list[TextContent]:
     test_ids = arguments.get("test_ids", "")
     prompt_version = arguments.get("prompt_version", "")
     parallel = arguments.get("parallel", False)
+    repeat = arguments.get("repeat", 1)
 
     # Se parallel=True, usa 3 container CircleCI per velocizzare
     native_parallelism = 3 if parallel else 0
+
+    # Valida repeat
+    repeat = max(1, min(5, repeat))
 
     if not project:
         return [TextContent(
@@ -782,33 +793,51 @@ async def handle_trigger_circleci(arguments: dict) -> list[TextContent]:
             text="Errore: CircleCI non configurato. Assicurarsi che CIRCLECI_TOKEN sia impostato."
         )]
 
-    # Trigger pipeline
-    success, response = client.trigger_pipeline(
-        project=project,
-        mode=mode,
-        tests=tests,
-        new_run=new_run,
-        test_limit=test_limit,
-        test_ids=test_ids,
-        tests_file=tests_file,
-        prompt_version=prompt_version,
-        native_parallelism=native_parallelism
-    )
+    # Se repeat > 1, lancia multiple pipeline
+    pipelines_launched = []
+    for i in range(repeat):
+        success, response = client.trigger_pipeline(
+            project=project,
+            mode=mode,
+            tests=tests,
+            new_run=new_run,
+            test_limit=test_limit,
+            test_ids=test_ids,
+            tests_file=tests_file,
+            prompt_version=prompt_version,
+            native_parallelism=native_parallelism
+        )
+        if success:
+            pipelines_launched.append({
+                "id": response.get("id", "?"),
+                "number": response.get("number", "?")
+            })
+        else:
+            error = response.get("error", "Errore sconosciuto") if response else "Errore sconosciuto"
+            if pipelines_launched:
+                # Alcune pipeline sono partite, riporta comunque
+                break
+            else:
+                return [TextContent(
+                    type="text",
+                    text=f"Errore nell'avvio della pipeline: {error}"
+                )]
 
-    if success:
-        pipeline_id = response.get("id", "?")
-        pipeline_number = response.get("number", "?")
-        pipeline_url = f"https://app.circleci.com/pipelines/gh/corradofrancolini/chatbot-tester-private/{pipeline_number}"
+    if len(pipelines_launched) == 1:
+        # Singola pipeline
+        p = pipelines_launched[0]
+        pipeline_url = f"https://app.circleci.com/pipelines/gh/corradofrancolini/chatbot-tester-private/{p['number']}"
 
         result = f"""Pipeline avviata con successo!
 
 **Dettagli:**
-- Pipeline ID: `{pipeline_id}`
-- Numero: #{pipeline_number}
+- Pipeline ID: `{p['id']}`
+- Numero: #{p['number']}
 - Progetto: {project}
 - Modalita': {mode}
 - Test: {tests}
 - Nuova RUN: {'Si' if new_run else 'No'}
+{f'- Test set: {test_set}' if test_set != 'standard' else ''}
 {f'- Prompt version: {prompt_version}' if prompt_version else ''}
 {f'- Parallelismo: {native_parallelism} container' if native_parallelism > 0 else ''}
 {f'- Limite test: {test_limit}' if test_limit > 0 else ''}
@@ -816,15 +845,29 @@ async def handle_trigger_circleci(arguments: dict) -> list[TextContent]:
 
 **Link:** {pipeline_url}
 
-Usa `get_workflow_status` con pipeline_id `{pipeline_id}` per monitorare lo stato."""
-
-        return [TextContent(type="text", text=result)]
+Usa `get_workflow_status` con pipeline_id `{p['id']}` per monitorare lo stato."""
     else:
-        error = response.get("error", "Errore sconosciuto") if response else "Errore sconosciuto"
-        return [TextContent(
-            type="text",
-            text=f"Errore nell'avvio della pipeline: {error}"
-        )]
+        # Multiple pipeline
+        result = f"""**{len(pipelines_launched)} Pipeline avviate con successo!**
+
+**Configurazione comune:**
+- Progetto: {project}
+- Modalita': {mode}
+- Test: {tests}
+- Nuova RUN: Si (una per pipeline)
+{f'- Test set: {test_set}' if test_set != 'standard' else ''}
+{f'- Prompt version: {prompt_version}' if prompt_version else ''}
+{f'- Parallelismo: {native_parallelism} container' if native_parallelism > 0 else ''}
+
+**Pipeline lanciate:**
+"""
+        for i, p in enumerate(pipelines_launched, 1):
+            url = f"https://app.circleci.com/pipelines/gh/corradofrancolini/chatbot-tester-private/{p['number']}"
+            result += f"{i}. **#{p['number']}** - {url}\n"
+
+        result += f"\nOgni pipeline creerà una RUN separata su Google Sheets per confronto A/B."
+
+    return [TextContent(type="text", text=result)]
 
 
 async def handle_get_pipeline_status(arguments: dict) -> list[TextContent]:
