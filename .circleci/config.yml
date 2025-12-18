@@ -36,6 +36,9 @@ parameters:
   tests_file:
     type: string
     default: "tests.json"  # Test set file to use (e.g., "tests_paraphrase.json")
+  prompt_version:
+    type: string
+    default: ""  # Prompt version to use (e.g., "v12")
   repeat:
     type: integer
     default: 1  # Number of parallel runs (1-5) for variance analysis
@@ -147,6 +150,9 @@ jobs:
       tests_file:
         type: string
         default: "tests.json"
+      prompt_version:
+        type: string
+        default: ""
       parallel_browsers:
         type: integer
         default: 0  # 0 = sequential, 1-5 = parallel with N browsers
@@ -208,6 +214,11 @@ jobs:
               PARALLEL_FLAG="--parallel --workers << parameters.parallel_browsers >>"
             fi
 
+            PROMPT_VERSION_FLAG=""
+            if [ -n "<< parameters.prompt_version >>" ]; then
+              PROMPT_VERSION_FLAG="--prompt-version << parameters.prompt_version >>"
+            fi
+
             python run.py \
               -p << parameters.project >> \
               -m << parameters.mode >> \
@@ -220,7 +231,8 @@ jobs:
               $TEST_IDS_FLAG \
               $SINGLE_TURN_FLAG \
               $TESTS_FILE_FLAG \
-              $PARALLEL_FLAG
+              $PARALLEL_FLAG \
+              $PROMPT_VERSION_FLAG
 
       - store_artifacts:
           path: reports
@@ -427,6 +439,7 @@ workflows:
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
           tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
 
   # Trigger manuale con native parallelism (split tests across N containers)
@@ -466,6 +479,7 @@ workflows:
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
           tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-1"
       # Run 2
@@ -479,6 +493,7 @@ workflows:
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
           tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-2"
       # Run 3
@@ -492,6 +507,7 @@ workflows:
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
           tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-3"
       # Run 4
@@ -505,6 +521,7 @@ workflows:
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
           tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-4"
       # Run 5
@@ -518,6 +535,7 @@ workflows:
           test_ids: << pipeline.parameters.test_ids >>
           single_turn: << pipeline.parameters.single_turn >>
           tests_file: << pipeline.parameters.tests_file >>
+          prompt_version: << pipeline.parameters.prompt_version >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
           run_label: "run-5"
 

@@ -184,6 +184,13 @@ Documentazione: https://github.com/user/chatbot-tester
         metavar='FILE',
         help='File test set da usare (default: tests.json)'
     )
+    test_group.add_argument(
+        '--prompt-version',
+        type=str,
+        default='',
+        metavar='VERSION',
+        help='Versione prompt da usare (es: v12). Override di run_config.prompt_version'
+    )
 
     # ═══════════════════════════════════════════════════════════════════
     # Analisi
@@ -2629,7 +2636,8 @@ async def run_test_session(
     test_limit: int = 0,
     test_ids: str = '',
     parallel: bool = False,
-    workers: int = 3
+    workers: int = 3,
+    prompt_version: str = ''
 ):
     """Esegue una sessione di test (sequenziale o parallela)"""
     ui = get_ui()
@@ -2647,6 +2655,10 @@ async def run_test_session(
     # Override single_turn from CLI flag
     if single_turn:
         run_config.single_turn = True
+
+    # Override prompt_version from CLI flag
+    if prompt_version:
+        run_config.prompt_version = prompt_version
 
     # Se forza nuova RUN o non c'è RUN attiva
     if force_new_run:
@@ -3171,7 +3183,8 @@ async def main_direct(args):
             test_limit=args.test_limit or 0,
             test_ids=args.test_ids or '',
             parallel=args.parallel,
-            workers=args.workers
+            workers=args.workers,
+            prompt_version=args.prompt_version or ''
         )
 
     except FileNotFoundError:

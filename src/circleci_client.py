@@ -224,6 +224,7 @@ Per configurare CircleCI:
         test_ids: str = "",
         single_turn: bool = False,
         tests_file: str = "tests.json",
+        prompt_version: str = "",
         repeat: int = 1,
         parallel_browsers: int = 0,
         native_parallelism: int = 0
@@ -240,6 +241,7 @@ Per configurare CircleCI:
             test_ids: Comma-separated list of test IDs to run
             single_turn: Only initial question, no follow-ups
             tests_file: Test set file to use (default: tests.json)
+            prompt_version: Prompt version to record (e.g., "v12")
             repeat: Number of parallel runs (1-5) for variance analysis
             parallel_browsers: Number of parallel browsers within single container (0 = sequential)
             native_parallelism: Number of CircleCI containers to split tests across (0 = disabled)
@@ -259,6 +261,7 @@ Per configurare CircleCI:
                 "test_ids": test_ids,
                 "single_turn": single_turn,
                 "tests_file": tests_file,
+                "prompt_version": prompt_version,
                 "repeat": repeat,
                 "parallel_browsers": parallel_browsers,
                 "native_parallelism": native_parallelism
