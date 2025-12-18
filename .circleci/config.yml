@@ -102,10 +102,8 @@ commands:
             if [ -n "$GOOGLE_SERVICE_ACCOUNT" ]; then
               echo "$GOOGLE_SERVICE_ACCOUNT" | base64 -d > config/service_account.json
               echo "✓ Google Service Account configured (no expiry)"
-            fi
-
-            # Google token (fallback - scade dopo 1 ora)
-            if [ -n "$GOOGLE_TOKEN_JSON" ]; then
+            elif [ -n "$GOOGLE_TOKEN_JSON" ]; then
+              # Fallback a OAuth token (scade dopo 1 ora) - solo se no Service Account
               echo "$GOOGLE_TOKEN_JSON" | base64 -d > config/token.json
               echo "✓ Google token configured (expires in 1h)"
             fi
