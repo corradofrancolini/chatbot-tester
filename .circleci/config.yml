@@ -7,6 +7,7 @@ version: 2.1
 orbs:
   python: circleci/python@2.1.1
   browser-tools: circleci/browser-tools@1.4.8
+  ms-teams: cloudradar-monitoring/ms-teams@0.0.1
 
 # Parametri per trigger manuale via API
 parameters:
@@ -74,15 +75,44 @@ commands:
     description: "Setup Python environment and dependencies"
     steps:
       - checkout
+      # Cache pip dependencies
+      - restore_cache:
+          keys:
+            - pip-v1-{{ checksum "requirements.txt" }}
+            - pip-v1-
       - python/install-packages:
           pkg-manager: pip
           pip-dependency-file: requirements.txt
+      - save_cache:
+          key: pip-v1-{{ checksum "requirements.txt" }}
+          paths:
+            - ~/.cache/pip
+            - ~/.local/lib/python3.11/site-packages
+      # Cache Playwright browsers
+      - restore_cache:
+          keys:
+            - playwright-v1-chromium
       - run:
           name: Install Playwright
           command: |
             pip install playwright
             playwright install chromium
             playwright install-deps chromium
+      - save_cache:
+          key: playwright-v1-chromium
+          paths:
+            - /home/circleci/.cache/ms-playwright
+
+  notify-teams:
+    description: "Send notification to Microsoft Teams"
+    parameters:
+      status:
+        type: string
+        default: "completed"
+    steps:
+      - ms-teams/report:
+          only_on_fail: false
+          webhook_url: ${MS_TEAMS_WEBHOOK_URL}
 
   setup-credentials:
     description: "Setup Google and LangSmith credentials"
@@ -274,6 +304,10 @@ jobs:
               echo "Reports generated:"
               find reports -name "*.html" -o -name "*.json" | head -20
             fi
+
+      - ms-teams/report:
+          only_on_fail: false
+          webhook_url: ${MS_TEAMS_WEBHOOK_URL}
 
   # Job per test specifici di ogni progetto
   test-silicon-a:
@@ -485,6 +519,10 @@ jobs:
       - store_artifacts:
           path: reports
           destination: test-reports-node-$CIRCLE_NODE_INDEX
+
+      - ms-teams/report:
+          only_on_fail: false
+          webhook_url: ${MS_TEAMS_WEBHOOK_URL}
 
 # Workflows
 workflows:
