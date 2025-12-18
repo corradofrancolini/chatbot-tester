@@ -551,6 +551,7 @@ class ChatbotTester:
             # Screenshot finale (skip if configured)
             screenshot_path = ""
             skip_ss = getattr(self.project.chatbot, 'skip_screenshot', False)
+            skip_ss = skip_ss or (self.run_config and getattr(self.run_config, 'skip_screenshots', False))
             if self.settings.screenshot_on_complete and self.report and not skip_ss:
                 ss_path = self.report.get_screenshot_path(test.id)
                 if await self.browser.take_screenshot(
@@ -836,6 +837,7 @@ class ChatbotTester:
 
             # PHASE: Screenshot finale COMPLETO (skip if configured)
             skip_ss = getattr(self.project.chatbot, 'skip_screenshot', False)
+            skip_ss = skip_ss or (self.run_config and getattr(self.run_config, 'skip_screenshots', False))
             if self.perf_collector and not skip_ss:
                 self.perf_collector.start_phase("screenshot")
 

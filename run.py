@@ -191,6 +191,18 @@ Documentazione: https://github.com/user/chatbot-tester
         metavar='VERSION',
         help='Versione prompt da usare (es: v12). Override di run_config.prompt_version'
     )
+    test_group.add_argument(
+        '--sheet-prefix',
+        type=str,
+        default='Run',
+        metavar='PREFIX',
+        help='Prefisso nome foglio (default: Run). Es: GGP per "GGP 001"'
+    )
+    test_group.add_argument(
+        '--skip-screenshots',
+        action='store_true',
+        help='Salta cattura screenshot'
+    )
 
     # ═══════════════════════════════════════════════════════════════════
     # Analisi
@@ -2637,7 +2649,9 @@ async def run_test_session(
     test_ids: str = '',
     parallel: bool = False,
     workers: int = 3,
-    prompt_version: str = ''
+    prompt_version: str = '',
+    sheet_prefix: str = 'Run',
+    skip_screenshots: bool = False
 ):
     """Esegue una sessione di test (sequenziale o parallela)"""
     ui = get_ui()
@@ -2659,6 +2673,10 @@ async def run_test_session(
     # Override prompt_version from CLI flag
     if prompt_version:
         run_config.prompt_version = prompt_version
+
+    # Set sheet_prefix and skip_screenshots from CLI
+    run_config.sheet_prefix = sheet_prefix
+    run_config.skip_screenshots = skip_screenshots
 
     # Se forza nuova RUN o non c'è RUN attiva
     if force_new_run:
@@ -3184,7 +3202,9 @@ async def main_direct(args):
             test_ids=args.test_ids or '',
             parallel=args.parallel,
             workers=args.workers,
-            prompt_version=args.prompt_version or ''
+            prompt_version=args.prompt_version or '',
+            sheet_prefix=args.sheet_prefix,
+            skip_screenshots=args.skip_screenshots
         )
 
     except FileNotFoundError:

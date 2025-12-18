@@ -203,6 +203,9 @@ class RunConfig:
     use_rag: bool = False          # Se True, usa RAG locale
     use_ollama: bool = True        # Se False, disabilita Ollama (solo Train mode)
     single_turn: bool = False      # Se True, modalità AUTO esegue solo domanda iniziale (no followup)
+    # Runtime-only options (not persisted)
+    sheet_prefix: str = "Run"      # Prefisso nome foglio (es: "GGP" per "GGP 001")
+    skip_screenshots: bool = False # Se True, salta cattura screenshot
 
     @classmethod
     def load(cls, file_path: Path) -> 'RunConfig':

@@ -51,6 +51,12 @@ parameters:
   manual_trigger:
     type: boolean
     default: false  # Only runs when triggered via API with manual_trigger=true
+  sheet_prefix:
+    type: string
+    default: "Run"  # Prefix for sheet name (e.g., "GGP" for "GGP 001")
+  skip_screenshots:
+    type: boolean
+    default: false  # Skip screenshot capture
 
 # Esecutori
 executors:
@@ -219,6 +225,16 @@ jobs:
               PROMPT_VERSION_FLAG="--prompt-version << parameters.prompt_version >>"
             fi
 
+            SHEET_PREFIX_FLAG=""
+            if [ "<< parameters.sheet_prefix >>" != "Run" ]; then
+              SHEET_PREFIX_FLAG="--sheet-prefix << parameters.sheet_prefix >>"
+            fi
+
+            SKIP_SCREENSHOTS_FLAG=""
+            if [ "<< parameters.skip_screenshots >>" == "true" ]; then
+              SKIP_SCREENSHOTS_FLAG="--skip-screenshots"
+            fi
+
             python run.py \
               -p << parameters.project >> \
               -m << parameters.mode >> \
@@ -232,7 +248,9 @@ jobs:
               $SINGLE_TURN_FLAG \
               $TESTS_FILE_FLAG \
               $PARALLEL_FLAG \
-              $PROMPT_VERSION_FLAG
+              $PROMPT_VERSION_FLAG \
+              $SHEET_PREFIX_FLAG \
+              $SKIP_SCREENSHOTS_FLAG
 
       - store_artifacts:
           path: reports
@@ -427,6 +445,16 @@ jobs:
               PROMPT_VERSION_FLAG="--prompt-version << parameters.prompt_version >>"
             fi
 
+            SHEET_PREFIX_FLAG=""
+            if [ "<< parameters.sheet_prefix >>" != "Run" ]; then
+              SHEET_PREFIX_FLAG="--sheet-prefix << parameters.sheet_prefix >>"
+            fi
+
+            SKIP_SCREENSHOTS_FLAG=""
+            if [ "<< parameters.skip_screenshots >>" == "true" ]; then
+              SKIP_SCREENSHOTS_FLAG="--skip-screenshots"
+            fi
+
             python run.py \
               -p << parameters.project >> \
               -m << parameters.mode >> \
@@ -438,7 +466,9 @@ jobs:
               $SINGLE_TURN_FLAG \
               $TEST_IDS_FLAG \
               $TESTS_FILE_FLAG \
-              $PROMPT_VERSION_FLAG
+              $PROMPT_VERSION_FLAG \
+              $SHEET_PREFIX_FLAG \
+              $SKIP_SCREENSHOTS_FLAG
 
       - store_artifacts:
           path: reports

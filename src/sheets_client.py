@@ -551,7 +551,8 @@ class GoogleSheetsClient:
                          env: str = "DEV",
                          mode: str = "train",
                          prompt_version: str = "",
-                         model_version: str = "") -> Optional[Any]:
+                         model_version: str = "",
+                         sheet_prefix: str = "Run") -> Optional[Any]:
         """
         Crea un nuovo foglio per una RUN.
 
@@ -571,7 +572,7 @@ class GoogleSheetsClient:
         try:
             # Costruisci nome foglio
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
-            sheet_name = f"Run {run_number:03d} [{env}] {mode} - {timestamp}"
+            sheet_name = f"{sheet_prefix} {run_number:03d} [{env}] {mode} - {timestamp}"
 
             # Usa colonne dinamiche
             headers = self._get_column_headers()
@@ -652,12 +653,14 @@ class GoogleSheetsClient:
 
         # Crea nuova RUN
         run_number = self.get_next_run_number()
+        sheet_prefix = getattr(run_config, 'sheet_prefix', 'Run')
         worksheet = self.create_run_sheet(
             run_number=run_number,
             env=run_config.env,
             mode=run_config.mode,
             prompt_version=run_config.prompt_version,
-            model_version=run_config.model_version
+            model_version=run_config.model_version,
+            sheet_prefix=sheet_prefix
         )
 
         if worksheet:
