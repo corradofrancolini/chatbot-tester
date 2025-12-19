@@ -23,7 +23,6 @@ from dataclasses import dataclass, field
 try:
     import gspread
     from google.oauth2.credentials import Credentials
-    from google.oauth2.service_account import Credentials as ServiceAccountCredentials
     from google.auth.transport.requests import Request
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
@@ -69,105 +68,6 @@ def escape_formula(value: Any) -> str:
     return str_value
 
 
-# =============================================================================
-# CONFIGURAZIONE COLONNE DINAMICHE
-# =============================================================================
-
-@dataclass
-class ColumnConfig:
-    """Configurazione di una singola colonna"""
-    id: str           # es. 'test_id'
-    header: str       # es. 'TEST ID'
-    width: int        # es. 100
-    header_key: str = ""  # chiave i18n (opzionale)
-
-
-# Colonne disponibili con header di default e larghezze
-AVAILABLE_COLUMNS: Dict[str, Dict[str, Any]] = {
-    'test_id':        {'header': 'TEST ID',        'width': 100, 'header_key': 'col.test_id'},
-    'date':           {'header': 'DATE',           'width': 140, 'header_key': 'col.date'},
-    'mode':           {'header': 'MODE',           'width': 80,  'header_key': 'col.mode'},
-    'question':       {'header': 'QUESTION',       'width': 250, 'header_key': 'col.question'},
-    'conversation':   {'header': 'CONVERSATION',   'width': 400, 'header_key': 'col.conversation'},
-    'screenshot':     {'header': 'SCREENSHOT',     'width': 200, 'header_key': 'col.screenshot'},
-    'screenshot_url': {'header': 'SCREENSHOT URL', 'width': 200, 'header_key': 'col.screenshot_url'},
-    'prompt_ver':     {'header': 'PROMPT VER',     'width': 100, 'header_key': 'col.prompt_ver'},
-    'model_ver':      {'header': 'MODEL VER',      'width': 100, 'header_key': 'col.model_ver'},
-    'vector_store':   {'header': 'VECTOR STORE',   'width': 100, 'header_key': 'col.vector_store'},
-    'env':            {'header': 'ENV',            'width': 60,  'header_key': 'col.env'},
-    'timing':         {'header': 'TIMING',         'width': 110, 'header_key': 'col.timing'},
-    'esito':          {'header': 'ESITO',          'width': 100, 'header_key': 'col.esito'},
-    'notes':          {'header': 'NOTES',          'width': 200, 'header_key': 'col.notes'},
-    'ls_report':      {'header': 'LS REPORT',      'width': 300, 'header_key': 'col.ls_report'},
-    'ls_trace':       {'header': 'LS TRACE LINK',  'width': 350, 'header_key': 'col.ls_trace'},
-    # Colonne GGP (Grounding, Guardrail, Probing)
-    'section':        {'header': 'SECTION',        'width': 100, 'header_key': 'col.section'},
-    'target':         {'header': 'TARGET',         'width': 200, 'header_key': 'col.target'},
-    'sources':        {'header': 'SOURCES',        'width': 200, 'header_key': 'col.sources'},
-    'run':            {'header': 'RUN',            'width': 60,  'header_key': 'col.run'},
-    'answer':         {'header': 'ANSWER',         'width': 400, 'header_key': 'col.answer'},
-    'outcome':        {'header': 'OUTCOME',        'width': 100, 'header_key': 'col.outcome'},
-}
-
-# Presets colonne predefiniti
-COLUMN_PRESETS: Dict[str, List[str]] = {
-    'standard': [
-        'test_id', 'date', 'mode', 'question', 'conversation',
-        'screenshot', 'screenshot_url', 'prompt_ver', 'model_ver',
-        'vector_store', 'env', 'timing', 'esito', 'notes',
-        'ls_report', 'ls_trace'
-    ],
-    'minimal': [
-        'test_id', 'date', 'question', 'conversation', 'esito', 'notes'
-    ],
-    'paraphrase': [
-        'test_id', 'date', 'question', 'notes', 'esito'
-    ],
-    'ggp': [
-        'test_id', 'section', 'date', 'mode', 'model_ver', 'prompt_ver',
-        'question', 'answer', 'outcome', 'target', 'sources', 'notes',
-        'screenshot', 'screenshot_url', 'run'
-    ],
-}
-
-
-def get_columns_from_preset(preset: str) -> List[ColumnConfig]:
-    """
-    Ottiene lista ColumnConfig da un preset.
-
-    Args:
-        preset: Nome preset ('standard', 'minimal', 'paraphrase')
-
-    Returns:
-        Lista di ColumnConfig
-    """
-    col_ids = COLUMN_PRESETS.get(preset, COLUMN_PRESETS['standard'])
-    return get_columns_from_list(col_ids)
-
-
-def get_columns_from_list(col_ids: List[str]) -> List[ColumnConfig]:
-    """
-    Ottiene lista ColumnConfig da lista di ID colonne.
-
-    Args:
-        col_ids: Lista di ID colonne (es. ['test_id', 'date', 'question'])
-
-    Returns:
-        Lista di ColumnConfig
-    """
-    columns = []
-    for col_id in col_ids:
-        if col_id in AVAILABLE_COLUMNS:
-            col_def = AVAILABLE_COLUMNS[col_id]
-            columns.append(ColumnConfig(
-                id=col_id,
-                header=col_def['header'],
-                width=col_def['width'],
-                header_key=col_def.get('header_key', '')
-            ))
-    return columns
-
-
 @dataclass
 class ScreenshotUrls:
     """URL screenshot per embedding e visualizzazione"""
@@ -187,18 +87,24 @@ class TestResult:
     screenshot_urls: Optional[ScreenshotUrls] = None  # Nuovo: entrambi gli URL
     prompt_version: str = ""
     model_version: str = ""
-    vector_store: str = ""  # Vector store provider (es. Qdrant, FAISS)
     environment: str = "DEV"  # Default DEV
     esito: str = ""  # Vuoto - compilato dal reviewer (Corretto/Non Corretto/Parzialmente corretto)
     notes: str = ""  # Vuoto - note del reviewer
     langsmith_report: str = ""  # Report LangSmith (testo)
     langsmith_url: str = ""  # Link al trace LangSmith
     timing: str = ""  # Timing: "TTFR → Total" (es. "2.3s → 12.0s")
+    # Evaluation metrics (opzionali)
+    semantic_score: Optional[float] = None  # 0-1 semantic similarity
+    judge_score: Optional[float] = None  # 0-1 LLM-as-judge
+    groundedness: Optional[float] = None  # 0-1 RAG metric
+    faithfulness: Optional[float] = None  # 0-1 RAG metric
+    relevance: Optional[float] = None  # 0-1 RAG metric
+    overall_score: Optional[float] = None  # 0-1 weighted average
+    judge_reasoning: str = ""  # Spiegazione LLM-as-judge
     # Campi GGP (Grounding, Guardrail, Probing)
-    section: str = ""  # Sezione test: GROUNDING, GUARDRAIL, PROBING
-    target: str = ""   # Target del test (test_target dal JSON)
-    sources: str = ""  # Fonti citate nella risposta
-    run_number: int = 0  # Numero della RUN
+    section: str = ""  # GROUNDING, GUARDRAIL, PROBING
+    target: str = ""  # Target del test
+    run_number: int = 0  # Numero RUN
 
 
 class GoogleSheetsClient:
@@ -211,7 +117,6 @@ class GoogleSheetsClient:
     - Append righe al report
     - Check test già eseguiti nella RUN corrente
     - Upload screenshot su Drive
-    - Colonne configurabili con preset o lista custom
 
     Usage:
         client = GoogleSheetsClient(
@@ -221,17 +126,12 @@ class GoogleSheetsClient:
         )
 
         if client.authenticate():
-            # Opzionale: configura colonne (default: preset 'standard')
-            client.set_columns(preset='minimal')
-            # oppure
-            client.set_columns(columns=['test_id', 'question', 'esito'])
-
             # Crea o riprende RUN
             client.setup_run_sheet(run_config)
             client.append_result(result)
     """
 
-    # Colonne standard del report (legacy, per retrocompatibilità)
+    # Colonne standard del report (22 colonne)
     COLUMNS = [
         "TEST ID",
         "DATE",
@@ -242,17 +142,24 @@ class GoogleSheetsClient:
         "SCREENSHOT URL",  # Link alta risoluzione
         "PROMPT VER",      # Versione prompt (da run config)
         "MODEL VER",       # provider/modello
-        "VECTOR STORE",    # Vector store provider (es. Qdrant, FAISS)
         "ENV",             # DEV/PROD (dropdown)
         "TIMING",          # TTFR → Total (es. "2.3s → 12.0s")
         "ESITO",           # Corretto/Non Corretto/Parzialmente corretto (dropdown, compilato da reviewer)
         "NOTES",           # Note del reviewer (campo libero)
         "LS REPORT",       # Report LangSmith (testo)
-        "LS TRACE LINK"    # Link al trace LangSmith
+        "LS TRACE LINK",   # Link al trace LangSmith
+        # Evaluation metrics (nuove colonne)
+        "SEMANTIC",        # Semantic similarity score (0-1)
+        "JUDGE",           # LLM-as-judge score (0-1)
+        "GROUND",          # Groundedness score (0-1)
+        "FAITH",           # Faithfulness score (0-1)
+        "RELEV",           # Relevance score (0-1)
+        "OVERALL",         # Overall evaluation score (0-1)
+        "JUDGE REASON"     # LLM-as-judge reasoning
     ]
 
-    # Larghezze colonne in pixel (legacy, per retrocompatibilità)
-    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 200, 200, 100, 100, 100, 60, 110, 100, 200, 300, 350]
+    # Larghezze colonne in pixel (22 colonne)
+    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 200, 200, 100, 100, 60, 110, 100, 200, 300, 350, 70, 70, 70, 70, 70, 70, 200]
 
     def __init__(self,
                  credentials_path: str,
@@ -269,9 +176,12 @@ class GoogleSheetsClient:
             spreadsheet_id: ID dello spreadsheet Google
             drive_folder_id: ID cartella Drive per screenshot (opzionale)
             token_path: Path per salvare il token (default: accanto a credentials)
-            column_preset: Preset colonne ('standard', 'minimal', 'paraphrase')
-            column_list: Lista custom di ID colonne (override preset)
+            column_preset: Preset colonne (standard, minimal, custom) - per compatibilità
+            column_list: Lista colonne custom - per compatibilità
         """
+        # Store column config for future use
+        self.column_preset = column_preset
+        self.column_list = column_list
         if not GOOGLE_AVAILABLE:
             raise ImportError("Dipendenze Google non installate. Esegui: pip install gspread google-auth google-auth-oauthlib google-api-python-client")
 
@@ -298,12 +208,6 @@ class GoogleSheetsClient:
         # Cache test esistenti nella RUN corrente
         self._existing_tests: set = set()
 
-        # Configurazione colonne dinamiche
-        if column_list:
-            self._columns = get_columns_from_list(column_list)
-        else:
-            self._columns = get_columns_from_preset(column_preset)
-
     @property
     def is_authenticated(self) -> bool:
         """Verifica se autenticato"""
@@ -314,230 +218,53 @@ class GoogleSheetsClient:
         """Numero RUN corrente"""
         return self._current_run
 
-    @property
-    def columns(self) -> List[ColumnConfig]:
-        """Configurazione colonne corrente"""
-        return self._columns
-
-    def set_columns(self,
-                    preset: Optional[str] = None,
-                    columns: Optional[List[str]] = None) -> None:
-        """
-        Configura le colonne da usare nel report.
-
-        Args:
-            preset: Nome preset ('standard', 'minimal', 'paraphrase')
-            columns: Lista custom di ID colonne (override preset)
-
-        Example:
-            client.set_columns(preset='minimal')
-            client.set_columns(columns=['test_id', 'question', 'esito', 'notes'])
-        """
-        if columns:
-            self._columns = get_columns_from_list(columns)
-        elif preset:
-            self._columns = get_columns_from_preset(preset)
-
-    def set_columns_for_test_file(self,
-                                   test_file: str,
-                                   by_test_file_config: Dict[str, Dict[str, Any]],
-                                   default_preset: str = "standard",
-                                   default_columns: Optional[List[str]] = None) -> None:
-        """
-        Configura le colonne per uno specifico file di test.
-
-        Cerca nel mapping by_test_file una configurazione specifica per il file.
-        Se non trovata, usa il preset/colonne di default.
-
-        Args:
-            test_file: Nome file test (es. 'tests_paraphrase.json')
-            by_test_file_config: Mapping file -> config colonne
-            default_preset: Preset di default se file non trovato
-            default_columns: Colonne di default se file non trovato
-
-        Example:
-            # project.yaml
-            # google_sheets:
-            #   columns:
-            #     preset: standard
-            #     by_test_file:
-            #       tests_paraphrase.json:
-            #         preset: custom
-            #         custom: [test_id, date, question, notes, esito]
-
-            client.set_columns_for_test_file(
-                'tests_paraphrase.json',
-                project.google_sheets.columns.by_test_file,
-                project.google_sheets.columns.preset,
-                project.google_sheets.columns.custom
-            )
-        """
-        # Cerca configurazione specifica per questo file
-        if test_file in by_test_file_config:
-            file_config = by_test_file_config[test_file]
-            file_preset = file_config.get('preset', 'standard')
-            file_columns = file_config.get('custom', [])
-
-            if file_preset == 'custom' and file_columns:
-                self._columns = get_columns_from_list(file_columns)
-            else:
-                self._columns = get_columns_from_preset(file_preset)
-        else:
-            # Usa default
-            if default_preset == 'custom' and default_columns:
-                self._columns = get_columns_from_list(default_columns)
-            else:
-                self._columns = get_columns_from_preset(default_preset)
-
-    def _get_column_headers(self) -> List[str]:
-        """Ritorna lista header per le colonne configurate"""
-        return [col.header for col in self._columns]
-
-    def _get_column_widths(self) -> List[int]:
-        """Ritorna lista larghezze per le colonne configurate"""
-        return [col.width for col in self._columns]
-
-    def _get_column_value(self, result: TestResult, col_id: str,
-                          screenshot_formula: str = "",
-                          screenshot_view_url: str = "") -> str:
-        """
-        Ottiene il valore di una colonna da un TestResult.
-
-        Args:
-            result: TestResult da cui estrarre il valore
-            col_id: ID della colonna
-            screenshot_formula: Formula screenshot (pre-calcolata)
-            screenshot_view_url: URL screenshot view (pre-calcolata)
-
-        Returns:
-            Valore stringa per la cella
-        """
-        mapping = {
-            'test_id': result.test_id,
-            'date': result.date,
-            'mode': result.mode,
-            'question': result.question,
-            'conversation': result.conversation,
-            'screenshot': screenshot_formula,
-            'screenshot_url': screenshot_view_url,
-            'prompt_ver': result.prompt_version,
-            'model_ver': result.model_version,
-            'vector_store': result.vector_store,
-            'env': result.environment or "DEV",
-            'timing': result.timing,
-            'esito': "",  # Compilato dal reviewer
-            'notes': result.notes,
-            'ls_report': escape_formula(result.langsmith_report),
-            'ls_trace': result.langsmith_url,
-            # Campi GGP
-            'section': result.section,
-            'target': result.target,
-            'sources': result.sources,
-            'run': str(result.run_number) if result.run_number else "",
-            'answer': result.conversation,  # Alias per conversation
-            'outcome': "",  # Compilato dal reviewer (come esito)
-        }
-        return mapping.get(col_id, "")
-
-    def _build_row(self, result: TestResult,
-                   screenshot_formula: str = "",
-                   screenshot_view_url: str = "") -> List[str]:
-        """
-        Costruisce una riga dinamicamente basata sulla configurazione colonne.
-
-        Args:
-            result: TestResult da convertire in riga
-            screenshot_formula: Formula =IMAGE() per screenshot
-            screenshot_view_url: URL view per screenshot
-
-        Returns:
-            Lista valori per la riga
-        """
-        row = []
-        for col in self._columns:
-            value = self._get_column_value(
-                result, col.id,
-                screenshot_formula, screenshot_view_url
-            )
-            row.append(value)
-        return row
-
     def authenticate(self) -> bool:
         """
-        Esegue autenticazione Google.
-
-        Per Sheets:
-        - Service Account (priorità) o OAuth
-
-        Per Drive (upload screenshot):
-        - OAuth SOLO (Service Account non ha quota su Drive personale)
+        Esegue autenticazione OAuth.
 
         Returns:
             True se autenticazione riuscita
         """
         try:
-            sheets_creds = None
-            drive_creds = None
+            creds = None
 
-            # 1. Prova Service Account per Sheets (priorità - nessuna scadenza)
-            service_account_path = self.credentials_path.parent / "service_account.json"
-            if service_account_path.exists():
-                sheets_creds = ServiceAccountCredentials.from_service_account_file(
-                    str(service_account_path), scopes=SCOPES
-                )
-
-            # 2. OAuth per Drive (e fallback per Sheets se no Service Account)
-            oauth_creds = None
+            # Prova a caricare token esistente
             if self.token_path.exists():
-                oauth_creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
+                creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
 
-                # Refresh se scaduto
-                if oauth_creds and oauth_creds.expired and oauth_creds.refresh_token:
-                    try:
-                        oauth_creds.refresh(Request())
-                        # Salva token aggiornato
-                        with open(self.token_path, 'w') as f:
-                            f.write(oauth_creds.to_json())
-                    except Exception as e:
-                        print(f"⚠ Impossibile refreshare OAuth token: {e}")
-                        oauth_creds = None
+            # Refresh se scaduto
+            if creds and creds.expired and creds.refresh_token:
+                try:
+                    creds.refresh(Request())
+                except:
+                    creds = None
 
-            # Se no OAuth valido e serve interattivo
-            if not oauth_creds or not oauth_creds.valid:
-                if self.credentials_path.exists():
-                    # Solo in ambiente interattivo (non CI)
-                    import os
-                    if os.environ.get('CI') != 'true' and os.isatty(0):
-                        flow = InstalledAppFlow.from_client_secrets_file(
-                            str(self.credentials_path), SCOPES
-                        )
-                        oauth_creds = flow.run_local_server(port=0)
-                        with open(self.token_path, 'w') as f:
-                            f.write(oauth_creds.to_json())
+            # Nuovo login se necessario
+            if not creds or not creds.valid:
+                if not self.credentials_path.exists():
+                    print(f"✗ File credentials non trovato: {self.credentials_path}")
+                    return False
 
-            # Usa Service Account per Sheets se disponibile, altrimenti OAuth
-            if not sheets_creds:
-                sheets_creds = oauth_creds
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    str(self.credentials_path), SCOPES
+                )
+                creds = flow.run_local_server(port=0)
 
-            if not sheets_creds:
-                print("✗ Nessuna credenziale valida per Google Sheets")
-                return False
+                # Salva token
+                with open(self.token_path, 'w') as f:
+                    f.write(creds.to_json())
 
-            # Drive usa SEMPRE OAuth (Service Account non ha quota)
-            drive_creds = oauth_creds
-
-            self._credentials = sheets_creds
+            self._credentials = creds
 
             # Inizializza clients
-            self._gspread_client = gspread.authorize(sheets_creds)
+            self._gspread_client = gspread.authorize(creds)
             self._spreadsheet = self._gspread_client.open_by_key(self.spreadsheet_id)
 
-            # Drive service per upload (solo con OAuth)
-            if self.drive_folder_id and drive_creds:
-                self._drive_service = build('drive', 'v3', credentials=drive_creds)
-            elif self.drive_folder_id:
-                print("⚠ OAuth non disponibile: screenshot non verranno uploadati su Drive")
+            # Drive service per upload
+            if self.drive_folder_id:
+                self._drive_service = build('drive', 'v3', credentials=creds)
 
+            pass  # Feedback gestito dal chiamante
             return True
 
         except Exception as e:
@@ -590,8 +317,7 @@ class GoogleSheetsClient:
                          env: str = "DEV",
                          mode: str = "train",
                          prompt_version: str = "",
-                         model_version: str = "",
-                         sheet_prefix: str = "Run") -> Optional[Any]:
+                         model_version: str = "") -> Optional[Any]:
         """
         Crea un nuovo foglio per una RUN.
 
@@ -611,24 +337,20 @@ class GoogleSheetsClient:
         try:
             # Costruisci nome foglio
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
-            sheet_name = f"{sheet_prefix} {run_number:03d} [{env}] {mode} - {timestamp}"
-
-            # Usa colonne dinamiche
-            headers = self._get_column_headers()
+            sheet_name = f"Run {run_number:03d} [{env}] {mode} - {timestamp}"
 
             # Crea foglio
             worksheet = self._spreadsheet.add_worksheet(
                 title=sheet_name,
                 rows=1000,
-                cols=len(headers)
+                cols=len(self.COLUMNS)
             )
 
             # Aggiungi header
-            worksheet.update('A1', [headers])
+            worksheet.update('A1', [self.COLUMNS])
 
-            # Formatta header (bold, centrato) - dinamico basato su numero colonne
-            last_col = chr(ord('A') + len(headers) - 1) if len(headers) <= 26 else 'Z'
-            worksheet.format(f'A1:{last_col}1', {
+            # Formatta header (bold, centrato) - 15 colonne (A-O)
+            worksheet.format('A1:O1', {
                 'textFormat': {'bold': True},
                 'horizontalAlignment': 'CENTER'
             })
@@ -644,11 +366,10 @@ class GoogleSheetsClient:
             return None
 
     def _set_column_widths(self, worksheet) -> None:
-        """Imposta le larghezze delle colonne (dinamico)"""
+        """Imposta le larghezze delle colonne"""
         try:
-            widths = self._get_column_widths()
             requests = []
-            for i, width in enumerate(widths):
+            for i, width in enumerate(self.COLUMN_WIDTHS):
                 requests.append({
                     "updateDimensionProperties": {
                         "range": {
@@ -692,14 +413,12 @@ class GoogleSheetsClient:
 
         # Crea nuova RUN
         run_number = self.get_next_run_number()
-        sheet_prefix = getattr(run_config, 'sheet_prefix', 'Run')
         worksheet = self.create_run_sheet(
             run_number=run_number,
             env=run_config.env,
             mode=run_config.mode,
             prompt_version=run_config.prompt_version,
-            model_version=run_config.model_version,
-            sheet_prefix=sheet_prefix
+            model_version=run_config.model_version
         )
 
         if worksheet:
@@ -808,18 +527,40 @@ class GoogleSheetsClient:
         """Ritorna set dei test già completati nella RUN corrente"""
         return self._existing_tests.copy()
 
+    def set_columns_for_test_file(self,
+                                   test_file_name: str,
+                                   by_test_file: Dict[str, Any],
+                                   default_preset: str = "standard",
+                                   default_list: Optional[List[str]] = None) -> None:
+        """
+        Configura colonne per test file specifico.
+
+        Args:
+            test_file_name: Nome del file test (es. "tests.json")
+            by_test_file: Configurazione per file specifici
+            default_preset: Preset di default
+            default_list: Lista colonne custom di default
+        """
+        # Cerca configurazione per questo file
+        file_config = by_test_file.get(test_file_name, {})
+        if file_config:
+            self.column_preset = file_config.get('preset', default_preset)
+            self.column_list = file_config.get('custom', default_list)
+        else:
+            self.column_preset = default_preset
+            self.column_list = default_list
+
     def ensure_headers(self) -> None:
         """Assicura che le intestazioni siano presenti"""
         if not self._worksheet:
             return
 
-        headers = self._get_column_headers()
         try:
             first_row = self._worksheet.row_values(1)
-            if not first_row or first_row != headers:
-                self._worksheet.update('A1', [headers])
+            if not first_row or first_row != self.COLUMNS:
+                self._worksheet.update('A1', [self.COLUMNS])
         except:
-            self._worksheet.update('A1', [headers])
+            self._worksheet.update('A1', [self.COLUMNS])
 
     # Altezza default per righe con screenshot (in pixel)
     DEFAULT_ROW_HEIGHT = 120
@@ -856,8 +597,38 @@ class GoogleSheetsClient:
                 # Legacy: URL singolo (mantieni retrocompatibilità)
                 screenshot_view_url = result.screenshot_url
 
-            # Costruisce riga dinamicamente basata su configurazione colonne
-            row = self._build_row(result, screenshot_formula, screenshot_view_url)
+            # Helper per formattare score (0-1 -> percentuale)
+            def fmt_score(val):
+                return f"{val:.0%}" if val is not None else ""
+
+            # 22 colonne: TEST ID, DATE, MODE, QUESTION, CONVERSATION, SCREENSHOT,
+            # SCREENSHOT URL, PROMPT VER, MODEL VER, ENV, TIMING, ESITO, NOTES, LS REPORT, LS TRACE LINK,
+            # SEMANTIC, JUDGE, GROUND, FAITH, RELEV, OVERALL, JUDGE REASON
+            row = [
+                result.test_id,
+                result.date,
+                result.mode,
+                result.question,
+                result.conversation,
+                screenshot_formula,                     # SCREENSHOT: immagine inline
+                screenshot_view_url,                    # SCREENSHOT URL: link alta risoluzione
+                result.prompt_version,                  # PROMPT VER: da run config
+                result.model_version,                   # MODEL VER: provider/modello
+                result.environment or "DEV",            # ENV: default DEV
+                result.timing,                          # TIMING: "TTFR → Total"
+                "",                                     # ESITO: vuoto (compilato dal reviewer)
+                "",                                     # NOTES: vuoto (note del reviewer)
+                escape_formula(result.langsmith_report), # LS REPORT: report LangSmith (escaped)
+                result.langsmith_url,                   # LS TRACE LINK: link al trace
+                # Evaluation metrics
+                fmt_score(result.semantic_score),       # SEMANTIC
+                fmt_score(result.judge_score),          # JUDGE
+                fmt_score(result.groundedness),         # GROUND
+                fmt_score(result.faithfulness),         # FAITH
+                fmt_score(result.relevance),            # RELEV
+                fmt_score(result.overall_score),        # OVERALL
+                result.judge_reasoning                  # JUDGE REASON
+            ]
 
             self._worksheet.append_row(row, value_input_option='USER_ENTERED')
             self._existing_tests.add(result.test_id)
@@ -912,8 +683,30 @@ class GoogleSheetsClient:
                 elif r.screenshot_url:
                     screenshot_view_url = r.screenshot_url
 
-                # Costruisce riga dinamicamente basata su configurazione colonne
-                rows.append(self._build_row(r, screenshot_formula, screenshot_view_url))
+                # Helper per formattare score (0-1 -> percentuale)
+                def fmt_score(val):
+                    return f"{val:.0%}" if val is not None else ""
+
+                # 22 colonne
+                rows.append([
+                    r.test_id, r.date, r.mode, r.question, r.conversation,
+                    screenshot_formula, screenshot_view_url,
+                    r.prompt_version, r.model_version,
+                    r.environment or "DEV",           # ENV: default DEV
+                    r.timing,                         # TIMING: "TTFR → Total"
+                    "",                               # ESITO: vuoto (reviewer)
+                    "",                               # NOTES: vuoto (reviewer)
+                    escape_formula(r.langsmith_report), # LS REPORT (escaped)
+                    r.langsmith_url,                  # LS TRACE LINK
+                    # Evaluation metrics
+                    fmt_score(r.semantic_score),      # SEMANTIC
+                    fmt_score(r.judge_score),         # JUDGE
+                    fmt_score(r.groundedness),        # GROUND
+                    fmt_score(r.faithfulness),        # FAITH
+                    fmt_score(r.relevance),           # RELEV
+                    fmt_score(r.overall_score),       # OVERALL
+                    r.judge_reasoning                 # JUDGE REASON
+                ])
 
             self._worksheet.append_rows(rows, value_input_option='USER_ENTERED')
 

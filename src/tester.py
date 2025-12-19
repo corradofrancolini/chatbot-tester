@@ -28,6 +28,7 @@ from .sheets_client import GoogleSheetsClient, TestResult, ScreenshotUrls
 from .report_local import ReportGenerator, TestResultLocal
 from .training import TrainingData, TrainModeUI
 from .performance import PerformanceCollector, PerformanceReporter, PerformanceAlerter, PerformanceHistory
+from .evaluation import Evaluator, EvaluationConfig, EvaluationResult, create_evaluator_from_settings
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
@@ -63,6 +64,9 @@ class TestCase:
     # Campi GGP (Grounding, Guardrail, Probing)
     section: str = ""  # GROUNDING, GUARDRAIL, PROBING
     test_target: str = ""  # Target del test
+    # Campi evaluation (OpenAI GPT-4o-mini)
+    expected_answer: Optional[str] = None  # Risposta attesa (per semantic matching)
+    rag_context_file: Optional[str] = None  # File di contesto per RAG evaluation
 
 
 @dataclass
@@ -168,6 +172,9 @@ class ChatbotTester:
         self.perf_collector: Optional[PerformanceCollector] = None
         self._service_start_time: Optional[float] = None
 
+        # Evaluation system
+        self.evaluator: Optional[Evaluator] = None
+
     async def initialize(self) -> bool:
         """
         Inizializza tutti i componenti.
@@ -222,6 +229,18 @@ class ChatbotTester:
             else:
                 self.on_status("! Ollama non disponibile")
                 self.ollama = None
+
+        # Evaluation system (opzionale - usa OpenAI GPT-4o-mini)
+        if self.settings.evaluation.enabled:
+            try:
+                self.evaluator = create_evaluator_from_settings(
+                    self.settings.evaluation,
+                    self.project.project_dir
+                )
+                self.on_status("✓ Evaluation system attivo (OpenAI)")
+            except Exception as e:
+                self.on_status(f"! Evaluation system non disponibile: {e}")
+                self.evaluator = None
 
         # LangSmith (opzionale) - rispetta toggle use_langsmith
         if self.use_langsmith and self.project.langsmith.enabled and self.project.langsmith.api_key:
@@ -337,7 +356,10 @@ class ChatbotTester:
                 notes=t.get('notes', ''),
                 # Campi GGP
                 section=t.get('section', ''),
-                test_target=t.get('test_target', '')
+                test_target=t.get('test_target', ''),
+                # Campi evaluation
+                expected_answer=t.get('expected_answer'),
+                rag_context_file=t.get('rag_context_file')
             ))
 
         return tests
@@ -871,17 +893,46 @@ class ChatbotTester:
             if self.perf_collector and not skip_ss:
                 self.perf_collector.end_phase()
 
-            # Valutazione LLM (solo se Ollama disponibile)
+            # Valutazione LLM
             final_response = conversation[-1].content if conversation else ""
-            if self.ollama:
+            evaluation = None
+
+            # Priorità 1: Evaluation system (OpenAI GPT-4o-mini)
+            if self.evaluator:
+                try:
+                    # Ottieni expected_answer dal test se disponibile
+                    expected_answer = getattr(test, 'expected_answer', None)
+                    rag_context_file = getattr(test, 'rag_context_file', None)
+
+                    eval_result = self.evaluator.evaluate(
+                        question=test.question,
+                        response=final_response,
+                        expected_answer=expected_answer,
+                        expected_behavior=test.expected,
+                        rag_context_file=rag_context_file
+                    )
+
+                    # Converti EvaluationResult in formato compatibile
+                    evaluation = {
+                        'passed': eval_result.passed,
+                        'reason': eval_result.judge_reasoning or eval_result.summary(),
+                        'details': eval_result.to_dict()
+                    }
+                except Exception as e:
+                    self.on_status(f"! Errore Evaluation: {e}")
+                    evaluation = None
+
+            # Priorità 2: Ollama (fallback locale)
+            if evaluation is None and self.ollama:
                 evaluation = self.ollama.evaluate_test_result(
                     test_case={'question': test.question, 'category': test.category, 'expected': test.expected},
                     conversation=[{'role': t.role, 'content': t.content} for t in conversation],
                     final_response=final_response
                 )
-            else:
-                # Senza Ollama, segna come pending (valutazione manuale richiesta)
-                evaluation = {'passed': None, 'reason': 'Valutazione manuale richiesta (Ollama non disponibile)'}
+
+            # Fallback: valutazione manuale richiesta
+            if evaluation is None:
+                evaluation = {'passed': None, 'reason': 'Valutazione manuale richiesta'}
 
             # LangSmith debug
             langsmith_url = ""
@@ -1070,6 +1121,10 @@ class ChatbotTester:
                     total_sec = timing.total_ms / 1000
                     timing_str = f"{ttfr_sec:.1f}s → {total_sec:.1f}s"
 
+            # Extract evaluation metrics from llm_evaluation if available
+            eval_data = result.llm_evaluation or {}
+            eval_details = eval_data.get('details', {})
+
             self.sheets.append_result(TestResult(
                 test_id=result.test_case.id,
                 date=date_str,
@@ -1088,7 +1143,15 @@ class ChatbotTester:
                 # Campi GGP
                 section=result.test_case.section,
                 target=result.test_case.test_target,
-                run_number=self.run_config.active_run if self.run_config else 0
+                run_number=self.run_config.active_run if self.run_config else 0,
+                # Evaluation metrics
+                semantic_score=eval_details.get('semantic_score'),
+                judge_score=eval_details.get('judge_score'),
+                groundedness=eval_details.get('groundedness'),
+                faithfulness=eval_details.get('faithfulness'),
+                relevance=eval_details.get('relevance'),
+                overall_score=eval_details.get('overall_score'),
+                judge_reasoning=eval_data.get('reason', '')[:500]  # Limit length
             ))
 
             # Track Sheets performance - end

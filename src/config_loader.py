@@ -174,12 +174,29 @@ class ProjectConfig:
 
 
 @dataclass
+class EvaluationSettings:
+    """Settings per il sistema di evaluation"""
+    enabled: bool = False
+    provider: str = "openai"
+    model: str = "gpt-4o-mini"
+    embedding_model: str = "text-embedding-3-small"
+    api_key_env: str = "OPENAI_API_KEY"
+    semantic_threshold: float = 0.8
+    judge_threshold: float = 0.7
+    rag_threshold: float = 0.6
+    semantic_weight: float = 0.3
+    judge_weight: float = 0.4
+    rag_weight: float = 0.3
+
+
+@dataclass
 class GlobalSettings:
     """Settings globali dell'applicazione"""
     version: str = "1.0.0"
     language: str = "it"
     browser: BrowserConfig = field(default_factory=BrowserConfig)
     report: ReportConfig = field(default_factory=ReportConfig)
+    evaluation: EvaluationSettings = field(default_factory=EvaluationSettings)
     max_turns: int = 15
     screenshot_on_complete: bool = True
     colors: bool = True
@@ -339,6 +356,20 @@ class ConfigLoader:
         ui = data.get('ui', {})
         settings.colors = ui.get('colors', True)
         settings.progress_bar = ui.get('progress_bar', True)
+
+        # Evaluation settings
+        evaluation = data.get('evaluation', {})
+        settings.evaluation.enabled = evaluation.get('enabled', False)
+        settings.evaluation.provider = evaluation.get('provider', 'openai')
+        settings.evaluation.model = evaluation.get('model', 'gpt-4o-mini')
+        settings.evaluation.embedding_model = evaluation.get('embedding_model', 'text-embedding-3-small')
+        settings.evaluation.api_key_env = evaluation.get('api_key_env', 'OPENAI_API_KEY')
+        settings.evaluation.semantic_threshold = evaluation.get('semantic_threshold', 0.8)
+        settings.evaluation.judge_threshold = evaluation.get('judge_threshold', 0.7)
+        settings.evaluation.rag_threshold = evaluation.get('rag_threshold', 0.6)
+        settings.evaluation.semantic_weight = evaluation.get('semantic_weight', 0.3)
+        settings.evaluation.judge_weight = evaluation.get('judge_weight', 0.4)
+        settings.evaluation.rag_weight = evaluation.get('rag_weight', 0.3)
 
         return settings
 

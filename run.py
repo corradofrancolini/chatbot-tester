@@ -2918,15 +2918,32 @@ async def run_test_session(
         run_config.save(project.run_config_file)
 
         # Cleanup automatico dei vecchi report
-        cleanup_cfg = settings.get('reports', {}).get('cleanup', {})
+        # Carica cleanup config direttamente dal YAML (non è in GlobalSettings dataclass)
+        cleanup_cfg = {}
+        try:
+            settings_path = Path("config/settings.yaml")
+            if settings_path.exists():
+                with open(settings_path, 'r', encoding='utf-8') as f:
+                    yaml_data = yaml.safe_load(f) or {}
+                cleanup_cfg = yaml_data.get('reports', {}).get('cleanup', {})
+        except Exception:
+            pass
+
         if cleanup_cfg.get('enabled', False):
             from src.cleanup import ReportCleanup, CleanupConfig, cleanup_interactive
+
+            # Carica keep_last_n separatamente
+            keep_last_n = 50
+            try:
+                keep_last_n = yaml_data.get('reports', {}).get('local', {}).get('keep_last_n', 50)
+            except Exception:
+                pass
 
             cleanup_config = CleanupConfig(
                 enabled=True,
                 auto_cleanup=cleanup_cfg.get('auto_cleanup', False),
                 max_age_days=cleanup_cfg.get('max_age_days', 30),
-                keep_last_n=settings.get('reports', {}).get('local', {}).get('keep_last_n', 50),
+                keep_last_n=keep_last_n,
                 compress_instead_delete=cleanup_cfg.get('compress_instead_delete', False),
                 keep_screenshots=cleanup_cfg.get('keep_screenshots', True)
             )
