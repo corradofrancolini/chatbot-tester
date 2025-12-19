@@ -7,7 +7,7 @@ version: 2.1
 orbs:
   python: circleci/python@2.1.1
   browser-tools: circleci/browser-tools@1.4.8
-  ms-teams: cloudradar-monitoring/ms-teams@0.0.1
+  # ms-teams: cloudradar-monitoring/ms-teams@0.0.1  # Disabilitato - riattivare con MS_TEAMS_WEBHOOK_URL
 
 # Parametri per trigger manuale via API
 parameters:
@@ -110,9 +110,10 @@ commands:
         type: string
         default: "completed"
     steps:
-      - ms-teams/report:
-          only_on_fail: false
-          webhook_url: ${MS_TEAMS_WEBHOOK_URL}
+      # MS Teams disabled - riattivare quando configurato
+      # - ms-teams/report:
+      #     only_on_fail: false
+      #     webhook_url: ${MS_TEAMS_WEBHOOK_URL}
 
   setup-credentials:
     description: "Setup Google and LangSmith credentials"
@@ -311,9 +312,10 @@ jobs:
               find reports -name "*.html" -o -name "*.json" | head -20
             fi
 
-      - ms-teams/report:
-          only_on_fail: false
-          webhook_url: ${MS_TEAMS_WEBHOOK_URL}
+      # MS Teams disabled - riattivare quando configurato
+      # - ms-teams/report:
+      #     only_on_fail: false
+      #     webhook_url: ${MS_TEAMS_WEBHOOK_URL}
 
   # Job per test specifici di ogni progetto
   test-silicon-a:
@@ -526,9 +528,10 @@ jobs:
           path: reports
           destination: test-reports-node-$CIRCLE_NODE_INDEX
 
-      - ms-teams/report:
-          only_on_fail: false
-          webhook_url: ${MS_TEAMS_WEBHOOK_URL}
+      # MS Teams disabled - riattivare quando configurato
+      # - ms-teams/report:
+      #     only_on_fail: false
+      #     webhook_url: ${MS_TEAMS_WEBHOOK_URL}
 
 # Workflows
 workflows:
