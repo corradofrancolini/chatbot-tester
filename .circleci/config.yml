@@ -201,6 +201,12 @@ jobs:
       run_label:
         type: string
         default: ""  # Optional label for repeated runs (e.g., "run-1")
+      sheet_prefix:
+        type: string
+        default: "Run"  # Prefix for sheet name (e.g., "GGP" for "GGP 001")
+      skip_screenshots:
+        type: boolean
+        default: false  # Skip screenshot capture
     steps:
       - setup-environment
       - setup-credentials
@@ -548,6 +554,8 @@ workflows:
           tests_file: << pipeline.parameters.tests_file >>
           prompt_version: << pipeline.parameters.prompt_version >>
           parallel_browsers: << pipeline.parameters.parallel_browsers >>
+          sheet_prefix: << pipeline.parameters.sheet_prefix >>
+          skip_screenshots: << pipeline.parameters.skip_screenshots >>
 
   # Trigger manuale con native parallelism (split tests across N containers)
   # Nota: con new_run=true, solo container 0 crea la RUN, gli altri scrivono sulla stessa
