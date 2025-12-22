@@ -174,6 +174,15 @@ class ProjectConfig:
 
 
 @dataclass
+class AutoRAGContextSettings:
+    """Settings per estrazione automatica contesto RAG da LangSmith"""
+    enabled: bool = True           # Abilita estrazione automatica
+    max_documents: int = 5         # Max documenti da includere
+    max_chars: int = 10000         # Max caratteri totali
+    prefer_manual: bool = True     # Se true, rag_context_file ha priorità
+
+
+@dataclass
 class EvaluationSettings:
     """Settings per il sistema di evaluation"""
     enabled: bool = False
@@ -187,6 +196,8 @@ class EvaluationSettings:
     semantic_weight: float = 0.3
     judge_weight: float = 0.4
     rag_weight: float = 0.3
+    # Auto RAG context from LangSmith
+    auto_rag_context: AutoRAGContextSettings = field(default_factory=AutoRAGContextSettings)
 
 
 @dataclass
@@ -370,6 +381,13 @@ class ConfigLoader:
         settings.evaluation.semantic_weight = evaluation.get('semantic_weight', 0.3)
         settings.evaluation.judge_weight = evaluation.get('judge_weight', 0.4)
         settings.evaluation.rag_weight = evaluation.get('rag_weight', 0.3)
+
+        # Auto RAG context settings
+        auto_rag = evaluation.get('auto_rag_context', {})
+        settings.evaluation.auto_rag_context.enabled = auto_rag.get('enabled', True)
+        settings.evaluation.auto_rag_context.max_documents = auto_rag.get('max_documents', 5)
+        settings.evaluation.auto_rag_context.max_chars = auto_rag.get('max_chars', 10000)
+        settings.evaluation.auto_rag_context.prefer_manual = auto_rag.get('prefer_manual', True)
 
         return settings
 

@@ -95,6 +95,40 @@ def get_project_tests(project: str, test_set: str = "standard") -> list[dict]:
         return []
 
 
+def get_run_config(project: str) -> dict:
+    """Get run_config.json for a project."""
+    config_file = PROJECTS_DIR / project / "run_config.json"
+    if not config_file.exists():
+        return {}
+    try:
+        with open(config_file) as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error reading run_config: {e}")
+        return {}
+
+
+def should_use_parallel(test_count: int) -> bool:
+    """Decide automaticamente se usare parallelismo."""
+    return test_count >= 10
+
+
+def estimate_duration(test_count: int, parallel: bool) -> str:
+    """Stima durata esecuzione."""
+    # ~1.5 min per test singolo, ~0.5 min con 3 container
+    if parallel:
+        minutes = (test_count / 3) * 0.5 + 2  # +2 min overhead
+    else:
+        minutes = test_count * 1.5
+
+    if minutes < 5:
+        return "5 minuti"
+    elif minutes < 15:
+        return "10-15 minuti"
+    else:
+        return f"{int(minutes)} minuti"
+
+
 def register_tools(server: Server):
     """Register all MCP tools with the server."""
 
@@ -104,14 +138,22 @@ def register_tools(server: Server):
         return [
             Tool(
                 name="get_help",
-                description="Mostra la guida completa su come usare chatbot-tester",
+                description="""Mostra la guida su come usare chatbot-tester.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Come funziona?"
+- "Aiuto"
+- "Cosa posso fare?"
+- "Come si usa?"
+
+Se l'utente è nuovo, usa topic='quickstart' per una guida rapida.""",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "topic": {
                             "type": "string",
-                            "enum": ["overview", "testing", "results", "comparison", "all"],
-                            "description": "Argomento specifico (default: 'all')",
+                            "enum": ["overview", "testing", "results", "comparison", "quickstart", "all"],
+                            "description": "Argomento specifico (default: 'all'). Usa 'quickstart' per utenti nuovi.",
                             "default": "all"
                         }
                     },
@@ -120,7 +162,15 @@ def register_tools(server: Server):
             ),
             Tool(
                 name="list_projects",
-                description="Elenca i progetti disponibili per il testing",
+                description="""Mostra i progetti disponibili per il testing.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Quali progetti posso testare?"
+- "Cosa c'è disponibile?"
+- "Lista progetti"
+- "Mostrami i progetti"
+
+Per ogni progetto mostra i test set disponibili (es. standard, paraphrase, ggp).""",
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -334,6 +384,155 @@ def register_tools(server: Server):
                     "required": ["project"]
                 }
             ),
+            # ====== NUOVI TOOL FOOL-PROOF ======
+            Tool(
+                name="start_test_session",
+                description="""Avvia una sessione guidata per testare un progetto.
+
+USA QUESTO TOOL quando l'utente dice:
+- "Voglio testare silicon-b"
+- "Lancia i test su silicon-b"
+- "Esegui i test di parafrasi su silicon-b"
+- "Testa il chatbot silicon-b"
+
+IMPORTANTE: L'utente DEVE specificare il nome del progetto.
+Se non lo fa, chiedi "Quale progetto vuoi testare?" e usa list_projects.
+
+Il tool mostra:
+1. Test set disponibili (es. standard, paraphrase, ggp) con conteggio
+2. Stato attuale (test pending, falliti, pass rate ultima RUN)
+3. Raccomandazione su cosa testare
+
+DOPO aver mostrato le opzioni, CHIEDI all'utente quale test set vuole usare.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto da testare (es. silicon-b, silicon-a)"
+                        }
+                    },
+                    "required": ["project"]
+                }
+            ),
+            Tool(
+                name="prepare_test_run",
+                description="""Prepara l'esecuzione dei test e mostra un RIEPILOGO DETTAGLIATO per conferma.
+
+USA QUESTO TOOL quando l'utente ha scelto cosa testare:
+- "Ok, lancia i test standard"
+- "Vai con paraphrase"
+- "Esegui i pending"
+
+NON lancia ancora! Mostra il riepilogo e CHIEDI CONFERMA all'utente.
+Solo dopo che l'utente conferma (es. "sì", "procedi", "ok"), usa execute_test_run.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto"
+                        },
+                        "test_set": {
+                            "type": "string",
+                            "description": "Test set (standard, paraphrase, ggp)"
+                        },
+                        "tests": {
+                            "type": "string",
+                            "enum": ["pending", "all", "failed"],
+                            "description": "Quali test eseguire",
+                            "default": "pending"
+                        }
+                    },
+                    "required": ["project", "test_set"]
+                }
+            ),
+            Tool(
+                name="execute_test_run",
+                description="""Esegue i test DOPO che l'utente ha confermato il riepilogo.
+
+USA QUESTO TOOL SOLO quando l'utente ha visto il riepilogo di prepare_test_run
+e ha confermato esplicitamente:
+- "sì"
+- "procedi"
+- "ok vai"
+- "confermo"
+
+Se l'utente NON ha confermato o ha detto "no", NON usare questo tool.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto"
+                        },
+                        "test_set": {
+                            "type": "string",
+                            "description": "Test set (standard, paraphrase, ggp)"
+                        },
+                        "tests": {
+                            "type": "string",
+                            "enum": ["pending", "all", "failed"],
+                            "description": "Quali test eseguire",
+                            "default": "pending"
+                        }
+                    },
+                    "required": ["project", "test_set"]
+                }
+            ),
+            Tool(
+                name="check_pipeline_status",
+                description="""Controlla lo stato di una pipeline in esecuzione.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Come sta andando?"
+- "A che punto siamo?"
+- "Sono finiti i test?"
+- "Controlla lo stato"
+
+NON fa polling automatico (non possibile in MCP).
+Restituisce lo stato attuale + promemoria per ricontrollare.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "pipeline_id": {
+                            "type": "string",
+                            "description": "ID pipeline da controllare"
+                        }
+                    },
+                    "required": ["pipeline_id"]
+                }
+            ),
+            Tool(
+                name="show_results",
+                description="""Mostra i risultati dell'ultima esecuzione in modo chiaro e comprensibile.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Come è andata?"
+- "Mostrami i risultati di silicon-b"
+- "Quanti test sono passati?"
+- "Ci sono errori?"
+
+Mostra:
+- Pass rate con indicatore visivo (✅ >90%, ⚠️ 70-90%, ❌ <70%)
+- Numero test passati/falliti/pending
+- Lista test falliti con breve descrizione
+- Suggerimento per prossimi passi""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto"
+                        },
+                        "run_number": {
+                            "type": "integer",
+                            "description": "Numero RUN (se non specificato, usa l'ultima)"
+                        }
+                    },
+                    "required": ["project"]
+                }
+            ),
         ]
 
     @server.call_tool()
@@ -366,6 +565,17 @@ def register_tools(server: Server):
                 return await handle_get_failed_tests(arguments)
             elif name == "compare_runs":
                 return await handle_compare_runs(arguments)
+            # ====== NUOVI TOOL FOOL-PROOF ======
+            elif name == "start_test_session":
+                return await handle_start_test_session(arguments)
+            elif name == "prepare_test_run":
+                return await handle_prepare_test_run(arguments)
+            elif name == "execute_test_run":
+                return await handle_execute_test_run(arguments)
+            elif name == "check_pipeline_status":
+                return await handle_check_pipeline_status(arguments)
+            elif name == "show_results":
+                return await handle_show_results(arguments)
             else:
                 return [TextContent(
                     type="text",
@@ -461,6 +671,31 @@ Chatbot Tester è un sistema per testare automaticamente chatbot conversazionali
 - Dopo un deploy per verificare regressioni
 - Per confrontare performance tra ambienti
 - Per tracking qualità nel tempo
+""",
+
+        "quickstart": """## 🚀 Guida Rapida
+
+**Se non sai da dove partire, dimmi semplicemente:**
+- *"Voglio testare silicon-b"* → Ti guido io passo passo
+- *"Mostrami cosa posso fare"* → Lista completa opzioni
+
+### Test Set disponibili per silicon-b:
+- **standard**: 50+ test completi
+- **paraphrase**: 40+ test con domande riformulate
+- **ggp**: 4 test di grounding
+
+### Comandi rapidi:
+- *"Lancia i test pending di silicon-b"* → Esegue solo test non ancora fatti
+- *"Lancia tutti i test"* → Nuova RUN completa
+- *"Come sta andando?"* → Stato pipeline
+- *"Mostrami i risultati"* → Ultima RUN
+
+### Flusso tipico:
+1. **Scegli progetto**: "Voglio testare silicon-b"
+2. **Scegli test set**: "standard" / "paraphrase" / "ggp"
+3. **Conferma**: Vedi riepilogo e confermi
+4. **Monitora**: "Come sta andando?"
+5. **Risultati**: "Mostrami i risultati"
 """
     }
 
@@ -1252,3 +1487,392 @@ async def handle_compare_runs(arguments: dict) -> list[TextContent]:
     except Exception as e:
         logger.error(f"Error comparing runs: {e}")
         return [TextContent(type="text", text=f"Errore nel confronto delle RUN: {str(e)}")]
+
+
+# ====== NUOVI HANDLER FOOL-PROOF ======
+
+async def handle_start_test_session(arguments: dict) -> list[TextContent]:
+    """Handle start_test_session tool - wizard guidato per testare un progetto."""
+    project = arguments.get("project")
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        projects = get_available_projects()
+        return [TextContent(
+            type="text",
+            text=f"Progetto '{project}' non trovato.\n\nProgetti disponibili: {', '.join(projects)}"
+        )]
+
+    # Get test sets with counts
+    test_sets = get_available_test_sets(project)
+    run_config = get_run_config(project)
+
+    # Try to get current run info from Google Sheets
+    current_run = run_config.get("active_run", 0)
+    env = run_config.get("env", "DEV")
+    prompt_version = run_config.get("prompt_version", "N/A")
+
+    result = f"Ecco la situazione per **{project}**:\n\n"
+
+    # For each test set, show details
+    for name, total_count in sorted(test_sets.items()):
+        result += f"📋 **{name}** ({total_count} test)\n"
+
+        # Try to get executed count from Sheets
+        try:
+            if current_run > 0:
+                client = get_sheets_client(project)
+                client.active_run = current_run
+                results = client.get_all_results()
+
+                # Filter results for this test set
+                prefix = "PARA_" if name == "paraphrase" else "GRD_" if name == "ggp" else "TEST_"
+                set_results = [r for r in results if r.get("test_id", "").startswith(prefix)]
+
+                if set_results:
+                    passed = sum(1 for r in set_results if r.get("esito", "").upper() == "PASS")
+                    failed = sum(1 for r in set_results if r.get("esito", "").upper() == "FAIL")
+                    pending = total_count - len(set_results)
+                    pass_rate = (passed / len(set_results) * 100) if set_results else 0
+                    result += f"   - {pending} pending, {failed} falliti, pass rate {pass_rate:.0f}%\n"
+                else:
+                    result += f"   - Tutti pending\n"
+            else:
+                result += f"   - Tutti pending (nessuna RUN attiva)\n"
+        except Exception as e:
+            logger.warning(f"Could not get stats for {project}/{name}: {e}")
+            result += f"   - Stato non disponibile\n"
+
+        result += "\n"
+
+    # Add run info
+    if current_run > 0:
+        result += f"📈 **RUN attiva:** #{current_run}\n"
+        result += f"📝 **Prompt:** {prompt_version}\n"
+        result += f"🌍 **Ambiente:** {env}\n\n"
+
+    # Add suggestion
+    result += "---\n\n"
+    if test_sets.get("standard", 0) > 0:
+        result += "💡 **Consiglio:** eseguire i test pending del set **standard**.\n\n"
+    result += "**Quale test set vuoi usare?** (standard, paraphrase, ggp)"
+
+    return [TextContent(type="text", text=result)]
+
+
+async def handle_prepare_test_run(arguments: dict) -> list[TextContent]:
+    """Handle prepare_test_run tool - prepara e mostra riepilogo per conferma."""
+    project = arguments.get("project")
+    test_set = arguments.get("test_set", "standard")
+    tests_filter = arguments.get("tests", "pending")
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    # Load configs
+    run_config = get_run_config(project)
+    all_tests = get_project_tests(project, test_set)
+
+    if not all_tests:
+        return [TextContent(type="text", text=f"Nessun test trovato per il set '{test_set}'.")]
+
+    # Count tests to run
+    test_count = len(all_tests)
+    executed_ids = set()
+    failed_ids = set()
+
+    try:
+        current_run = run_config.get("active_run", 0)
+        if current_run > 0:
+            client = get_sheets_client(project)
+            client.active_run = current_run
+            results = client.get_all_results()
+            executed_ids = {r.get("test_id") for r in results if r.get("test_id")}
+            failed_ids = {r.get("test_id") for r in results
+                         if r.get("esito", "").upper() == "FAIL"}
+    except Exception as e:
+        logger.warning(f"Could not get executed tests: {e}")
+
+    # Filter tests based on mode
+    if tests_filter == "pending":
+        tests_to_run = [t for t in all_tests if t.get("id") not in executed_ids]
+        test_count = len(tests_to_run)
+    elif tests_filter == "failed":
+        tests_to_run = [t for t in all_tests if t.get("id") in failed_ids]
+        test_count = len(tests_to_run)
+    else:  # all
+        test_count = len(all_tests)
+
+    if test_count == 0:
+        return [TextContent(
+            type="text",
+            text=f"Nessun test da eseguire con filtro '{tests_filter}' per il set '{test_set}'."
+        )]
+
+    # Determine if new RUN
+    current_run = run_config.get("active_run", 0)
+    new_run = (tests_filter == "all") or (current_run == 0)
+    next_run = current_run + 1 if new_run else current_run
+
+    # Auto-determine parallelism
+    use_parallel = should_use_parallel(test_count)
+    estimated_time = estimate_duration(test_count, use_parallel)
+
+    # Sheet name
+    sheet_name = f"RUN_{next_run}"
+
+    # Build summary
+    env = run_config.get("env", "DEV")
+    prompt_version = run_config.get("prompt_version", "N/A")
+
+    result = f"""📋 **RIEPILOGO ESECUZIONE**
+
+🎯 **Progetto:** {project}
+🌍 **Ambiente:** {env}
+📝 **Prompt version:** {prompt_version}
+
+📊 **Test Set:** {test_set}
+   - {test_count} test da eseguire ({tests_filter})
+   - Modalità: auto
+
+📈 **RUN:** #{next_run} {'(NUOVA)' if new_run else '(ESISTENTE)'}
+📄 **Google Sheets:** Foglio "{sheet_name}"
+
+⚡ **Parallelismo:** {'SÌ (3 container)' if use_parallel else 'NO (singolo container)'}
+⏱️ **Tempo stimato:** ~{estimated_time}
+
+---
+**Procedo con l'esecuzione?** (sì/no)"""
+
+    return [TextContent(type="text", text=result)]
+
+
+async def handle_execute_test_run(arguments: dict) -> list[TextContent]:
+    """Handle execute_test_run tool - esegue dopo conferma."""
+    from src.circleci_client import CircleCIClient
+
+    project = arguments.get("project")
+    test_set = arguments.get("test_set", "standard")
+    tests_filter = arguments.get("tests", "pending")
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    # Load configs
+    run_config = get_run_config(project)
+    all_tests = get_project_tests(project, test_set)
+
+    # Count tests to determine parallelism
+    test_count = len(all_tests)
+
+    try:
+        current_run = run_config.get("active_run", 0)
+        if current_run > 0 and tests_filter in ["pending", "failed"]:
+            client = get_sheets_client(project)
+            client.active_run = current_run
+            results = client.get_all_results()
+            executed_ids = {r.get("test_id") for r in results if r.get("test_id")}
+            failed_ids = {r.get("test_id") for r in results
+                         if r.get("esito", "").upper() == "FAIL"}
+
+            if tests_filter == "pending":
+                test_count = len([t for t in all_tests if t.get("id") not in executed_ids])
+            elif tests_filter == "failed":
+                test_count = len([t for t in all_tests if t.get("id") in failed_ids])
+    except Exception as e:
+        logger.warning(f"Could not count tests: {e}")
+
+    # Auto-determine parallelism
+    use_parallel = should_use_parallel(test_count)
+    native_parallelism = 3 if use_parallel else 0
+
+    # Determine new_run
+    new_run = (tests_filter == "all")
+
+    # Build tests_file
+    tests_file = "tests.json" if test_set == "standard" else f"tests_{test_set}.json"
+
+    # Trigger CircleCI
+    circleci = CircleCIClient()
+
+    if not circleci.is_available():
+        return [TextContent(
+            type="text",
+            text="❌ Errore: CircleCI non configurato. Assicurarsi che CIRCLECI_TOKEN sia impostato."
+        )]
+
+    success, response = circleci.trigger_pipeline(
+        project=project,
+        mode="auto",
+        tests=tests_filter,
+        new_run=new_run,
+        tests_file=tests_file,
+        native_parallelism=native_parallelism
+    )
+
+    if not success:
+        error = response.get("error", "Errore sconosciuto") if response else "Errore sconosciuto"
+        return [TextContent(type="text", text=f"❌ Errore nell'avvio della pipeline: {error}")]
+
+    pipeline_id = response.get("id", "?")
+    pipeline_number = response.get("number", "?")
+    pipeline_url = f"https://app.circleci.com/pipelines/gh/corradofrancolini/chatbot-tester-private/{pipeline_number}"
+
+    result = f"""✅ **Pipeline avviata!**
+
+🔗 **URL:** {pipeline_url}
+🆔 **ID:** `{pipeline_id}`
+
+{'⚡ Parallelismo attivo (3 container)' if use_parallel else ''}
+
+⏰ **Chiedimi "come sta andando?" tra 5-10 minuti** per un aggiornamento."""
+
+    return [TextContent(type="text", text=result)]
+
+
+async def handle_check_pipeline_status(arguments: dict) -> list[TextContent]:
+    """Handle check_pipeline_status tool - controlla stato pipeline."""
+    from src.circleci_client import CircleCIClient
+
+    pipeline_id = arguments.get("pipeline_id")
+
+    if not pipeline_id:
+        return [TextContent(type="text", text="Errore: specificare pipeline_id")]
+
+    client = CircleCIClient()
+
+    if not client.is_available():
+        return [TextContent(
+            type="text",
+            text="❌ Errore: CircleCI non configurato."
+        )]
+
+    # Get pipeline info
+    pipeline = client.get_pipeline(pipeline_id)
+    if not pipeline:
+        return [TextContent(type="text", text=f"Pipeline `{pipeline_id}` non trovata.")]
+
+    # Get workflows
+    workflows = client.get_pipeline_workflows(pipeline_id)
+
+    # Check if all done
+    all_done = all(w.status in ["success", "failed", "canceled"]
+                   for w in workflows) if workflows else False
+
+    if all_done:
+        success = all(w.status == "success" for w in workflows)
+        icon = "✅" if success else "❌"
+        status = "SUCCESS" if success else "FAILED"
+
+        return [TextContent(
+            type="text",
+            text=f"""{icon} **Pipeline completata!**
+
+Stato: **{status}**
+URL: {pipeline.url}
+
+Vuoi vedere i risultati dei test? Chiedimi "mostrami i risultati di [progetto]"."""
+        )]
+
+    # Still running
+    jobs_info = ""
+    if workflows:
+        try:
+            jobs = client.get_workflow_jobs(workflows[0].id)
+            running = [j for j in jobs if j.get("status") == "running"]
+            if running:
+                jobs_info = f"\nJob in esecuzione: **{running[0].get('name', '?')}**"
+        except Exception:
+            pass
+
+    return [TextContent(
+        type="text",
+        text=f"""⏳ **Pipeline in esecuzione...**
+
+Stato: **{workflows[0].status if workflows else 'starting'}**{jobs_info}
+URL: {pipeline.url}
+
+⏰ **Chiedimi di nuovo tra 3-5 minuti** per un aggiornamento."""
+    )]
+
+
+async def handle_show_results(arguments: dict) -> list[TextContent]:
+    """Handle show_results tool - mostra risultati user-friendly."""
+    project = arguments.get("project")
+    run_number = arguments.get("run_number")
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    try:
+        client = get_sheets_client(project)
+
+        # Get latest run if not specified
+        if not run_number:
+            runs = client.get_all_run_numbers()
+            if not runs:
+                return [TextContent(type="text", text="Nessuna RUN trovata.")]
+            run_number = max(runs)
+
+        # Set active run and get results
+        client.active_run = run_number
+        results = client.get_all_results()
+
+        if not results:
+            return [TextContent(type="text", text=f"Nessun risultato trovato per RUN {run_number}.")]
+
+        # Calculate stats
+        total = len(results)
+        passed = sum(1 for r in results if r.get("esito", "").upper() == "PASS")
+        failed = sum(1 for r in results if r.get("esito", "").upper() == "FAIL")
+        pass_rate = (passed / total * 100) if total > 0 else 0
+
+        # Choose icon based on pass rate
+        if pass_rate >= 90:
+            icon = "✅"
+        elif pass_rate >= 70:
+            icon = "⚠️"
+        else:
+            icon = "❌"
+
+        result = f"""{icon} **Risultati RUN #{run_number} - {project}**
+
+**Pass rate: {pass_rate:.0f}%** ({passed}/{total})
+
+"""
+        # Show failed tests
+        failed_tests = [r for r in results if r.get("esito", "").upper() == "FAIL"]
+
+        if failed_tests:
+            result += f"❌ **{len(failed_tests)} test falliti:**\n"
+            for r in failed_tests[:10]:
+                test_id = r.get("test_id", "?")
+                question = r.get("question", r.get("domanda", ""))[:50]
+                result += f"- `{test_id}`: {question}...\n"
+            if len(failed_tests) > 10:
+                result += f"  ... e altri {len(failed_tests) - 10}\n"
+            result += "\n"
+
+        # Add suggestions
+        result += "---\n"
+        if failed_tests:
+            result += f"💡 Vuoi ri-eseguire solo i {len(failed_tests)} test falliti? Dimmelo!"
+        else:
+            result += "🎉 Tutti i test sono passati!"
+
+        return [TextContent(type="text", text=result)]
+
+    except Exception as e:
+        logger.error(f"Error showing results: {e}")
+        return [TextContent(type="text", text=f"Errore nel recupero dei risultati: {str(e)}")]

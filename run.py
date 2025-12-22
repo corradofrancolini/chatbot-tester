@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.config_loader import ConfigLoader, ProjectConfig, RunConfig
 from src.tester import ChatbotTester, TestMode
-from src.ui import ConsoleUI, MenuItem, get_ui
+from src.ui import ConsoleUI, MenuItem, MenuAction, MenuSection, get_ui
 from src.i18n import get_i18n, set_language, t
 from src.health import HealthChecker, ServiceStatus
 from src.circleci_client import CircleCIClient
@@ -37,6 +37,7 @@ from src.cli_utils import (
     confirm_action, ConfirmLevel, handle_keyboard_interrupt,
     print_startup_feedback
 )
+from src.dashboard import run_dashboard
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # HELPER: Project validation with suggestions
@@ -77,6 +78,402 @@ def validate_project(project_name: str, ui: ConsoleUI) -> bool:
             ui.muted(f"  Progetti disponibili: {', '.join(available)}")
 
     return False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ACCORDION MENU: Shortcuts registry e nuovo menu
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Registry globale shortcut -> (handler_name, requires_project)
+# handler_name è stringa; il mapping effettivo è in handle_shortcut()
+SHORTCUTS = {
+    # Progetti
+    'new': ('run_wizard', False),
+    'run': ('run_test_session', True),
+
+    # Analisi
+    'cmp': ('_analysis_compare_runs', True),
+    'reg': ('_analysis_regressions', True),
+    'flk': ('_analysis_flaky', True),
+    'cov': ('_analysis_coverage', True),
+    'stb': ('_analysis_stability', True),
+    'prf': ('_analysis_performance', True),
+    'cal': ('_analysis_calibration', True),
+
+    # Strumenti
+    'exp': ('run_export_menu', True),
+    'cld': ('show_cloud_menu', False),
+    'fin': ('show_finetuning_menu', True),
+    'prm': ('show_prompt_manager_menu', True),
+    'dgn': ('run_diagnose_command', True),
+    'lst': ('list_all_runs', False),
+
+    # Impostazioni
+    'lng': ('_settings_language', False),
+    'ntf': ('_settings_notifications', False),
+    'brw': ('_settings_browser', False),
+    'log': ('_settings_logging', False),
+    'tst': ('_settings_test_notify', False),
+}
+
+
+def _generate_unique_shortcuts(projects: list) -> dict:
+    """
+    Genera shortcut unici per i progetti.
+
+    Strategia: usa prime 3 lettere, se collisione aggiunge numero.
+    Es: silicon-a -> sil, silicon-b -> si2, silicon-prod -> si3
+    """
+    shortcuts = {}
+    used = set(['new', 'run'])  # Riservati
+
+    for proj in projects:
+        base = proj[:3].lower()
+
+        if base not in used:
+            shortcuts[proj] = base
+            used.add(base)
+        else:
+            # Collisione - trova shortcut alternativo
+            # Prova base[:2] + numero (si2, si3, etc.)
+            for i in range(2, 10):
+                alt = f"{base[:2]}{i}"
+                if alt not in used:
+                    shortcuts[proj] = alt
+                    used.add(alt)
+                    break
+            else:
+                # Fallback: usa p + indice
+                idx = len(shortcuts) + 1
+                shortcuts[proj] = f"p{idx}"
+                used.add(f"p{idx}")
+
+    return shortcuts
+
+
+def build_menu_sections(loader: ConfigLoader) -> list:
+    """Costruisce le sezioni del menu accordion."""
+    projects = loader.list_projects()
+
+    # Verifica disponibilità cloud
+    ci_client = CircleCIClient()
+    cloud_available = ci_client.is_available()
+
+    # Genera shortcut unici per progetti
+    project_shortcuts = _generate_unique_shortcuts(projects[:5])
+
+    sections = [
+        MenuSection(
+            key="1",
+            title=f"Progetti ({len(projects)})",
+            actions=[
+                MenuAction("new", "Nuovo progetto", "Wizard guidato"),
+                *[MenuAction(project_shortcuts[p], p, "Apri progetto") for p in projects[:5]],
+                MenuAction("run", "Esegui test", "Lancia test su progetto"),
+            ]
+        ),
+        MenuSection(
+            key="2",
+            title="Analisi Testing",
+            actions=[
+                MenuAction("cmp", "Confronta RUN", "A/B comparison"),
+                MenuAction("reg", "Regressioni", "PASS→FAIL"),
+                MenuAction("flk", "Test Flaky", "Risultati inconsistenti"),
+                MenuAction("cov", "Coverage", "Copertura categorie"),
+                MenuAction("stb", "Stabilità", "Overview suite"),
+                MenuAction("prf", "Performance", "Metriche e trend"),
+                MenuAction("cal", "Calibrazione", "Soglie evaluation"),
+            ]
+        ),
+        MenuSection(
+            key="3",
+            title="Strumenti",
+            actions=[
+                MenuAction("exp", "Esporta", "PDF/Excel/HTML/CSV"),
+                MenuAction("cld", "Cloud", "Esegui senza browser", disabled=not cloud_available),
+                MenuAction("fin", "Finetuning", "Addestra modello"),
+                MenuAction("prm", "Prompt Manager", "Gestisci prompt"),
+                MenuAction("dgn", "Diagnosi", "Analizza fallimenti"),
+                MenuAction("lst", "Lista Run", "Tutti i progetti"),
+            ]
+        ),
+        MenuSection(
+            key="4",
+            title="Impostazioni",
+            actions=[
+                MenuAction("lng", "Lingua", "IT/EN"),
+                MenuAction("ntf", "Notifiche", "Desktop/Email/Teams"),
+                MenuAction("brw", "Browser", "Headless/Viewport"),
+                MenuAction("log", "Logging", "Livello log"),
+                MenuAction("tst", "Test Notifiche", "Invia test"),
+            ]
+        ),
+    ]
+
+    return sections
+
+
+def show_main_menu_v2(ui: ConsoleUI, loader: ConfigLoader) -> Optional[str]:
+    """
+    Menu principale con accordion e shortcut diretti.
+
+    Returns:
+        Shortcut selezionato o None per quit
+    """
+    sections = build_menu_sections(loader)
+
+    return ui.accordion_menu(
+        sections=sections,
+        title="CHATBOT TESTER",
+        version="1.4.0",
+        global_shortcuts=SHORTCUTS
+    )
+
+
+async def handle_shortcut(shortcut: str, ui: ConsoleUI, loader: ConfigLoader) -> bool:
+    """
+    Esegue l'handler per lo shortcut selezionato.
+
+    Args:
+        shortcut: Lo shortcut selezionato (es: 'cal', 'cmp')
+        ui: Console UI
+        loader: Config loader
+
+    Returns:
+        True se gestito, False se non riconosciuto
+    """
+    projects = loader.list_projects()
+
+    # Controlla se è uno shortcut di progetto (primi 3 caratteri del nome)
+    for proj in projects:
+        if proj[:3].lower() == shortcut:
+            # Apri progetto direttamente
+            await handle_project_shortcut(ui, loader, proj)
+            return True
+
+    # Shortcut non nel registry
+    if shortcut not in SHORTCUTS:
+        return False
+
+    handler_name, requires_project = SHORTCUTS[shortcut]
+    project_name = None
+
+    # Se richiede progetto, chiedi selezione
+    if requires_project:
+        project_name = show_project_menu(ui, loader)
+        if not project_name:
+            return True  # User ha cancellato
+
+    # Dispatch agli handler
+    settings_path = loader.base_dir / "config" / "settings.yaml"
+
+    try:
+        # === PROGETTI ===
+        if shortcut == 'new':
+            from wizard.main import run_wizard
+            run_wizard(language="it")
+
+        elif shortcut == 'run':
+            await handle_run_shortcut(ui, loader, project_name)
+
+        # === ANALISI ===
+        elif shortcut == 'cmp':
+            from src.comparison import RunComparator
+            project = loader.load_project(project_name)
+            comparator = RunComparator(project)
+            _analysis_compare_runs(ui, comparator)
+            input("\n  Premi INVIO per continuare...")
+
+        elif shortcut == 'reg':
+            from src.comparison import RegressionDetector
+            project = loader.load_project(project_name)
+            detector = RegressionDetector(project)
+            _analysis_regressions(ui, detector)
+            input("\n  Premi INVIO per continuare...")
+
+        elif shortcut == 'flk':
+            from src.comparison import FlakyTestDetector
+            project = loader.load_project(project_name)
+            detector = FlakyTestDetector(project)
+            _analysis_flaky(ui, detector)
+            input("\n  Premi INVIO per continuare...")
+
+        elif shortcut == 'cov':
+            from src.comparison import RunComparator
+            project = loader.load_project(project_name)
+            comparator = RunComparator(project)
+            _analysis_coverage(ui, project, comparator)
+            input("\n  Premi INVIO per continuare...")
+
+        elif shortcut == 'stb':
+            from src.comparison import RegressionDetector
+            project = loader.load_project(project_name)
+            detector = RegressionDetector(project)
+            _analysis_stability(ui, detector)
+            input("\n  Premi INVIO per continuare...")
+
+        elif shortcut == 'prf':
+            _analysis_performance(ui, project_name, loader)
+            input("\n  Premi INVIO per continuare...")
+
+        elif shortcut == 'cal':
+            _analysis_calibration(ui, project_name)
+            input("\n  Premi INVIO per continuare...")
+
+        # === STRUMENTI ===
+        elif shortcut == 'exp':
+            run_export_menu(ui, loader, project_name)
+
+        elif shortcut == 'cld':
+            show_cloud_menu(ui, loader)
+
+        elif shortcut == 'fin':
+            show_finetuning_menu(ui, project_name, loader.base_dir)
+
+        elif shortcut == 'prm':
+            show_prompt_manager_menu(ui, project_name, loader.base_dir)
+
+        elif shortcut == 'dgn':
+            class DiagnoseArgs:
+                project = project_name
+                diagnose = True
+                diagnose_test = None
+                diagnose_run = None
+                diagnose_interactive = True
+                diagnose_model = 'generic'
+            run_diagnose_command(DiagnoseArgs())
+            input("\n  Premi INVIO per continuare...")
+
+        elif shortcut == 'lst':
+            list_all_runs(ui, loader)
+
+        # === IMPOSTAZIONI ===
+        elif shortcut == 'lng':
+            _settings_language(ui, loader, settings_path)
+
+        elif shortcut == 'ntf':
+            _settings_notifications(ui, loader, settings_path)
+
+        elif shortcut == 'brw':
+            _settings_browser(ui, loader, settings_path)
+
+        elif shortcut == 'log':
+            _settings_logging(ui, loader, settings_path)
+
+        elif shortcut == 'tst':
+            _settings_test_notify(ui, loader)
+
+        else:
+            ui.warning(f"Shortcut '{shortcut}' non ancora implementato")
+
+    except Exception as e:
+        ui.error(f"Errore: {e}")
+        import traceback
+        traceback.print_exc()
+        input("\n  Premi INVIO per continuare...")
+
+    return True
+
+
+async def handle_project_shortcut(ui: ConsoleUI, loader: ConfigLoader, project_name: str) -> None:
+    """Gestisce l'apertura diretta di un progetto."""
+    try:
+        project = loader.load_project(project_name)
+        ui.success(f"Progetto: {project_name}")
+
+        # Mostra menu azioni progetto
+        while True:
+            action = show_project_actions_menu(ui, project_name)
+            if action is None:
+                break
+
+            if action == 'run':
+                await handle_run_shortcut(ui, loader, project_name)
+            elif action == 'prompt':
+                show_prompt_manager_menu(ui, project_name, loader.base_dir)
+            elif action == 'diagnose':
+                class DiagnoseArgs:
+                    project = project_name
+                    diagnose = True
+                    diagnose_test = None
+                    diagnose_run = None
+                    diagnose_interactive = True
+                    diagnose_model = 'generic'
+                run_diagnose_command(DiagnoseArgs())
+                input("\n  Premi INVIO per continuare...")
+
+    except Exception as e:
+        ui.error(f"Errore caricamento progetto: {e}")
+
+
+async def handle_run_shortcut(ui: ConsoleUI, loader: ConfigLoader, project_name: str) -> None:
+    """Gestisce l'esecuzione test per un progetto."""
+    try:
+        project = loader.load_project(project_name)
+        run_config = RunConfig.load(project.run_config_file)
+
+        run_choice = show_run_menu(ui, project, run_config)
+        if run_choice is None:
+            return
+
+        force_new_run = False
+
+        if run_choice == '1':
+            if not run_config.active_run:
+                configure_run_interactive(ui, run_config)
+                run_config.save(project.run_config_file)
+
+        elif run_choice == '2':
+            if start_new_run_interactive(ui, run_config):
+                force_new_run = True
+                run_config.save(project.run_config_file)
+            else:
+                return
+
+        elif run_choice == '3':
+            configure_run_interactive(ui, run_config)
+            run_config.save(project.run_config_file)
+            return
+
+        elif run_choice == '4':
+            toggle_options_interactive(ui, run_config)
+            run_config.save(project.run_config_file)
+            return
+
+        # Seleziona modalità
+        settings = loader.load_global_settings()
+        mode_choice = show_mode_menu(ui, project, run_config)
+        if mode_choice is None:
+            return
+
+        mode_map = {'1': 'train', '2': 'assisted', '3': 'auto'}
+        mode = mode_map.get(mode_choice, 'train')
+
+        # Carica e filtra test
+        tests = loader.load_tests(project_name)
+        selected_tests = show_test_selection(ui, tests)
+        if not selected_tests:
+            return
+
+        # Esegui
+        tester = ChatbotTester(
+            project=project,
+            mode=TestMode[mode.upper()],
+            tests=selected_tests,
+            run_config=run_config
+        )
+
+        if force_new_run:
+            await tester.start_new_run()
+
+        await tester.run()
+        await tester.shutdown()
+
+    except Exception as e:
+        ui.error(f"Errore esecuzione: {e}")
+        import traceback
+        traceback.print_exc()
+        input("\n  Premi INVIO per continuare...")
 
 
 def parse_args():
@@ -256,6 +653,14 @@ Documentazione: https://github.com/user/chatbot-tester
         action='store_true',
         help='Salta conferma costi API'
     )
+    analysis_group.add_argument(
+        '--calibrate',
+        type=int,
+        nargs='?',
+        const=5,
+        metavar='N',
+        help='Calibra soglie metriche (analizza ultime N run, default: 5)'
+    )
 
     # ═══════════════════════════════════════════════════════════════════
     # Prompt Manager
@@ -426,6 +831,11 @@ Documentazione: https://github.com/user/chatbot-tester
         action='store_true',
         default=os.environ.get('DEBUG', '').lower() in ('1', 'true'),
         help='Output di debug verbose'
+    )
+    output_group.add_argument(
+        '--no-dashboard',
+        action='store_true',
+        help='Usa menu accordion legacy invece della dashboard'
     )
 
     # ═══════════════════════════════════════════════════════════════════
@@ -1700,6 +2110,7 @@ def show_analysis_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
             MenuItem('4', 'Coverage', 'Analisi copertura test'),
             MenuItem('5', 'Report Stabilita', 'Overview stabilita test suite'),
             MenuItem('6', 'Performance', 'Metriche e trend di performance'),
+            MenuItem('7', 'Calibrazione Soglie', 'Analizza metriche e suggerisci soglie'),
         ]
 
         choice = ui.menu(items, "Azione", allow_back=True)
@@ -1724,6 +2135,9 @@ def show_analysis_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
 
         elif choice == '6':
             _analysis_performance(ui, project_name, loader)
+
+        elif choice == '7':
+            _analysis_calibration(ui, project_name)
 
 
 def _analysis_compare_runs(ui: ConsoleUI, comparator) -> None:
@@ -2050,6 +2464,39 @@ def _analysis_performance(ui: ConsoleUI, project_name: str, loader: ConfigLoader
 
         ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
         input()
+
+
+def _analysis_calibration(ui: ConsoleUI, project_name: str) -> None:
+    """Sottomenu calibrazione soglie evaluation"""
+    from src.calibration import run_calibration
+
+    ui.section("Calibrazione Soglie")
+
+    ui.print("\n  [dim]Analizza le metriche delle ultime run per suggerire[/dim]")
+    ui.print("  [dim]soglie ottimali per semantic, judge e RAG.[/dim]\n")
+
+    # Chiedi numero run da analizzare
+    n_runs = input("  Numero run da analizzare (default 5): ").strip()
+    n_runs = int(n_runs) if n_runs.isdigit() else 5
+
+    ui.info(f"Analisi ultime {n_runs} run...")
+
+    report = run_calibration(
+        project_name=project_name,
+        last_n_runs=n_runs
+    )
+
+    if report is None:
+        ui.error("Calibrazione fallita")
+    elif report.tests_with_metrics == 0:
+        ui.warning("Nessuna metrica trovata nelle run analizzate")
+        ui.print("\n  [dim]Assicurati che evaluation sia abilitato in settings.yaml[/dim]")
+        ui.print("  [dim]e che ci siano run con metriche popolate.[/dim]")
+    else:
+        ui.success("Calibrazione completata")
+
+    ui.print("\n  [dim]Premi INVIO per continuare...[/dim]")
+    input()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -3000,154 +3447,36 @@ async def run_test_session(
 
 
 async def main_interactive(args):
-    """Modalità interattiva con menu"""
+    """Modalità interattiva con dashboard multi-panel"""
     set_language(args.lang)
     ui = get_ui()
     loader = ConfigLoader()
 
-    while True:
-        choice = show_main_menu(ui, loader)
+    # Usa dashboard o menu legacy in base al flag
+    use_dashboard = not getattr(args, 'no_dashboard', False)
 
-        if choice == 'quit':
+    while True:
+        if use_dashboard:
+            # Dashboard multi-panel (stile lazygit)
+            try:
+                shortcut = run_dashboard(loader)
+            except Exception as e:
+                ui.warning(f"Dashboard error: {e}. Fallback a menu legacy.")
+                shortcut = show_main_menu_v2(ui, loader)
+        else:
+            # Menu accordion legacy
+            shortcut = show_main_menu_v2(ui, loader)
+
+        if shortcut is None or shortcut == "quit":
+            # Quit
             ui.print(t('main_menu.goodbye'))
             break
 
-        elif choice == '1':
-            # Nuovo progetto - avvia wizard
-            from wizard.main import run_wizard
-            success = run_wizard(language="it")
-            if success:
-                ui.success("Progetto creato! Selezionalo dal menu.")
+        # Gestisci lo shortcut selezionato
+        handled = await handle_shortcut(shortcut, ui, loader)
 
-        elif choice == '2':
-            # Apri progetto
-            project_name = show_project_menu(ui, loader)
-            if project_name:
-                try:
-                    project = loader.load_project(project_name)
-                    settings = loader.load_global_settings()
-
-                    # Menu azioni progetto (nuovo livello)
-                    while True:
-                        action = show_project_actions_menu(ui, project_name)
-
-                        if action is None:
-                            break  # Torna al menu principale
-
-                        elif action == 'prompt':
-                            # Prompt Manager
-                            show_prompt_manager_menu(ui, project_name, loader.base_dir)
-
-                        elif action == 'visualizer':
-                            # Visualizer (TODO: implementare menu)
-                            ui.warning("Visualizer: usa CLI --viz-prompt o --viz-test")
-                            input("\n  Premi INVIO per continuare...")
-
-                        elif action == 'diagnose':
-                            # Diagnosi
-                            class DiagnoseArgs:
-                                project = project_name
-                                diagnose = True
-                                diagnose_test = None
-                                diagnose_run = None
-                                diagnose_interactive = True
-                                diagnose_model = 'generic'
-                            run_diagnose_command(DiagnoseArgs())
-                            input("\n  Premi INVIO per continuare...")
-
-                        elif action == 'run':
-                            # Gestione RUN (flusso esistente)
-                            run_config = RunConfig.load(project.run_config_file)
-
-                            run_choice = show_run_menu(ui, project, run_config)
-
-                            force_new_run = False
-
-                            if run_choice is None:
-                                continue  # Torna al menu azioni progetto
-
-                            elif run_choice == '1':
-                                # Continua/Inizia RUN
-                                if not run_config.active_run:
-                                    configure_run_interactive(ui, run_config)
-                                    run_config.save(project.run_config_file)
-
-                            elif run_choice == '2':
-                                # Forza nuova RUN
-                                if start_new_run_interactive(ui, run_config):
-                                    force_new_run = True
-                                    run_config.save(project.run_config_file)
-                                else:
-                                    continue
-
-                            elif run_choice == '3':
-                                # Solo configura, non esegui
-                                configure_run_interactive(ui, run_config)
-                                run_config.save(project.run_config_file)
-                                continue
-
-                            elif run_choice == '4':
-                                # Toggle opzioni
-                                toggle_options_interactive(ui, run_config)
-                                run_config.save(project.run_config_file)
-                                continue
-
-                            # Scegli modalità
-                            mode_choice = show_mode_menu(ui, project, run_config)
-                            if mode_choice:
-                                mode_map = {'1': TestMode.TRAIN, '2': TestMode.ASSISTED, '3': TestMode.AUTO}
-                                mode = mode_map.get(mode_choice, TestMode.TRAIN)
-
-                                # Chiedi se vuole selezionare test specifici
-                                select_items = [
-                                    MenuItem('1', t('test_selection.pending'), t('test_selection.pending_desc')),
-                                    MenuItem('2', t('test_selection.all'), t('test_selection.all_desc').format(count='')),
-                                    MenuItem('3', t('test_selection.specific'), t('test_selection.specific_desc')),
-                                ]
-                                ui.section(t('test_selection.title'))
-                                select_choice = ui.menu(select_items, t('common.next'), allow_back=True)
-
-                                if select_choice is None:
-                                    continue
-
-                                test_filter_map = {'1': 'pending', '2': 'all', '3': 'select'}
-                                test_filter = test_filter_map.get(select_choice, 'pending')
-
-                                await run_test_session(
-                                    project,
-                                    settings,
-                                    mode,
-                                    test_filter=test_filter,
-                                    force_new_run=force_new_run
-                                )
-
-                except FileNotFoundError:
-                    ui.error(f"Progetto '{project_name}' non trovato")
-
-        elif choice == '3':
-            # Fine-tuning
-            show_finetuning_menu(ui, loader)
-
-        elif choice == '4':
-            # Esegui nel cloud
-            show_cloud_menu(ui, loader)
-
-        elif choice == '5':
-            # Analisi Testing
-            show_analysis_menu(ui, loader)
-
-        elif choice == '6':
-            # Lista Run (tutti i progetti)
-            list_all_runs(ui, loader, last_n=15)
-            input("\n  Premi INVIO per continuare...")
-
-        elif choice == '7':
-            # Impostazioni
-            show_settings_menu(ui, loader)
-
-        elif choice == '8':
-            # Aiuto
-            ui.help_text(t('help_guide'))
+        if not handled:
+            ui.warning(f"Shortcut '{shortcut}' non riconosciuto")
 
 
 async def main_direct(args):
@@ -4068,6 +4397,38 @@ def run_analyze_command(args):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# CLI: Calibration Commands
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def run_calibrate_command(args):
+    """
+    Esegue comando --calibrate.
+
+    Analizza le metriche delle ultime N run per suggerire
+    soglie ottimali per semantic, judge, RAG.
+    """
+    from src.calibration import run_calibration
+
+    ui = get_ui()
+    ui.section(f"Calibrazione Soglie - {args.project}")
+
+    report = run_calibration(
+        project_name=args.project,
+        last_n_runs=args.calibrate
+    )
+
+    if report is None:
+        ui.error("Calibrazione fallita")
+        return
+
+    # Suggerimenti finali
+    if report.suggested_config:
+        ui.muted("\nProssimi passi:")
+        ui.muted(f"  1. Copia i valori suggeriti in config/settings.yaml")
+        ui.muted(f"  2. Esegui nuovi test per verificare: python run.py -p {args.project} -m auto")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # CLI: Diagnostic Engine Commands
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -4410,6 +4771,14 @@ def main():
             ui.error("Specifica un progetto con -p PROJECT")
             sys.exit(ExitCode.USAGE_ERROR)
         run_analyze_command(args)
+        sys.exit(ExitCode.SUCCESS)
+
+    # Comando calibrazione soglie
+    if args.calibrate is not None:
+        if not args.project:
+            ui.error("Specifica un progetto con -p PROJECT")
+            sys.exit(ExitCode.USAGE_ERROR)
+        run_calibrate_command(args)
         sys.exit(ExitCode.SUCCESS)
 
     # Comandi diagnostic engine

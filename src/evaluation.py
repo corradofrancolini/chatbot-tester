@@ -402,11 +402,25 @@ class RAGEvaluator:
             return self._fallback_evaluation(question, answer, contexts)
 
         try:
+            # Ensure API key is set BEFORE importing RAGAS
+            api_key = os.getenv(self.config.api_key_env)
+            if not api_key:
+                # Try loading from .env
+                from dotenv import load_dotenv
+                load_dotenv()
+                api_key = os.getenv(self.config.api_key_env)
+
+            if not api_key:
+                logger.warning(f"No API key found for RAGAS, using fallback")
+                return self._fallback_evaluation(question, answer, contexts)
+
+            # Set in environment for RAGAS
+            os.environ["OPENAI_API_KEY"] = api_key
+
             from ragas import evaluate
             from ragas.metrics import (
                 faithfulness,
                 answer_relevancy,
-                context_precision,
             )
             from datasets import Dataset
 
@@ -417,17 +431,12 @@ class RAGEvaluator:
                 "contexts": [contexts],
             }
             if ground_truth:
-                data["ground_truth"] = [ground_truth]
+                data["reference"] = [ground_truth]  # RAGAS usa 'reference' per ground truth
 
             dataset = Dataset.from_dict(data)
 
-            # Select metrics
-            metrics = [faithfulness, answer_relevancy, context_precision]
-
-            # Set up LLM for RAGAS
-            api_key = os.getenv(self.config.api_key_env)
-            if api_key:
-                os.environ["OPENAI_API_KEY"] = api_key
+            # Select metrics (only faithfulness and answer_relevancy - no ground truth needed)
+            metrics = [faithfulness, answer_relevancy]
 
             # Evaluate
             result = evaluate(dataset, metrics=metrics)
@@ -435,7 +444,7 @@ class RAGEvaluator:
             return {
                 "faithfulness": result.get("faithfulness", 0.0),
                 "relevance": result.get("answer_relevancy", 0.0),
-                "context_precision": result.get("context_precision", 0.0),
+                "context_precision": 0.0,  # Requires ground truth, skip
                 "groundedness": result.get("faithfulness", 0.0),  # Alias
             }
 

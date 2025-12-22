@@ -897,47 +897,11 @@ class ChatbotTester:
             final_response = conversation[-1].content if conversation else ""
             evaluation = None
 
-            # Priorità 1: Evaluation system (OpenAI GPT-4o-mini)
-            if self.evaluator:
-                try:
-                    # Ottieni expected_answer dal test se disponibile
-                    expected_answer = getattr(test, 'expected_answer', None)
-                    rag_context_file = getattr(test, 'rag_context_file', None)
-
-                    eval_result = self.evaluator.evaluate(
-                        question=test.question,
-                        response=final_response,
-                        expected_answer=expected_answer,
-                        expected_behavior=test.expected,
-                        rag_context_file=rag_context_file
-                    )
-
-                    # Converti EvaluationResult in formato compatibile
-                    evaluation = {
-                        'passed': eval_result.passed,
-                        'reason': eval_result.judge_reasoning or eval_result.summary(),
-                        'details': eval_result.to_dict()
-                    }
-                except Exception as e:
-                    self.on_status(f"! Errore Evaluation: {e}")
-                    evaluation = None
-
-            # Priorità 2: Ollama (fallback locale)
-            if evaluation is None and self.ollama:
-                evaluation = self.ollama.evaluate_test_result(
-                    test_case={'question': test.question, 'category': test.category, 'expected': test.expected},
-                    conversation=[{'role': t.role, 'content': t.content} for t in conversation],
-                    final_response=final_response
-                )
-
-            # Fallback: valutazione manuale richiesta
-            if evaluation is None:
-                evaluation = {'passed': None, 'reason': 'Valutazione manuale richiesta'}
-
-            # LangSmith debug
+            # LangSmith fetch (PRIMA dell'evaluation per avere il contesto RAG)
             langsmith_url = ""
             langsmith_report = ""
             model_version = ""
+            report = None  # LangSmithReport per estrazione RAG context
             if self.langsmith:
                 try:
                     langsmith_start = time.perf_counter()
@@ -966,6 +930,61 @@ class ChatbotTester:
                             success=False,
                             error=str(e)
                         )
+
+            # Priorità 1: Evaluation system (OpenAI GPT-4o-mini)
+            if self.evaluator:
+                try:
+                    # Ottieni expected_answer e rag_context_file dal test
+                    expected_answer = getattr(test, 'expected_answer', None)
+                    rag_context_file = getattr(test, 'rag_context_file', None)
+
+                    # Determina contesto RAG con priorità:
+                    # 1. File manuale (override esplicito)
+                    # 2. Contesto automatico da LangSmith (se abilitato)
+                    # 3. Nessun contesto
+                    rag_context = None
+                    auto_rag_cfg = self.settings.evaluation.auto_rag_context
+                    use_auto_rag = auto_rag_cfg.enabled and (not rag_context_file or not auto_rag_cfg.prefer_manual)
+
+                    if use_auto_rag and not rag_context_file and report and report.sources:
+                        # Estrai contesto da LangSmith automaticamente
+                        rag_context = report.get_rag_context(
+                            max_docs=auto_rag_cfg.max_documents,
+                            max_chars=auto_rag_cfg.max_chars
+                        )
+                        if rag_context:
+                            self.on_status(f"  Auto RAG context: {len(report.sources)} docs")
+
+                    eval_result = self.evaluator.evaluate(
+                        question=test.question,
+                        response=final_response,
+                        expected_answer=expected_answer,
+                        expected_behavior=test.expected,
+                        rag_context_file=rag_context_file,
+                        rag_context=rag_context  # Contesto automatico da LangSmith
+                    )
+
+                    # Converti EvaluationResult in formato compatibile
+                    evaluation = {
+                        'passed': eval_result.passed,
+                        'reason': eval_result.judge_reasoning or eval_result.summary(),
+                        'details': eval_result.to_dict()
+                    }
+                except Exception as e:
+                    self.on_status(f"! Errore Evaluation: {e}")
+                    evaluation = None
+
+            # Priorità 2: Ollama (fallback locale)
+            if evaluation is None and self.ollama:
+                evaluation = self.ollama.evaluate_test_result(
+                    test_case={'question': test.question, 'category': test.category, 'expected': test.expected},
+                    conversation=[{'role': t.role, 'content': t.content} for t in conversation],
+                    final_response=final_response
+                )
+
+            # Fallback: valutazione manuale richiesta
+            if evaluation is None:
+                evaluation = {'passed': None, 'reason': 'Valutazione manuale richiesta'}
 
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
 

@@ -62,6 +62,13 @@ class WizardState:
     ollama_enabled: bool = False
     ollama_model: str = "mistral"
 
+    # Evaluation
+    evaluation_enabled: bool = False
+    eval_semantic_threshold: float = 0.7
+    eval_judge_threshold: float = 0.6
+    eval_rag_threshold: float = 0.5
+    eval_auto_rag_context: bool = True
+
     # Tests
     tests: List[Dict[str, Any]] = field(default_factory=list)
 
@@ -141,7 +148,7 @@ class StateManager:
             return False
 
         state = self.load()
-        return state.current_step > 1 and len(state.completed_steps) < 9
+        return state.current_step > 1 and len(state.completed_steps) < 10
 
 
 # Validators
@@ -419,6 +426,17 @@ def save_project_config(state: WizardState) -> None:
             'enabled': state.ollama_enabled,
             'model': state.ollama_model,
             'url': 'http://localhost:11434/api/generate'
+        },
+        'evaluation': {
+            'enabled': state.evaluation_enabled,
+            'semantic_threshold': state.eval_semantic_threshold,
+            'judge_threshold': state.eval_judge_threshold,
+            'rag_threshold': state.eval_rag_threshold,
+            'auto_rag_context': {
+                'enabled': state.eval_auto_rag_context,
+                'max_documents': 5,
+                'max_chars': 10000
+            }
         }
     }
 

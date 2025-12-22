@@ -26,10 +26,10 @@ from src.i18n import t
 
 
 class TestImportStep(BaseStep):
-    """Step 8: Import or create test cases."""
+    """Step 9: Import or create test cases."""
 
-    step_number = 8
-    step_key = "step8"
+    step_number = 9
+    step_key = "step9"
     is_optional = True
     estimated_time = 5.0
 

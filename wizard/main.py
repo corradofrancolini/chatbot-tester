@@ -29,7 +29,7 @@ class Wizard:
     Manages step flow, state, and navigation.
     """
 
-    TOTAL_STEPS = 9
+    TOTAL_STEPS = 10
 
     def __init__(self, language: str = "it", project_name: str = ""):
         """
@@ -62,19 +62,21 @@ class Wizard:
         from wizard.steps.google_sheets import GoogleSheetsStep
         from wizard.steps.langsmith import LangSmithStep
         from wizard.steps.ollama import OllamaStep
+        from wizard.steps.evaluation import EvaluationStep
         from wizard.steps.test_import import TestImportStep
         from wizard.steps.summary import SummaryStep
 
         step_classes = [
-            PrerequisitesStep,
-            ProjectInfoStep,
-            ChatbotUrlStep,
-            SelectorsStep,
-            GoogleSheetsStep,
-            LangSmithStep,
-            OllamaStep,
-            TestImportStep,
-            SummaryStep,
+            PrerequisitesStep,      # Step 1
+            ProjectInfoStep,        # Step 2
+            ChatbotUrlStep,         # Step 3
+            SelectorsStep,          # Step 4
+            GoogleSheetsStep,       # Step 5
+            LangSmithStep,          # Step 6
+            OllamaStep,             # Step 7
+            EvaluationStep,         # Step 8 (NEW)
+            TestImportStep,         # Step 9
+            SummaryStep,            # Step 10
         ]
 
         # Instantiate each step with UI and state

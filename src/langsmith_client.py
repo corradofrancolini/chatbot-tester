@@ -59,7 +59,8 @@ class SourceDocument:
     """Documento fonte recuperato durante la ricerca"""
     title: str = ""
     source: str = ""  # URL o path
-    content_preview: str = ""
+    content_preview: str = ""  # Troncato per display (max 300 char)
+    full_content: str = ""     # Contenuto completo per evaluation
     score: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -247,6 +248,53 @@ class LangSmithReport:
         if self.model_provider and self.model:
             return f"{self.model_provider}/{self.model}"
         return self.model or ""
+
+    def get_rag_context(self, max_docs: int = 5, max_chars: int = 10000) -> Optional[str]:
+        """
+        Restituisce contesto RAG concatenato dai documenti recuperati.
+
+        Utile per passare automaticamente il contesto all'Evaluator
+        senza richiedere file manuali.
+
+        Args:
+            max_docs: Numero massimo di documenti da includere
+            max_chars: Lunghezza massima totale del contesto
+
+        Returns:
+            Stringa con contesto concatenato, o None se nessun documento
+        """
+        if not self.sources:
+            return None
+
+        context_parts = []
+        total_chars = 0
+
+        for doc in self.sources[:max_docs]:
+            # Usa full_content se disponibile, altrimenti content_preview
+            content = doc.full_content or doc.content_preview
+            if not content:
+                continue
+
+            # Aggiungi source come header se disponibile
+            if doc.source:
+                header = f"[Source: {doc.source}]\n"
+            else:
+                header = ""
+
+            part = f"{header}{content}\n\n---\n\n"
+
+            # Verifica limite caratteri
+            if total_chars + len(part) > max_chars:
+                # Tronca l'ultimo documento se necessario
+                remaining = max_chars - total_chars
+                if remaining > 100:
+                    context_parts.append(part[:remaining] + "...")
+                break
+
+            context_parts.append(part)
+            total_chars += len(part)
+
+        return "".join(context_parts).strip() if context_parts else None
 
 
 class LangSmithClient:
@@ -902,6 +950,7 @@ class LangSmithClient:
                             title=metadata.get('title', '') or metadata.get('name', ''),
                             source=metadata.get('source', '') or metadata.get('url', '') or metadata.get('file', ''),
                             content_preview=page_content[:300] if page_content else '',
+                            full_content=page_content,  # Contenuto completo per RAG evaluation
                             score=float(metadata.get('score', 0) or doc.get('score', 0) or 0),
                             metadata=metadata
                         )
@@ -913,6 +962,7 @@ class LangSmithClient:
                             seen_sources.add(doc[:50])
                             sources.append(SourceDocument(
                                 content_preview=doc[:300],
+                                full_content=doc,  # Contenuto completo
                                 source="inline"
                             ))
 
