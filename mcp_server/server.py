@@ -77,6 +77,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 import uvicorn
 
+from mcp_server import __version__
 from mcp_server.tools import register_tools
 from mcp_server.auth import APIKeyMiddleware
 
@@ -102,7 +103,7 @@ async def health_check(request):
     return JSONResponse({
         "status": "healthy",
         "service": "chatbot-tester-mcp",
-        "version": "1.0.0"
+        "version": __version__
     })
 
 
@@ -136,8 +137,11 @@ class MCPApp:
         """Route requests to appropriate handler."""
         if scope["type"] == "http":
             path = scope.get("path", "")
-            # Route /sse to raw ASGI handler (with auth check)
-            if path == "/sse":
+            method = scope.get("method", "")
+
+            # Route GET /sse to raw ASGI handler for SSE connection
+            # POST requests should go to /messages/ (handled by Starlette)
+            if path == "/sse" and method == "GET":
                 # Check API key authentication
                 api_key = os.environ.get("MCP_API_KEY")
                 if api_key:

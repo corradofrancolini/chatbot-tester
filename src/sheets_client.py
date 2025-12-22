@@ -330,6 +330,9 @@ class GoogleSheetsClient:
         """
         Trova il foglio di una RUN esistente.
 
+        Cerca fogli con qualsiasi prefisso (Run, GGP, PARA, ecc.)
+        che contengano il numero specificato nel formato XXX.
+
         Args:
             run_number: Numero RUN da cercare
 
@@ -339,9 +342,17 @@ class GoogleSheetsClient:
         if not self._spreadsheet:
             return None
 
-        pattern = f"Run {run_number:03d}"
+        # Formato numero a 3 cifre (es. 037, 038)
+        number_pattern = f"{run_number:03d}"
+
+        # Prima cerca con prefisso "Run" (priorità ai test standard)
         for worksheet in self._spreadsheet.worksheets():
-            if worksheet.title.startswith(pattern):
+            if worksheet.title.startswith(f"Run {number_pattern}"):
+                return worksheet
+
+        # Se non trova, cerca qualsiasi foglio con quel numero (GGP, PARA, ecc.)
+        for worksheet in self._spreadsheet.worksheets():
+            if number_pattern in worksheet.title:
                 return worksheet
 
         return None

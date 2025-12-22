@@ -11,6 +11,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -20,8 +21,106 @@ from mcp.types import Tool, TextContent
 
 logger = logging.getLogger(__name__)
 
+
+def get_field(record: dict, field: str, default: str = "") -> str:
+    """
+    Get a field from a record dictionary, case-insensitive.
+
+    Google Sheets headers may be uppercase (ESITO) but code may use lowercase (esito).
+    Headers may also have spaces (TEST ID) vs underscores (test_id).
+    This helper tries multiple variations.
+    """
+    # Try exact match first
+    if field in record:
+        return record[field]
+
+    # Try case variations
+    variations = [
+        field.upper(),           # ESITO
+        field.lower(),           # esito
+        field.title(),           # Esito
+        field.replace("_", " "), # test id
+        field.replace("_", " ").upper(),    # TEST ID
+        field.replace("_", " ").title(),    # Test Id
+        field.replace(" ", "_"),            # test_id
+        field.replace(" ", "_").upper(),    # TEST_ID
+    ]
+
+    for variant in variations:
+        if variant in record:
+            return record[variant]
+
+    return default
+
+
+# Import version from package
+from mcp_server import __version__
+
 # Projects directory
 PROJECTS_DIR = Path(__file__).parent.parent / "projects"
+
+# Changelog MCP - scritto per l'utente finale (il collega)
+# La data della versione corrente viene generata automaticamente
+TODAY = datetime.now().strftime("%d/%m/%Y")
+
+CHANGELOG = [
+    {
+        "version": __version__,
+        "date": TODAY,
+        "title": "Comunicazione e gestione test",
+        "changes": [
+            {
+                "icon": "🔔",
+                "title": "Contatto diretto",
+                "description": "Puoi contattare direttamente Corrado via Telegram con 'Avvisa Corrado che...' per segnalare problemi, fare domande o richiedere funzionalità."
+            },
+            {
+                "icon": "📝",
+                "title": "Creazione test",
+                "description": "Puoi aggiungere nuovi test case direttamente dalla chat con 'Aggiungi questo test a silicon-b'. Specifica domanda, risposta attesa e categoria."
+            },
+            {
+                "icon": "📋",
+                "title": "Lista completa",
+                "description": "La lista test ora mostra tutti i test disponibili, non più limitata ai primi 10."
+            },
+        ]
+    },
+    {
+        "version": "1.2.0",
+        "date": "21/12/2024",
+        "title": "Sessioni guidate",
+        "changes": [
+            {
+                "icon": "🚀",
+                "title": "Wizard interattivo",
+                "description": "Scrivi 'Voglio testare silicon-b' per avviare una sessione guidata che ti mostra test set disponibili e stato attuale."
+            },
+            {
+                "icon": "📊",
+                "title": "Conferma prima dell'esecuzione",
+                "description": "Prima di lanciare i test vedi un riepilogo dettagliato con numero test, tempo stimato e configurazione."
+            },
+            {
+                "icon": "⚡",
+                "title": "Parallelismo automatico",
+                "description": "Per test set con più di 10 test, l'esecuzione usa automaticamente 3 container paralleli per velocizzare."
+            },
+        ]
+    },
+    {
+        "version": "1.1.0",
+        "date": "20/12/2024",
+        "title": "Prima release",
+        "changes": [
+            {
+                "icon": "✨",
+                "title": "Funzionalità base",
+                "description": "Lancia test su CircleCI, controlla lo stato delle pipeline, visualizza i risultati da Google Sheets."
+            },
+        ]
+    },
+]
 
 
 def get_available_projects() -> list[str]:
@@ -135,7 +234,6 @@ def register_tools(server: Server):
     @server.list_tools()
     async def list_tools() -> list[Tool]:
         """List available tools."""
-        logger.info("=== list_tools() CALLED - Returning 20 tools ===")
         tools = [
             Tool(
                 name="get_help",
@@ -315,7 +413,16 @@ Per ogni progetto mostra i test set disponibili (es. standard, paraphrase, ggp).
             ),
             Tool(
                 name="list_runs",
-                description="Elenca tutte le RUN disponibili su Google Sheets per un progetto",
+                description="""OBBLIGATORIO per vedere le RUN disponibili su Google Sheets.
+
+DEVI SEMPRE usare questo tool quando l'utente chiede:
+- "Quali run ci sono?"
+- "Mostrami le run di silicon-b"
+- "Quante run abbiamo fatto?"
+- "Lista run"
+
+NON tentare di rispondere senza chiamare questo tool.
+I dati delle RUN sono su Google Sheets e cambiano continuamente.""",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -329,7 +436,18 @@ Per ogni progetto mostra i test set disponibili (es. standard, paraphrase, ggp).
             ),
             Tool(
                 name="get_run_results",
-                description="Ottiene i risultati di una specifica RUN da Google Sheets",
+                description="""OBBLIGATORIO per ottenere i risultati dei test da Google Sheets.
+
+DEVI SEMPRE usare questo tool quando l'utente menziona:
+- "risultati", "esiti", "come è andata"
+- "mostrami la run", "vedi run"
+- numeri di run (es. "run 38", "ultima run")
+- "cosa c'è nel foglio"
+
+NON tentare di rispondere senza chiamare questo tool.
+I dati sono su Google Sheets e cambiano continuamente.
+
+Parametro verbose=true per vedere anche le risposte del chatbot (CONVERSATION).""",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -340,6 +458,11 @@ Per ogni progetto mostra i test set disponibili (es. standard, paraphrase, ggp).
                         "run_number": {
                             "type": "integer",
                             "description": "Numero della RUN (es. 15). Se non specificato, usa l'ultima."
+                        },
+                        "verbose": {
+                            "type": "boolean",
+                            "description": "Se true, mostra anche la risposta del chatbot (CONVERSATION). Default: false",
+                            "default": False
                         }
                     },
                     "required": ["project"]
@@ -347,7 +470,16 @@ Per ogni progetto mostra i test set disponibili (es. standard, paraphrase, ggp).
             ),
             Tool(
                 name="get_failed_tests",
-                description="Ottiene solo i test falliti di una RUN",
+                description="""OBBLIGATORIO per vedere i test falliti di una RUN.
+
+DEVI SEMPRE usare questo tool quando l'utente chiede:
+- "quali test sono falliti?"
+- "mostrami i fallimenti"
+- "errori della run"
+- "test che non passano"
+
+NON tentare di rispondere senza chiamare questo tool.
+I dati sono su Google Sheets e cambiano continuamente.""",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -365,7 +497,22 @@ Per ogni progetto mostra i test set disponibili (es. standard, paraphrase, ggp).
             ),
             Tool(
                 name="compare_runs",
-                description="Confronta due RUN per trovare regressioni, miglioramenti e test instabili",
+                description="""OBBLIGATORIO per confrontare due RUN e trovare differenze.
+
+DEVI SEMPRE usare questo tool quando l'utente chiede:
+- "confronta la run 37 con la 38"
+- "cosa è cambiato tra le run?"
+- "mostrami le differenze"
+- "regressioni tra run"
+- "confronto run"
+
+Mostra:
+- Test che sono migliorati (FAIL → PASS)
+- Test che sono peggiorati (PASS → FAIL)
+- Statistiche comparative
+
+NON tentare di rispondere senza chiamare questo tool.
+I dati sono su Google Sheets e cambiano continuamente.""",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -534,6 +681,110 @@ Mostra:
                     "required": ["project"]
                 }
             ),
+            # Tool per aggiungere nuovi test
+            Tool(
+                name="add_test",
+                description="""Aggiunge un nuovo test al test set di un progetto.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Aggiungi questo test a silicon-b"
+- "Crea un nuovo test per..."
+- "Voglio aggiungere una domanda al test set"
+
+Il test verrà aggiunto al file tests_{test_set}.json del progetto.
+Genera automaticamente un ID univoco basato sul test set (es. TEST_055, PARA_025).""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto (es. 'silicon-b')"
+                        },
+                        "test_set": {
+                            "type": "string",
+                            "description": "Set di test dove aggiungere (standard, paraphrase, ggp). Default: 'standard'",
+                            "default": "standard"
+                        },
+                        "question": {
+                            "type": "string",
+                            "description": "La domanda da testare"
+                        },
+                        "expected_answer": {
+                            "type": "string",
+                            "description": "Risposta attesa (opzionale, per valutazione semantica)"
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "Categoria del test (opzionale)"
+                        },
+                        "follow_ups": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Lista di domande follow-up (opzionale)"
+                        }
+                    },
+                    "required": ["project", "question"]
+                }
+            ),
+            # Tool per notificare Corrado via Telegram
+            Tool(
+                name="notify_corrado",
+                description="""Invia una notifica a Corrado via Telegram.
+
+USA QUESTO TOOL quando l'utente dice:
+- "Avvisa Corrado che..."
+- "Notifica a Corrado..."
+- "Manda un messaggio a Corrado..."
+- "Segnala a Corrado..."
+- "Ho un problema, avvisa Corrado"
+
+Il messaggio arriva istantaneamente su Telegram con contesto sul progetto.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string",
+                            "description": "Il messaggio da inviare a Corrado"
+                        },
+                        "project": {
+                            "type": "string",
+                            "description": "Progetto correlato (opzionale, per contesto)"
+                        },
+                        "priority": {
+                            "type": "string",
+                            "enum": ["low", "normal", "high"],
+                            "description": "Priorità della notifica",
+                            "default": "normal"
+                        }
+                    },
+                    "required": ["message"]
+                }
+            ),
+            # Tool per vedere le novità
+            Tool(
+                name="novita",
+                description="""Mostra le ultime novità e funzionalità aggiunte.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Cosa c'è di nuovo?"
+- "Novità"
+- "Ultime modifiche"
+- "Changelog"
+- "Cosa è cambiato?"
+
+Mostra le ultime versioni con le modifiche principali.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "limit": {
+                            "type": "integer",
+                            "description": "Numero di versioni da mostrare (default: 3)",
+                            "default": 3
+                        }
+                    },
+                    "required": []
+                }
+            ),
         ]
         logger.info(f"=== Returning {len(tools)} tools ===")
         return tools
@@ -579,16 +830,28 @@ Mostra:
                 return await handle_check_pipeline_status(arguments)
             elif name == "show_results":
                 return await handle_show_results(arguments)
+            elif name == "add_test":
+                return await handle_add_test(arguments)
+            elif name == "notify_corrado":
+                return await handle_notify_corrado(arguments)
+            elif name == "novita":
+                return await handle_novita(arguments)
             else:
                 return [TextContent(
                     type="text",
-                    text=f"Tool sconosciuto: {name}"
+                    text=f"""Tool sconosciuto: {name}
+
+💡 *Questa funzionalità non esiste ancora.*
+Vuoi che la richieda? Scrivi: **"Avvisa Corrado che vorrei poter {name}"**"""
                 )]
         except Exception as e:
             logger.error(f"Error in tool {name}: {e}")
             return [TextContent(
                 type="text",
-                text=f"Errore nell'esecuzione del tool {name}: {str(e)}"
+                text=f"""Errore nell'esecuzione del tool {name}: {str(e)}
+
+💡 *Hai bisogno di aiuto?*
+Scrivi: **"Avvisa Corrado che ho un problema con {name}"**"""
             )]
 
 
@@ -699,6 +962,10 @@ Chatbot Tester è un sistema per testare automaticamente chatbot conversazionali
 3. **Conferma**: Vedi riepilogo e confermi
 4. **Monitora**: "Come sta andando?"
 5. **Risultati**: "Mostrami i risultati"
+
+---
+💡 *Scrivi "novità" per vedere le ultime funzionalità aggiunte!*
+🔔 *Problemi? Scrivi "Avvisa Corrado che..." per notificare il team*
 """
     }
 
@@ -804,8 +1071,8 @@ async def handle_suggest_project() -> list[TextContent]:
                 results = client.get_all_results()
 
                 if results:
-                    passed = sum(1 for r in results if r.get("esito", "").upper() == "PASS")
-                    failed = sum(1 for r in results if r.get("esito", "").upper() == "FAIL")
+                    passed = sum(1 for r in results if get_field(r, "esito").upper() == "PASS")
+                    failed = sum(1 for r in results if get_field(r, "esito").upper() == "FAIL")
                     pending = total_tests - passed - failed
 
                     stats["pass_rate"] = (passed / len(results) * 100) if results else 0
@@ -957,8 +1224,8 @@ async def handle_list_tests(arguments: dict) -> list[TextContent]:
 
         return [TextContent(type="text", text=result)]
 
-    # No filter - show grouped by category
-    result = f"Test per **{project}** ({len(tests)} totali):\n\n"
+    # No filter - show ALL tests grouped by category
+    result = f"Test per **{project}** - set **{test_set}** ({len(tests)} totali):\n\n"
 
     # Group by category if available
     by_category = {}
@@ -969,13 +1236,11 @@ async def handle_list_tests(arguments: dict) -> list[TextContent]:
         by_category[category].append(test)
 
     for category, cat_tests in sorted(by_category.items()):
-        result += f"### {category}\n"
-        for test in cat_tests[:10]:  # Limit to first 10 per category
+        result += f"### {category} ({len(cat_tests)} test)\n"
+        for test in cat_tests:  # Show ALL tests, no limit
             test_id = test.get("id", "?")
-            description = test.get("description", test.get("question", ""))[:60]
-            result += f"- `{test_id}`: {description}...\n"
-        if len(cat_tests) > 10:
-            result += f"  ... e altri {len(cat_tests) - 10} test\n"
+            question = test.get("question", test.get("description", ""))[:80]
+            result += f"- `{test_id}`: {question}\n"
         result += "\n"
 
     return [TextContent(type="text", text=result)]
@@ -1323,40 +1588,71 @@ async def handle_get_run_results(arguments: dict) -> list[TextContent]:
                 return [TextContent(type="text", text="Nessuna RUN trovata.")]
             run_number = max(runs)
 
-        # Set active run and get results
-        client.active_run = run_number
+        # Load the worksheet for this run
+        worksheet = client.get_run_sheet(run_number)
+        if not worksheet:
+            return [TextContent(type="text", text=f"RUN {run_number} non trovata nel foglio Google Sheets.")]
+
+        sheet_name = worksheet.title
+        client._worksheet = worksheet
         results = client.get_all_results()
 
         if not results:
-            return [TextContent(type="text", text=f"Nessun risultato trovato per RUN {run_number}.")]
+            return [TextContent(type="text", text=f"Nessun dato trovato per RUN {run_number} (foglio: {sheet_name}).")]
 
-        # Calculate stats
+        # Calculate stats (ESITO è opzionale, compilato manualmente dal reviewer)
         total = len(results)
-        passed = sum(1 for r in results if r.get("esito", "").upper() == "PASS")
-        failed = sum(1 for r in results if r.get("esito", "").upper() == "FAIL")
-        pending = total - passed - failed
-        pass_rate = (passed / total * 100) if total > 0 else 0
+        reviewed = sum(1 for r in results if get_field(r, "esito").strip())
+        passed = sum(1 for r in results if get_field(r, "esito").upper() == "PASS")
+        failed = sum(1 for r in results if get_field(r, "esito").upper() == "FAIL")
 
-        result = f"""**Risultati RUN {run_number}** per {project}
-
-**Statistiche:**
-- Totale: {total} test
-- Passati: {passed} ({pass_rate:.1f}%)
-- Falliti: {failed}
-- Pending: {pending}
-
-**Dettaglio test:**
-
+        result = f"""**RUN {run_number}** - {project}
+📄 Foglio: `{sheet_name}`
+📊 Test registrati: **{total}**
 """
-        # Group by status
-        for r in results[:30]:  # Limit to 30 results
-            test_id = r.get("test_id", "?")
-            esito = r.get("esito", "?").upper()
-            icon = "ok" if esito == "PASS" else "X" if esito == "FAIL" else "-"
-            result += f"[{icon}] `{test_id}`: {esito}\n"
+        # Mostra statistiche ESITO solo se ci sono review
+        if reviewed > 0:
+            pass_rate = (passed / reviewed * 100) if reviewed > 0 else 0
+            result += f"""
+**Review completate:** {reviewed}/{total}
+- ✅ Passati: {passed} ({pass_rate:.1f}%)
+- ❌ Falliti: {failed}
+- ⏳ Da revieware: {total - reviewed}
+"""
+        else:
+            result += "\n⏳ **Nessuna review completata** (colonna ESITO vuota)\n"
 
-        if len(results) > 30:
-            result += f"\n... e altri {len(results) - 30} test"
+        result += "\n**Dati registrati:**\n\n"
+
+        # Mostra i dati effettivi del foglio
+        for r in results[:20]:  # Limit to 20 results
+            test_id = get_field(r, "test_id", "?")
+            date = get_field(r, "date", "")
+            question = get_field(r, "question", "")[:60]
+            conversation = get_field(r, "conversation", "")
+            esito = get_field(r, "esito", "").upper()
+
+            # Icona basata su: ha conversazione? ha esito?
+            if esito == "PASS":
+                icon = "✅"
+            elif esito == "FAIL":
+                icon = "❌"
+            elif conversation:
+                icon = "📝"  # Ha dati ma non reviewato
+            else:
+                icon = "⏳"  # Vuoto
+
+            result += f"{icon} `{test_id}`"
+            if date:
+                # Estrai solo ora se è oggi
+                date_short = date.split(" ")[-1] if " " in date else date
+                result += f" | {date_short}"
+            if question:
+                result += f" | {question}..."
+            result += "\n"
+
+        if len(results) > 20:
+            result += f"\n... e altri {len(results) - 20} test"
 
         return [TextContent(type="text", text=result)]
     except Exception as e:
@@ -1388,12 +1684,16 @@ async def handle_get_failed_tests(arguments: dict) -> list[TextContent]:
                 return [TextContent(type="text", text="Nessuna RUN trovata.")]
             run_number = max(runs)
 
-        # Set active run and get results
-        client.active_run = run_number
+        # Load the worksheet for this run
+        worksheet = client.get_run_sheet(run_number)
+        if not worksheet:
+            return [TextContent(type="text", text=f"RUN {run_number} non trovata nel foglio Google Sheets.")]
+
+        client._worksheet = worksheet
         results = client.get_all_results()
 
         # Filter failed tests
-        failed_tests = [r for r in results if r.get("esito", "").upper() == "FAIL"]
+        failed_tests = [r for r in results if get_field(r, "esito").upper() == "FAIL"]
 
         if not failed_tests:
             return [TextContent(type="text", text=f"Nessun test fallito nella RUN {run_number}!")]
@@ -1402,7 +1702,7 @@ async def handle_get_failed_tests(arguments: dict) -> list[TextContent]:
 
 """
         for r in failed_tests:
-            test_id = r.get("test_id", "?")
+            test_id = get_field(r, "test_id", "?")
             question = r.get("question", r.get("domanda", ""))[:80]
             notes = r.get("notes", r.get("note", ""))[:100]
             result += f"**{test_id}**\n"
@@ -1535,8 +1835,8 @@ async def handle_start_test_session(arguments: dict) -> list[TextContent]:
                 set_results = [r for r in results if r.get("test_id", "").startswith(prefix)]
 
                 if set_results:
-                    passed = sum(1 for r in set_results if r.get("esito", "").upper() == "PASS")
-                    failed = sum(1 for r in set_results if r.get("esito", "").upper() == "FAIL")
+                    passed = sum(1 for r in set_results if get_field(r, "esito").upper() == "PASS")
+                    failed = sum(1 for r in set_results if get_field(r, "esito").upper() == "FAIL")
                     pending = total_count - len(set_results)
                     pass_rate = (passed / len(set_results) * 100) if set_results else 0
                     result += f"   - {pending} pending, {failed} falliti, pass rate {pass_rate:.0f}%\n"
@@ -1597,7 +1897,7 @@ async def handle_prepare_test_run(arguments: dict) -> list[TextContent]:
             results = client.get_all_results()
             executed_ids = {r.get("test_id") for r in results if r.get("test_id")}
             failed_ids = {r.get("test_id") for r in results
-                         if r.get("esito", "").upper() == "FAIL"}
+                         if get_field(r, "esito").upper() == "FAIL"}
     except Exception as e:
         logger.warning(f"Could not get executed tests: {e}")
 
@@ -1684,7 +1984,7 @@ async def handle_execute_test_run(arguments: dict) -> list[TextContent]:
             results = client.get_all_results()
             executed_ids = {r.get("test_id") for r in results if r.get("test_id")}
             failed_ids = {r.get("test_id") for r in results
-                         if r.get("esito", "").upper() == "FAIL"}
+                         if get_field(r, "esito").upper() == "FAIL"}
 
             if tests_filter == "pending":
                 test_count = len([t for t in all_tests if t.get("id") not in executed_ids])
@@ -1828,8 +2128,12 @@ async def handle_show_results(arguments: dict) -> list[TextContent]:
                 return [TextContent(type="text", text="Nessuna RUN trovata.")]
             run_number = max(runs)
 
-        # Set active run and get results
-        client.active_run = run_number
+        # Load the worksheet for this run
+        worksheet = client.get_run_sheet(run_number)
+        if not worksheet:
+            return [TextContent(type="text", text=f"RUN {run_number} non trovata nel foglio Google Sheets.")]
+
+        client._worksheet = worksheet
         results = client.get_all_results()
 
         if not results:
@@ -1837,8 +2141,8 @@ async def handle_show_results(arguments: dict) -> list[TextContent]:
 
         # Calculate stats
         total = len(results)
-        passed = sum(1 for r in results if r.get("esito", "").upper() == "PASS")
-        failed = sum(1 for r in results if r.get("esito", "").upper() == "FAIL")
+        passed = sum(1 for r in results if get_field(r, "esito").upper() == "PASS")
+        failed = sum(1 for r in results if get_field(r, "esito").upper() == "FAIL")
         pass_rate = (passed / total * 100) if total > 0 else 0
 
         # Choose icon based on pass rate
@@ -1855,12 +2159,12 @@ async def handle_show_results(arguments: dict) -> list[TextContent]:
 
 """
         # Show failed tests
-        failed_tests = [r for r in results if r.get("esito", "").upper() == "FAIL"]
+        failed_tests = [r for r in results if get_field(r, "esito").upper() == "FAIL"]
 
         if failed_tests:
             result += f"❌ **{len(failed_tests)} test falliti:**\n"
             for r in failed_tests[:10]:
-                test_id = r.get("test_id", "?")
+                test_id = get_field(r, "test_id", "?")
                 question = r.get("question", r.get("domanda", ""))[:50]
                 result += f"- `{test_id}`: {question}...\n"
             if len(failed_tests) > 10:
@@ -1879,3 +2183,228 @@ async def handle_show_results(arguments: dict) -> list[TextContent]:
     except Exception as e:
         logger.error(f"Error showing results: {e}")
         return [TextContent(type="text", text=f"Errore nel recupero dei risultati: {str(e)}")]
+
+
+async def handle_add_test(arguments: dict) -> list[TextContent]:
+    """Handle add_test tool - adds a new test to a test set."""
+    project = arguments.get("project")
+    test_set = arguments.get("test_set", "standard")
+    question = arguments.get("question")
+    expected_answer = arguments.get("expected_answer")
+    category = arguments.get("category")
+    follow_ups = arguments.get("follow_ups", [])
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if not question:
+        return [TextContent(type="text", text="Errore: specificare la domanda del test")]
+
+    projects = get_available_projects()
+    if project not in projects:
+        return [TextContent(
+            type="text",
+            text=f"Progetto '{project}' non trovato.\n\nProgetti disponibili: {', '.join(projects)}"
+        )]
+
+    # Determine tests file path
+    project_dir = PROJECTS_DIR / project
+    if test_set == "standard":
+        tests_file = project_dir / "tests.json"
+    else:
+        tests_file = project_dir / f"tests_{test_set}.json"
+
+    # Load existing tests
+    existing_tests = []
+    if tests_file.exists():
+        try:
+            with open(tests_file) as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    existing_tests = data
+                elif isinstance(data, dict) and "tests" in data:
+                    existing_tests = data["tests"]
+        except Exception as e:
+            logger.error(f"Error reading tests file: {e}")
+            return [TextContent(type="text", text=f"Errore nel leggere il file test: {str(e)}")]
+
+    # Generate new test ID
+    # Determine prefix based on test set
+    if test_set == "paraphrase":
+        prefix = "PARA"
+    elif test_set == "ggp":
+        prefix = "GGP"
+    else:
+        prefix = "TEST"
+
+    # Find max existing ID with this prefix
+    max_num = 0
+    for test in existing_tests:
+        test_id = test.get("id", "")
+        if test_id.startswith(prefix + "_"):
+            try:
+                num = int(test_id.split("_")[1])
+                max_num = max(max_num, num)
+            except (ValueError, IndexError):
+                pass
+
+    new_id = f"{prefix}_{max_num + 1:03d}"
+
+    # Build new test object
+    new_test = {
+        "id": new_id,
+        "question": question
+    }
+
+    if expected_answer:
+        new_test["expected_answer"] = expected_answer
+
+    if category:
+        new_test["category"] = category
+
+    if follow_ups:
+        new_test["follow_ups"] = follow_ups
+
+    # Add to tests list
+    existing_tests.append(new_test)
+
+    # Write back to file
+    try:
+        with open(tests_file, "w", encoding="utf-8") as f:
+            json.dump(existing_tests, f, indent=2, ensure_ascii=False)
+
+        result = f"""✅ **Test aggiunto con successo!**
+
+**ID:** `{new_id}`
+**Progetto:** {project}
+**Test set:** {test_set}
+**File:** {tests_file.name}
+
+**Domanda:** {question}
+"""
+        if expected_answer:
+            result += f"**Risposta attesa:** {expected_answer}\n"
+        if category:
+            result += f"**Categoria:** {category}\n"
+        if follow_ups:
+            result += f"**Follow-ups:** {len(follow_ups)} domande\n"
+
+        result += f"\n📊 Totale test nel set: {len(existing_tests)}"
+        result += f"\n\n💡 Per eseguire questo test: *\"Esegui {new_id} su {project}\"*"
+
+        return [TextContent(type="text", text=result)]
+
+    except Exception as e:
+        logger.error(f"Error writing tests file: {e}")
+        return [TextContent(type="text", text=f"Errore nel salvare il test: {str(e)}")]
+
+
+async def handle_notify_corrado(arguments: dict) -> list[TextContent]:
+    """Handle notify_corrado tool - sends a Telegram notification."""
+    import httpx
+    from datetime import datetime
+
+    message = arguments.get("message")
+    project = arguments.get("project")
+    priority = arguments.get("priority", "normal")
+
+    if not message:
+        return [TextContent(type="text", text="Errore: specificare il messaggio da inviare")]
+
+    # Get Telegram credentials from environment
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+
+    if not bot_token or not chat_id:
+        logger.error("Telegram credentials not configured")
+        return [TextContent(
+            type="text",
+            text="Errore: Telegram non configurato. Contatta l'amministratore."
+        )]
+
+    # Build the notification message
+    priority_emoji = {"low": "📝", "normal": "🔔", "high": "🚨"}
+    emoji = priority_emoji.get(priority, "🔔")
+
+    timestamp = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    telegram_message = f"""{emoji} *Notifica da Claude Desktop*
+
+📋 *Progetto:* {project or "Non specificato"}
+💬 *Messaggio:* {message}
+
+🕐 {timestamp}"""
+
+    # Send via Telegram API
+    telegram_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                telegram_url,
+                json={
+                    "chat_id": chat_id,
+                    "text": telegram_message,
+                    "parse_mode": "Markdown"
+                },
+                timeout=10.0
+            )
+
+            if response.status_code == 200:
+                return [TextContent(
+                    type="text",
+                    text=f"✅ Notifica inviata a Corrado!\n\nMessaggio: {message}"
+                )]
+            else:
+                logger.error(f"Telegram API error: {response.status_code} - {response.text}")
+                return [TextContent(
+                    type="text",
+                    text=f"Errore nell'invio della notifica: {response.status_code}"
+                )]
+
+    except Exception as e:
+        logger.error(f"Error sending Telegram notification: {e}")
+        return [TextContent(type="text", text=f"Errore nell'invio della notifica: {str(e)}")]
+
+
+async def handle_novita(arguments: dict) -> list[TextContent]:
+    """Handle novita tool - shows changelog."""
+    limit = arguments.get("limit", 3)
+
+    if not CHANGELOG:
+        return [TextContent(type="text", text="Nessuna novità disponibile.")]
+
+    result = "# 🆕 Novità del Sistema di Testing\n\n"
+
+    for i, release in enumerate(CHANGELOG[:limit]):
+        version = release.get("version", "?")
+        date = release.get("date", "?")
+        title = release.get("title", "")
+        changes = release.get("changes", [])
+
+        # Header versione
+        if i == 0:
+            result += f"## ✨ Versione {version} — {title}\n"
+            result += f"📅 Rilasciata il {date}\n\n"
+        else:
+            result += f"---\n\n## Versione {version} — {title}\n"
+            result += f"📅 {date}\n\n"
+
+        # Cambiamenti con formato dettagliato
+        for change in changes:
+            if isinstance(change, dict):
+                icon = change.get("icon", "•")
+                change_title = change.get("title", "")
+                description = change.get("description", "")
+                result += f"### {icon} {change_title}\n"
+                result += f"{description}\n\n"
+            else:
+                # Fallback per formato vecchio (stringa semplice)
+                result += f"- {change}\n"
+
+        result += "\n"
+
+    if len(CHANGELOG) > limit:
+        result += f"---\n*Altre {len(CHANGELOG) - limit} versioni precedenti disponibili*"
+
+    return [TextContent(type="text", text=result)]
