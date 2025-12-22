@@ -67,6 +67,38 @@ CHANGELOG = [
     {
         "version": __version__,
         "date": TODAY,
+        "title": "Analytics e Report avanzati",
+        "changes": [
+            {
+                "icon": "📊",
+                "title": "Analisi Flaky e Regressioni",
+                "description": "Rileva test instabili con 'Test flaky?' e regressioni con 'Cosa si è rotto?'. Confronta automaticamente le ultime run."
+            },
+            {
+                "icon": "⚡",
+                "title": "Performance e Alert",
+                "description": "Monitora timing, throughput e latenze con 'Performance report'. Ricevi alert automatici su soglie superate."
+            },
+            {
+                "icon": "📈",
+                "title": "Coverage e Stabilità",
+                "description": "Analizza gap di copertura per categoria e genera report di stabilità della suite di test."
+            },
+            {
+                "icon": "🔧",
+                "title": "Diagnosi e Calibrazione",
+                "description": "Diagnosi intelligente dei fallimenti con 'Perché fallisce?' e calibrazione automatica delle soglie."
+            },
+            {
+                "icon": "📄",
+                "title": "Export Report",
+                "description": "Esporta i risultati in Excel, HTML o CSV con 'Esporta in Excel'."
+            },
+        ]
+    },
+    {
+        "version": "1.3.0",
+        "date": "22/12/2024",
         "title": "Comunicazione e gestione test",
         "changes": [
             {
@@ -785,6 +817,260 @@ Mostra le ultime versioni con le modifiche principali.""",
                     "required": []
                 }
             ),
+            # ====== NUOVI TOOL v1.4.0 ======
+            Tool(
+                name="detect_flaky_tests",
+                description="""Rileva test flaky (risultati inconsistenti) nelle ultime N run.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Quali test sono instabili?"
+- "Test flaky"
+- "Test che a volte passano e a volte falliscono"
+- "Stabilità dei test"
+
+Un test è flaky se ha risultati inconsistenti (PASS/FAIL) su run diverse.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto (es. 'silicon-b')"
+                        },
+                        "last_n_runs": {
+                            "type": "integer",
+                            "description": "Numero RUN da analizzare (default: 10)",
+                            "default": 10
+                        },
+                        "threshold": {
+                            "type": "number",
+                            "description": "Soglia flaky score 0-1 (0=stabile, 1=random, default: 0.3)",
+                            "default": 0.3
+                        }
+                    },
+                    "required": ["project"]
+                }
+            ),
+            Tool(
+                name="get_regressions",
+                description="""Rileva test che erano PASS e ora sono FAIL (regressioni).
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Quali test sono peggiorati?"
+- "Regressioni nell'ultima run"
+- "Test che prima passavano"
+- "Cosa si è rotto?"
+
+Confronta l'ultima RUN con quella precedente automaticamente.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto"
+                        },
+                        "run_number": {
+                            "type": "integer",
+                            "description": "RUN da verificare (default: ultima)"
+                        }
+                    },
+                    "required": ["project"]
+                }
+            ),
+            Tool(
+                name="get_performance_report",
+                description="""Genera report dettagliato delle performance di una RUN.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Come sono andate le performance?"
+- "Quanto ci ha messo?"
+- "Velocità dei test"
+- "Metriche performance"
+
+Mostra timing, throughput, latenze servizi esterni.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto"
+                        },
+                        "run_number": {
+                            "type": "integer",
+                            "description": "RUN da analizzare (default: ultima)"
+                        }
+                    },
+                    "required": ["project"]
+                }
+            ),
+            Tool(
+                name="get_performance_alerts",
+                description="""Verifica se ci sono alert di performance (soglie superate).
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Ci sono problemi di performance?"
+- "Alert?"
+- "Soglie superate?"
+- "Warning performance"
+
+Controlla error rate, pass rate, latenze e confronta con baseline.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto"
+                        },
+                        "run_number": {
+                            "type": "integer",
+                            "description": "RUN da verificare (default: ultima)"
+                        }
+                    },
+                    "required": ["project"]
+                }
+            ),
+            Tool(
+                name="analyze_coverage",
+                description="""Analizza la copertura dei test per categoria.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Quali categorie sono coperte?"
+- "Gap di copertura"
+- "Mancano test?"
+- "Coverage dei test"
+
+Identifica categorie scoperte o con pochi test.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto"
+                        },
+                        "test_set": {
+                            "type": "string",
+                            "description": "Test set da analizzare (default: 'standard')",
+                            "default": "standard"
+                        }
+                    },
+                    "required": ["project"]
+                }
+            ),
+            Tool(
+                name="get_stability_report",
+                description="""Report generale sulla stabilità della suite di test.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Quanto è stabile la suite?"
+- "Stabilità complessiva"
+- "Overview stabilità"
+- "Report stabilità"
+
+Mostra test stabili, instabili e flaky con score complessivo.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto"
+                        },
+                        "last_n_runs": {
+                            "type": "integer",
+                            "description": "Numero RUN da analizzare (default: 10)",
+                            "default": 10
+                        }
+                    },
+                    "required": ["project"]
+                }
+            ),
+            Tool(
+                name="diagnose_prompt",
+                description="""Diagnosi intelligente dei test falliti con suggerimenti fix.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Perché questo test fallisce?"
+- "Come fixo questo errore?"
+- "Diagnosi fallimenti"
+- "Suggerimenti per il prompt"
+
+Classifica il tipo di errore e suggerisce fix specifici.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto"
+                        },
+                        "run_number": {
+                            "type": "integer",
+                            "description": "RUN da analizzare (default: ultima)"
+                        },
+                        "test_id": {
+                            "type": "string",
+                            "description": "ID specifico test da diagnosticare (opzionale)"
+                        }
+                    },
+                    "required": ["project"]
+                }
+            ),
+            Tool(
+                name="calibrate_thresholds",
+                description="""Analizza metriche storiche e suggerisce soglie ottimali.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Quali soglie usare?"
+- "Calibra metriche"
+- "Soglie ottimali"
+- "Configura thresholds"
+
+Analizza distribuzioni e suggerisce configurazione ottimale.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto"
+                        },
+                        "last_n_runs": {
+                            "type": "integer",
+                            "description": "Numero RUN da analizzare (default: 10)",
+                            "default": 10
+                        }
+                    },
+                    "required": ["project"]
+                }
+            ),
+            Tool(
+                name="export_report",
+                description="""Esporta i risultati di una RUN in vari formati.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Esporta in Excel"
+- "Genera report HTML"
+- "Scarica CSV"
+- "Export risultati"
+
+Formati disponibili: excel, html, csv.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {
+                            "type": "string",
+                            "description": "Nome del progetto"
+                        },
+                        "run_number": {
+                            "type": "integer",
+                            "description": "RUN da esportare (default: ultima)"
+                        },
+                        "format": {
+                            "type": "string",
+                            "enum": ["excel", "html", "csv"],
+                            "description": "Formato export (excel, html, csv)",
+                            "default": "excel"
+                        }
+                    },
+                    "required": ["project"]
+                }
+            ),
         ]
         logger.info(f"=== Returning {len(tools)} tools ===")
         return tools
@@ -836,6 +1122,25 @@ Mostra le ultime versioni con le modifiche principali.""",
                 return await handle_notify_corrado(arguments)
             elif name == "novita":
                 return await handle_novita(arguments)
+            # ====== NUOVI TOOL v1.4.0 ======
+            elif name == "detect_flaky_tests":
+                return await handle_detect_flaky_tests(arguments)
+            elif name == "get_regressions":
+                return await handle_get_regressions(arguments)
+            elif name == "get_performance_report":
+                return await handle_get_performance_report(arguments)
+            elif name == "get_performance_alerts":
+                return await handle_get_performance_alerts(arguments)
+            elif name == "analyze_coverage":
+                return await handle_analyze_coverage(arguments)
+            elif name == "get_stability_report":
+                return await handle_get_stability_report(arguments)
+            elif name == "diagnose_prompt":
+                return await handle_diagnose_prompt(arguments)
+            elif name == "calibrate_thresholds":
+                return await handle_calibrate_thresholds(arguments)
+            elif name == "export_report":
+                return await handle_export_report(arguments)
             else:
                 return [TextContent(
                     type="text",
@@ -2408,3 +2713,527 @@ async def handle_novita(arguments: dict) -> list[TextContent]:
         result += f"---\n*Altre {len(CHANGELOG) - limit} versioni precedenti disponibili*"
 
     return [TextContent(type="text", text=result)]
+
+
+# ====== HANDLER NUOVI TOOL v1.4.0 ======
+
+async def handle_detect_flaky_tests(arguments: dict) -> list[TextContent]:
+    """Handle detect_flaky_tests tool."""
+    from src.comparison import RunComparator, FlakyTestDetector
+
+    project = arguments.get("project")
+    last_n_runs = arguments.get("last_n_runs", 10)
+    threshold = arguments.get("threshold", 0.3)
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    try:
+        client = get_sheets_client(project)
+        comparator = RunComparator(client)
+        detector = FlakyTestDetector(comparator)
+
+        flaky_tests = detector.detect_flaky_tests(
+            last_n_runs=last_n_runs,
+            flaky_threshold=threshold
+        )
+
+        if not flaky_tests:
+            return [TextContent(type="text", text=f"✅ Nessun test flaky rilevato nelle ultime {last_n_runs} run di **{project}**")]
+
+        result = f"**Test Flaky in {project}** (ultime {last_n_runs} run)\n\n"
+        result += f"Soglia: {threshold} (0=stabile, 1=random)\n\n"
+
+        for ft in flaky_tests[:15]:
+            score_bar = "🔴" if ft.flaky_score > 0.6 else "🟡" if ft.flaky_score > 0.3 else "🟢"
+            result += f"{score_bar} **{ft.test_id}** - score: {ft.flaky_score:.2f}\n"
+            result += f"   PASS: {ft.pass_count}/{ft.total_runs} | FAIL: {ft.fail_count}/{ft.total_runs}\n"
+
+        if len(flaky_tests) > 15:
+            result += f"\n... e altri {len(flaky_tests) - 15} test flaky"
+
+        return [TextContent(type="text", text=result)]
+    except Exception as e:
+        logger.error(f"Error detecting flaky tests: {e}")
+        return [TextContent(type="text", text=f"Errore nel rilevamento flaky tests: {str(e)}")]
+
+
+async def handle_get_regressions(arguments: dict) -> list[TextContent]:
+    """Handle get_regressions tool."""
+    from src.comparison import RunComparator, RegressionDetector
+
+    project = arguments.get("project")
+    run_number = arguments.get("run_number")
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    try:
+        client = get_sheets_client(project)
+
+        # Get run number if not specified
+        if not run_number:
+            runs = client.get_all_run_numbers()
+            if not runs:
+                return [TextContent(type="text", text="Nessuna RUN trovata.")]
+            run_number = max(runs)
+
+        comparator = RunComparator(client)
+        detector = RegressionDetector(comparator)
+
+        regressions = detector.check_for_regressions(new_run=run_number)
+
+        if not regressions:
+            return [TextContent(type="text", text=f"✅ Nessuna regressione nella RUN {run_number} di **{project}**")]
+
+        result = f"**Regressioni RUN {run_number}** - {project}\n\n"
+        result += f"Test che erano PASS e ora sono FAIL:\n\n"
+
+        for reg in regressions[:20]:
+            result += f"❌ **{reg.test_id}**: {reg.old_result} → {reg.new_result}\n"
+            if reg.category:
+                result += f"   Categoria: {reg.category}\n"
+
+        if len(regressions) > 20:
+            result += f"\n... e altre {len(regressions) - 20} regressioni"
+
+        return [TextContent(type="text", text=result)]
+    except Exception as e:
+        logger.error(f"Error getting regressions: {e}")
+        return [TextContent(type="text", text=f"Errore nel rilevamento regressioni: {str(e)}")]
+
+
+async def handle_get_performance_report(arguments: dict) -> list[TextContent]:
+    """Handle get_performance_report tool."""
+    from src.performance import PerformanceHistory, PerformanceReporter
+
+    project = arguments.get("project")
+    run_number = arguments.get("run_number")
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    try:
+        reports_dir = Path(__file__).parent.parent / "reports"
+        history = PerformanceHistory(project, reports_dir)
+
+        # Load metrics
+        metrics_list = history.load_history(last_n=5)
+
+        if not metrics_list:
+            return [TextContent(type="text", text=f"Nessun dato performance trovato per **{project}**. I dati vengono generati durante l'esecuzione dei test.")]
+
+        # Get specific or latest
+        if run_number:
+            metrics = next((m for m in metrics_list if m.run_id == f"run_{run_number}"), None)
+            if not metrics:
+                return [TextContent(type="text", text=f"Dati performance non trovati per RUN {run_number}")]
+        else:
+            metrics = metrics_list[0]
+
+        reporter = PerformanceReporter(metrics)
+        summary = reporter.generate_summary()
+
+        result = f"**Performance Report - {project}**\n\n"
+        result += summary
+
+        return [TextContent(type="text", text=result)]
+    except Exception as e:
+        logger.error(f"Error generating performance report: {e}")
+        return [TextContent(type="text", text=f"Errore nel report performance: {str(e)}")]
+
+
+async def handle_get_performance_alerts(arguments: dict) -> list[TextContent]:
+    """Handle get_performance_alerts tool."""
+    from src.performance import PerformanceHistory, PerformanceAlerter
+
+    project = arguments.get("project")
+    run_number = arguments.get("run_number")
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    try:
+        reports_dir = Path(__file__).parent.parent / "reports"
+        history = PerformanceHistory(project, reports_dir)
+
+        metrics_list = history.load_history(last_n=5)
+
+        if not metrics_list:
+            return [TextContent(type="text", text=f"Nessun dato performance trovato per **{project}**")]
+
+        current = metrics_list[0]
+        baseline = metrics_list[1] if len(metrics_list) > 1 else None
+
+        alerter = PerformanceAlerter()
+        alerts = alerter.check(current, baseline)
+
+        result = f"**Performance Alerts - {project}**\n\n"
+        result += alerter.format_alerts()
+
+        if alerter.has_critical_alerts():
+            result += "\n\n🚨 **Attenzione:** Ci sono alert critici da investigare!"
+
+        return [TextContent(type="text", text=result)]
+    except Exception as e:
+        logger.error(f"Error checking performance alerts: {e}")
+        return [TextContent(type="text", text=f"Errore nel controllo alert: {str(e)}")]
+
+
+async def handle_analyze_coverage(arguments: dict) -> list[TextContent]:
+    """Handle analyze_coverage tool."""
+    from src.comparison import CoverageAnalyzer
+
+    project = arguments.get("project")
+    test_set = arguments.get("test_set", "standard")
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    try:
+        # Load tests
+        tests = load_tests(project, test_set)
+        if not tests:
+            return [TextContent(type="text", text=f"Nessun test trovato per {project}/{test_set}")]
+
+        analyzer = CoverageAnalyzer()
+        report = analyzer.analyze(tests)
+
+        result = f"**Coverage Analysis - {project}/{test_set}**\n\n"
+        result += f"Test totali: {report.total_tests}\n\n"
+
+        result += "**Copertura per categoria:**\n"
+        for category, count in sorted(report.categories.items(), key=lambda x: -x[1]):
+            icon = "✅" if count >= 3 else "⚠️" if count >= 1 else "❌"
+            result += f"{icon} {category}: {count} test\n"
+
+        if report.uncovered_categories:
+            result += f"\n**Categorie scoperte:**\n"
+            for cat in report.uncovered_categories:
+                result += f"❌ {cat}\n"
+
+        if report.suggested_tests:
+            result += f"\n**Suggerimenti:**\n"
+            for suggestion in report.suggested_tests[:5]:
+                result += f"💡 {suggestion}\n"
+
+        return [TextContent(type="text", text=result)]
+    except Exception as e:
+        logger.error(f"Error analyzing coverage: {e}")
+        return [TextContent(type="text", text=f"Errore nell'analisi coverage: {str(e)}")]
+
+
+async def handle_get_stability_report(arguments: dict) -> list[TextContent]:
+    """Handle get_stability_report tool."""
+    from src.comparison import RunComparator, FlakyTestDetector
+
+    project = arguments.get("project")
+    last_n_runs = arguments.get("last_n_runs", 10)
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    try:
+        client = get_sheets_client(project)
+        comparator = RunComparator(client)
+        detector = FlakyTestDetector(comparator)
+
+        report = detector.get_stability_report(last_n_runs=last_n_runs)
+
+        result = f"**Stability Report - {project}** (ultime {last_n_runs} run)\n\n"
+
+        if isinstance(report, dict):
+            result += f"📊 **Metriche:**\n"
+            result += f"- RUN analizzate: {report.get('runs_analyzed', 0)}\n"
+            result += f"- Test totali: {report.get('total_tests', 0)}\n"
+            result += f"- Sempre PASS: {report.get('stable_pass', 0)} ✅\n"
+            result += f"- Sempre FAIL: {report.get('stable_fail', 0)} ❌\n"
+            result += f"- Flaky: {report.get('flaky_tests', 0)} ⚠️\n"
+            result += f"\n**Stability Score:** {report.get('stability_score', 0):.1%}\n"
+
+            if report.get('flaky_test_ids'):
+                result += f"\n**Test flaky da investigare:**\n"
+                for tid in report['flaky_test_ids'][:10]:
+                    result += f"- {tid}\n"
+        else:
+            result += str(report)
+
+        return [TextContent(type="text", text=result)]
+    except Exception as e:
+        logger.error(f"Error generating stability report: {e}")
+        return [TextContent(type="text", text=f"Errore nel report stabilità: {str(e)}")]
+
+
+async def handle_diagnose_prompt(arguments: dict) -> list[TextContent]:
+    """Handle diagnose_prompt tool."""
+    project = arguments.get("project")
+    run_number = arguments.get("run_number")
+    test_id = arguments.get("test_id")
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    try:
+        client = get_sheets_client(project)
+
+        if not run_number:
+            runs = client.get_all_run_numbers()
+            if not runs:
+                return [TextContent(type="text", text="Nessuna RUN trovata.")]
+            run_number = max(runs)
+
+        worksheet = client.get_run_sheet(run_number)
+        if not worksheet:
+            return [TextContent(type="text", text=f"RUN {run_number} non trovata.")]
+
+        client._worksheet = worksheet
+        results = client.get_all_results()
+
+        # Filter failed tests
+        failed_tests = [r for r in results if get_field(r, "esito").upper() == "FAIL"]
+
+        if test_id:
+            failed_tests = [r for r in failed_tests if get_field(r, "test_id") == test_id]
+
+        if not failed_tests:
+            return [TextContent(type="text", text=f"Nessun test fallito trovato nella RUN {run_number}")]
+
+        result = f"**Diagnosi Fallimenti - RUN {run_number}**\n\n"
+
+        for ft in failed_tests[:5]:
+            tid = get_field(ft, "test_id")
+            question = get_field(ft, "question", "")[:100]
+            expected = get_field(ft, "expected_answer", "")[:100]
+            actual = get_field(ft, "conversation", "")[:200]
+            notes = get_field(ft, "notes", "")
+
+            result += f"### ❌ {tid}\n"
+            result += f"**Domanda:** {question}\n"
+            if expected:
+                result += f"**Atteso:** {expected}\n"
+            if actual:
+                result += f"**Risposta:** {actual}...\n"
+
+            # Simple heuristic diagnosis
+            diagnosis = []
+            if "italiano" in str(actual).lower() or "english" in str(question).lower():
+                diagnosis.append("🔤 Possibile mismatch lingua")
+            if len(str(actual)) < 20:
+                diagnosis.append("📝 Risposta troppo breve")
+            if "errore" in str(actual).lower() or "error" in str(actual).lower():
+                diagnosis.append("⚠️ Errore nella risposta")
+            if not diagnosis:
+                diagnosis.append("🔍 Richiede analisi manuale")
+
+            result += f"**Diagnosi:** {', '.join(diagnosis)}\n"
+            if notes:
+                result += f"**Note:** {notes}\n"
+            result += "\n"
+
+        if len(failed_tests) > 5:
+            result += f"... e altri {len(failed_tests) - 5} test falliti"
+
+        return [TextContent(type="text", text=result)]
+    except Exception as e:
+        logger.error(f"Error diagnosing prompt: {e}")
+        return [TextContent(type="text", text=f"Errore nella diagnosi: {str(e)}")]
+
+
+async def handle_calibrate_thresholds(arguments: dict) -> list[TextContent]:
+    """Handle calibrate_thresholds tool."""
+    project = arguments.get("project")
+    last_n_runs = arguments.get("last_n_runs", 10)
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    try:
+        client = get_sheets_client(project)
+        runs = client.get_all_run_numbers()
+
+        if not runs:
+            return [TextContent(type="text", text="Nessuna RUN trovata.")]
+
+        # Collect metrics from last N runs
+        metrics_data = {"semantic": [], "judge": [], "overall": []}
+        runs_analyzed = []
+
+        for run_num in sorted(runs, reverse=True)[:last_n_runs]:
+            worksheet = client.get_run_sheet(run_num)
+            if worksheet:
+                client._worksheet = worksheet
+                results = client.get_all_results()
+                runs_analyzed.append(run_num)
+
+                for r in results:
+                    sem = get_field(r, "semantic", "")
+                    judge = get_field(r, "judge", "")
+                    overall = get_field(r, "overall", "")
+
+                    try:
+                        if sem:
+                            metrics_data["semantic"].append(float(sem))
+                        if judge:
+                            metrics_data["judge"].append(float(judge))
+                        if overall:
+                            metrics_data["overall"].append(float(overall))
+                    except (ValueError, TypeError):
+                        pass
+
+        result = f"**Calibrazione Soglie - {project}**\n\n"
+        result += f"RUN analizzate: {len(runs_analyzed)} ({min(runs_analyzed)}-{max(runs_analyzed)})\n\n"
+
+        for metric_name, values in metrics_data.items():
+            if values:
+                import statistics
+                result += f"**{metric_name.upper()}:**\n"
+                result += f"  - Samples: {len(values)}\n"
+                result += f"  - Min: {min(values):.2f}\n"
+                result += f"  - Max: {max(values):.2f}\n"
+                result += f"  - Media: {statistics.mean(values):.2f}\n"
+                if len(values) > 1:
+                    result += f"  - Mediana: {statistics.median(values):.2f}\n"
+                    sorted_vals = sorted(values)
+                    p25 = sorted_vals[len(sorted_vals)//4]
+                    p75 = sorted_vals[3*len(sorted_vals)//4]
+                    result += f"  - P25: {p25:.2f} | P75: {p75:.2f}\n"
+                    # Suggested threshold: P25 for pass threshold
+                    result += f"  - 💡 Soglia suggerita: {p25:.2f}\n"
+                result += "\n"
+
+        if not any(metrics_data.values()):
+            result += "⚠️ Nessuna metrica trovata nei dati. Assicurati che le colonne SEMANTIC, JUDGE, OVERALL siano presenti nel foglio.\n"
+
+        return [TextContent(type="text", text=result)]
+    except Exception as e:
+        logger.error(f"Error calibrating thresholds: {e}")
+        return [TextContent(type="text", text=f"Errore nella calibrazione: {str(e)}")]
+
+
+async def handle_export_report(arguments: dict) -> list[TextContent]:
+    """Handle export_report tool."""
+    from src.export import RunReport, ReportExporter
+
+    project = arguments.get("project")
+    run_number = arguments.get("run_number")
+    export_format = arguments.get("format", "excel")
+
+    if not project:
+        return [TextContent(type="text", text="Errore: specificare il nome del progetto")]
+
+    if project not in get_available_projects():
+        return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
+
+    if export_format not in ["excel", "html", "csv"]:
+        return [TextContent(type="text", text=f"Formato non supportato: {export_format}. Usa: excel, html, csv")]
+
+    try:
+        client = get_sheets_client(project)
+
+        if not run_number:
+            runs = client.get_all_run_numbers()
+            if not runs:
+                return [TextContent(type="text", text="Nessuna RUN trovata.")]
+            run_number = max(runs)
+
+        # Load data from sheets
+        worksheet = client.get_run_sheet(run_number)
+        if not worksheet:
+            return [TextContent(type="text", text=f"RUN {run_number} non trovata.")]
+
+        client._worksheet = worksheet
+        results = client.get_all_results()
+
+        # Create report dir
+        reports_dir = Path(__file__).parent.parent / "reports" / project / f"run_{run_number}" / "exports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build simple report data
+        total = len(results)
+        passed = sum(1 for r in results if get_field(r, "esito").upper() == "PASS")
+        failed = sum(1 for r in results if get_field(r, "esito").upper() == "FAIL")
+
+        output_file = reports_dir / f"{project}_run{run_number}.{export_format if export_format != 'excel' else 'xlsx'}"
+
+        if export_format == "csv":
+            import csv
+            with open(output_file, 'w', newline='', encoding='utf-8') as f:
+                if results:
+                    writer = csv.DictWriter(f, fieldnames=results[0].keys())
+                    writer.writeheader()
+                    writer.writerows(results)
+
+        elif export_format == "html":
+            html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Report RUN {run_number}</title>
+<style>body{{font-family:sans-serif;margin:20px}}table{{border-collapse:collapse;width:100%}}
+th,td{{border:1px solid #ddd;padding:8px;text-align:left}}th{{background:#4CAF50;color:white}}
+.pass{{color:green}}.fail{{color:red}}</style></head>
+<body><h1>{project} - RUN {run_number}</h1>
+<p>Total: {total} | Pass: {passed} | Fail: {failed} | Rate: {passed/total*100:.1f}%</p>
+<table><tr><th>Test ID</th><th>Esito</th><th>Question</th></tr>"""
+            for r in results:
+                esito = get_field(r, "esito").upper()
+                css = "pass" if esito == "PASS" else "fail"
+                html += f"<tr><td>{get_field(r, 'test_id')}</td><td class='{css}'>{esito}</td><td>{get_field(r, 'question')[:80]}</td></tr>"
+            html += "</table></body></html>"
+            output_file.write_text(html, encoding='utf-8')
+
+        elif export_format == "excel":
+            try:
+                from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill
+
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Results"
+
+                # Headers
+                headers = list(results[0].keys()) if results else []
+                for col, h in enumerate(headers, 1):
+                    ws.cell(row=1, column=col, value=h).font = Font(bold=True)
+
+                # Data
+                for row, r in enumerate(results, 2):
+                    for col, h in enumerate(headers, 1):
+                        ws.cell(row=row, column=col, value=r.get(h, ""))
+
+                wb.save(output_file)
+            except ImportError:
+                return [TextContent(type="text", text="openpyxl non installato. Usa formato csv o html.")]
+
+        result = f"✅ **Export completato**\n\n"
+        result += f"- Progetto: {project}\n"
+        result += f"- RUN: {run_number}\n"
+        result += f"- Formato: {export_format}\n"
+        result += f"- File: `{output_file}`\n"
+        result += f"- Test: {total} (Pass: {passed}, Fail: {failed})"
+
+        return [TextContent(type="text", text=result)]
+    except Exception as e:
+        logger.error(f"Error exporting report: {e}")
+        return [TextContent(type="text", text=f"Errore nell'export: {str(e)}")]
