@@ -27,10 +27,29 @@ def setup_google_credentials():
     """
     Write Google credentials from environment variables to disk.
     Credentials are stored as base64-encoded secrets in Fly.io.
+
+    Supports two modes:
+    1. Service Account (PREFERRED): GOOGLE_SERVICE_ACCOUNT_B64
+       - No token needed, no expiration
+       - Write to oauth_credentials.json (auto-detected by sheets_client)
+
+    2. OAuth (LEGACY): GOOGLE_OAUTH_B64 + GOOGLE_TOKEN_B64
+       - Requires periodic token refresh
+       - May expire if not used
     """
     config_dir = Path(__file__).parent.parent / "config"
     config_dir.mkdir(exist_ok=True)
 
+    # PREFERRED: Service Account credentials (no expiration)
+    sa_b64 = os.environ.get("GOOGLE_SERVICE_ACCOUNT_B64")
+    if sa_b64:
+        # Write to oauth_credentials.json - sheets_client auto-detects type
+        sa_path = config_dir / "oauth_credentials.json"
+        sa_path.write_bytes(base64.b64decode(sa_b64))
+        logging.info(f"Google Service Account credentials written to {sa_path}")
+        return  # Service Account doesn't need token.json
+
+    # LEGACY: OAuth credentials + token
     # Decode and write token.json
     token_b64 = os.environ.get("GOOGLE_TOKEN_B64")
     if token_b64:

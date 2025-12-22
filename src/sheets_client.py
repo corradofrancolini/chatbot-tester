@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 try:
     import gspread
     from google.oauth2.credentials import Credentials
+    from google.oauth2.service_account import Credentials as ServiceAccountCredentials
     from google.auth.transport.requests import Request
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
@@ -218,9 +219,22 @@ class GoogleSheetsClient:
         """Numero RUN corrente"""
         return self._current_run
 
+    def _is_service_account_file(self, path: Path) -> bool:
+        """Check if credentials file is a Service Account key."""
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            return data.get('type') == 'service_account'
+        except Exception:
+            return False
+
     def authenticate(self) -> bool:
         """
-        Esegue autenticazione OAuth.
+        Esegue autenticazione Google (Service Account o OAuth).
+
+        Rileva automaticamente il tipo di credenziali:
+        - Service Account: usa direttamente il file JSON (nessun token, nessuna scadenza)
+        - OAuth: richiede token.json e refresh periodico
 
         Returns:
             True se autenticazione riuscita
@@ -228,6 +242,26 @@ class GoogleSheetsClient:
         try:
             creds = None
 
+            # Verifica se è un Service Account (preferito per server)
+            if self.credentials_path.exists() and self._is_service_account_file(self.credentials_path):
+                # Service Account - nessun token necessario, nessuna scadenza
+                creds = ServiceAccountCredentials.from_service_account_file(
+                    str(self.credentials_path),
+                    scopes=SCOPES
+                )
+                self._credentials = creds
+
+                # Inizializza clients
+                self._gspread_client = gspread.authorize(creds)
+                self._spreadsheet = self._gspread_client.open_by_key(self.spreadsheet_id)
+
+                # Drive service per upload
+                if self.drive_folder_id:
+                    self._drive_service = build('drive', 'v3', credentials=creds)
+
+                return True
+
+            # Fallback: OAuth flow (per uso locale/interattivo)
             # Prova a caricare token esistente
             if self.token_path.exists():
                 creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
