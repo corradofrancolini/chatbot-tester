@@ -2906,8 +2906,19 @@ async def handle_analyze_coverage(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"Progetto '{project}' non trovato.")]
 
     try:
-        # Load tests
-        tests = load_tests(project, test_set)
+        # Load tests from project directory
+        project_dir = PROJECTS_DIR / project
+        if test_set == "standard":
+            tests_file = project_dir / "tests.json"
+        else:
+            tests_file = project_dir / f"tests_{test_set}.json"
+
+        if not tests_file.exists():
+            return [TextContent(type="text", text=f"File test non trovato: {tests_file.name}")]
+
+        with open(tests_file) as f:
+            tests = json.load(f)
+
         if not tests:
             return [TextContent(type="text", text=f"Nessun test trovato per {project}/{test_set}")]
 
