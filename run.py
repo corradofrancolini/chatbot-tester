@@ -2779,6 +2779,101 @@ def _prompt_diff_interactive(ui: ConsoleUI, manager) -> None:
     input("\n  Premi INVIO per continuare...")
 
 
+def run_export_menu(ui: ConsoleUI, loader: ConfigLoader, project_name: str) -> None:
+    """Menu interattivo per esportazione report"""
+    from src.export import RunReport, ReportExporter, check_dependencies
+
+    ui.section("Esporta Report")
+
+    # Verifica dipendenze
+    deps = check_dependencies()
+
+    # Trova run disponibili
+    reports_dir = loader.get_report_dir(project_name)
+    if not reports_dir.exists():
+        ui.error(f"Nessun report trovato per {project_name}")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    run_dirs = sorted([d for d in reports_dir.iterdir() if d.is_dir() and d.name.startswith('run_')])
+    if not run_dirs:
+        ui.error("Nessun run trovato")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    # Mostra run disponibili
+    ui.print("\n  Run disponibili:")
+    for i, rd in enumerate(run_dirs[-10:], 1):  # Ultimi 10
+        ui.print(f"    {i}. {rd.name}")
+
+    # Selezione run (default: ultimo)
+    run_input = ui.input("\n  Seleziona run (INVIO per ultimo)", default=str(len(run_dirs[-10:])))
+    try:
+        run_idx = int(run_input) - 1
+        target_dir = run_dirs[-10:][run_idx]
+    except (ValueError, IndexError):
+        target_dir = run_dirs[-1]
+
+    # Carica report
+    report_json = target_dir / "report.json"
+    report_html = target_dir / "report.html"
+
+    if report_json.exists():
+        report = RunReport.from_local_report(report_json)
+    elif report_html.exists():
+        report = RunReport.from_local_report(report_html)
+    else:
+        ui.error(f"Nessun report trovato in {target_dir}")
+        input("\n  Premi INVIO per continuare...")
+        return
+
+    # Menu formato
+    items = [
+        MenuItem('1', 'PDF', 'Esporta in PDF' + (' (richiede reportlab)' if not deps['pdf'] else '')),
+        MenuItem('2', 'Excel', 'Esporta in Excel' + (' (richiede openpyxl)' if not deps['excel'] else '')),
+        MenuItem('3', 'HTML', 'Esporta in HTML'),
+        MenuItem('4', 'CSV', 'Esporta in CSV'),
+        MenuItem('5', 'Tutti', 'Esporta tutti i formati'),
+    ]
+
+    choice = ui.menu("Formato export", items)
+    if not choice:
+        return
+
+    exporter = ReportExporter(report)
+    output_dir = target_dir / "exports"
+    output_dir.mkdir(exist_ok=True)
+    base_name = f"{report.project}_run{report.run_number}"
+
+    try:
+        if choice == '1':
+            if not deps['pdf']:
+                ui.error("PDF export richiede: pip install reportlab pillow")
+            else:
+                path = exporter.to_pdf(output_dir / f"{base_name}.pdf")
+                ui.success(f"PDF: {path}")
+        elif choice == '2':
+            if not deps['excel']:
+                ui.error("Excel export richiede: pip install openpyxl")
+            else:
+                path = exporter.to_excel(output_dir / f"{base_name}.xlsx")
+                ui.success(f"Excel: {path}")
+        elif choice == '3':
+            path = exporter.to_html(output_dir / f"{base_name}.html")
+            ui.success(f"HTML: {path}")
+        elif choice == '4':
+            path = exporter.to_csv(output_dir / f"{base_name}.csv")
+            ui.success(f"CSV: {path}")
+        elif choice == '5':
+            results = exporter.export_all(output_dir)
+            for fmt, path in results.items():
+                ui.success(f"{fmt.upper()}: {path}")
+    except Exception as e:
+        ui.error(f"Errore export: {e}")
+
+    input("\n  Premi INVIO per continuare...")
+
+
 def show_finetuning_menu(ui: ConsoleUI, loader: ConfigLoader) -> None:
     """Menu per fine-tuning del modello valutatore"""
     from src.finetuning import FineTuningPipeline, DatasetStats
