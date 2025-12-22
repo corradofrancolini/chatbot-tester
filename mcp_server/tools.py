@@ -135,7 +135,8 @@ def register_tools(server: Server):
     @server.list_tools()
     async def list_tools() -> list[Tool]:
         """List available tools."""
-        return [
+        logger.info("=== list_tools() CALLED - Returning 20 tools ===")
+        tools = [
             Tool(
                 name="get_help",
                 description="""Mostra la guida su come usare chatbot-tester.
@@ -534,6 +535,8 @@ Mostra:
                 }
             ),
         ]
+        logger.info(f"=== Returning {len(tools)} tools ===")
+        return tools
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
