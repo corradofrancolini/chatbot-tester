@@ -3192,27 +3192,49 @@ async def handle_export_report(arguments: dict) -> list[TextContent]:
 
         if export_format == "csv":
             import csv
-            with open(output_file, 'w', newline='', encoding='utf-8') as f:
-                if results:
-                    writer = csv.DictWriter(f, fieldnames=results[0].keys())
-                    writer.writeheader()
-                    writer.writerows(results)
+            import io
+            # Generate CSV content in memory
+            output = io.StringIO()
+            if results:
+                writer = csv.DictWriter(output, fieldnames=results[0].keys())
+                writer.writeheader()
+                writer.writerows(results)
+            csv_content = output.getvalue()
+
+            # Return content inline
+            result = f"**📊 Export CSV - {project} RUN {run_number}**\n\n"
+            result += f"Test: {total} | Pass: {passed} | Fail: {failed} | Rate: {passed/total*100:.1f}%\n\n"
+            result += "```csv\n"
+            result += csv_content
+            result += "```"
+            return [TextContent(type="text", text=result)]
 
         elif export_format == "html":
             html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Report RUN {run_number}</title>
 <style>body{{font-family:sans-serif;margin:20px}}table{{border-collapse:collapse;width:100%}}
 th,td{{border:1px solid #ddd;padding:8px;text-align:left}}th{{background:#4CAF50;color:white}}
-.pass{{color:green}}.fail{{color:red}}</style></head>
-<body><h1>{project} - RUN {run_number}</h1>
-<p>Total: {total} | Pass: {passed} | Fail: {failed} | Rate: {passed/total*100:.1f}%</p>
-<table><tr><th>Test ID</th><th>Esito</th><th>Question</th></tr>"""
+tr:nth-child(even){{background:#f9f9f9}}
+.pass{{color:green;font-weight:bold}}.fail{{color:red;font-weight:bold}}</style></head>
+<body><h1>📊 {project} - RUN {run_number}</h1>
+<p><strong>Totale:</strong> {total} | <strong>Pass:</strong> {passed} | <strong>Fail:</strong> {failed} | <strong>Rate:</strong> {passed/total*100:.1f}%</p>
+<table><tr><th>Test ID</th><th>Esito</th><th>Question</th><th>Response</th></tr>"""
             for r in results:
                 esito = get_field(r, "esito").upper()
                 css = "pass" if esito == "PASS" else "fail"
-                html += f"<tr><td>{get_field(r, 'test_id')}</td><td class='{css}'>{esito}</td><td>{get_field(r, 'question')[:80]}</td></tr>"
+                question = get_field(r, 'question')[:100].replace('<', '&lt;').replace('>', '&gt;')
+                response = get_field(r, 'response')[:150].replace('<', '&lt;').replace('>', '&gt;')
+                html += f"<tr><td>{get_field(r, 'test_id')}</td><td class='{css}'>{esito}</td><td>{question}</td><td>{response}...</td></tr>"
             html += "</table></body></html>"
-            output_file.write_text(html, encoding='utf-8')
+
+            # Return HTML content inline
+            result = f"**📊 Export HTML - {project} RUN {run_number}**\n\n"
+            result += f"Test: {total} | Pass: {passed} | Fail: {failed} | Rate: {passed/total*100:.1f}%\n\n"
+            result += "```html\n"
+            result += html
+            result += "\n```\n\n"
+            result += "_Copia il codice HTML e salvalo come file .html per visualizzarlo nel browser._"
+            return [TextContent(type="text", text=result)]
 
         elif export_format == "excel":
             try:
@@ -3234,17 +3256,16 @@ th,td{{border:1px solid #ddd;padding:8px;text-align:left}}th{{background:#4CAF50
                         ws.cell(row=row, column=col, value=r.get(h, ""))
 
                 wb.save(output_file)
+
+                # Excel can't be returned inline - suggest CSV
+                result = f"**📊 Export Excel - {project} RUN {run_number}**\n\n"
+                result += f"Test: {total} | Pass: {passed} | Fail: {failed} | Rate: {passed/total*100:.1f}%\n\n"
+                result += f"⚠️ Il file Excel è stato generato sul server:\n`{output_file}`\n\n"
+                result += "**Suggerimento:** Usa `format: csv` per ottenere i dati direttamente nella risposta."
+                return [TextContent(type="text", text=result)]
+
             except ImportError:
                 return [TextContent(type="text", text="openpyxl non installato. Usa formato csv o html.")]
-
-        result = f"✅ **Export completato**\n\n"
-        result += f"- Progetto: {project}\n"
-        result += f"- RUN: {run_number}\n"
-        result += f"- Formato: {export_format}\n"
-        result += f"- File: `{output_file}`\n"
-        result += f"- Test: {total} (Pass: {passed}, Fail: {failed})"
-
-        return [TextContent(type="text", text=result)]
     except Exception as e:
         logger.error(f"Error exporting report: {e}")
         return [TextContent(type="text", text=f"Errore nell'export: {str(e)}")]
