@@ -58,6 +58,18 @@ parameters:
   skip_screenshots:
     type: boolean
     default: false  # Skip screenshot capture
+  multi_testset:
+    type: boolean
+    default: false  # Run multiple test sets in parallel (standard, paraphrase, GGP)
+  testset_standard:
+    type: boolean
+    default: true  # Include tests.json in multi_testset
+  testset_paraphrase:
+    type: boolean
+    default: true  # Include tests_paraphrase.json in multi_testset
+  testset_ggp:
+    type: boolean
+    default: true  # Include tests_ggp.json in multi_testset
 
 # Esecutori
 executors:
@@ -562,6 +574,9 @@ workflows:
 
   # Trigger manuale con native parallelism (split tests across N containers)
   # Nota: con new_run=true, solo container 0 crea la RUN, gli altri scrivono sulla stessa
+  # ⚠️  ATTENZIONE: NON lanciare multiple pipeline native-parallel-test contemporaneamente!
+  #     I container non-zero di ogni pipeline scriveranno tutti sulla stessa RUN.
+  #     Per test set multipli in parallelo, usa il workflow "multi-testset" invece.
   native-parallel-test:
     when:
       and:
@@ -693,3 +708,57 @@ workflows:
   #   jobs:
   #     - test-all-parallel:
   #         name: "Weekly Full Run"
+
+  # Multi-testset: lancia test set multipli in parallelo, ognuno con la propria RUN
+  # Risolve il problema di race condition quando si lanciano 3 pipeline native-parallel-test separate
+  # Uso: multi_testset=true, testset_standard=true, testset_paraphrase=true, testset_ggp=true
+  multi-testset:
+    when:
+      and:
+        - << pipeline.parameters.manual_trigger >>
+        - << pipeline.parameters.multi_testset >>
+    jobs:
+      # Standard tests (tests.json)
+      - run-tests:
+          name: "testset-standard-<< pipeline.parameters.project >>"
+          project: << pipeline.parameters.project >>
+          mode: << pipeline.parameters.mode >>
+          tests: << pipeline.parameters.tests >>
+          new_run: true
+          test_limit: << pipeline.parameters.test_limit >>
+          single_turn: << pipeline.parameters.single_turn >>
+          tests_file: "tests.json"
+          prompt_version: << pipeline.parameters.prompt_version >>
+          parallel_browsers: << pipeline.parameters.parallel_browsers >>
+          sheet_prefix: "Run"
+          skip_screenshots: << pipeline.parameters.skip_screenshots >>
+
+      # Paraphrase tests (tests_paraphrase.json)
+      - run-tests:
+          name: "testset-paraphrase-<< pipeline.parameters.project >>"
+          project: << pipeline.parameters.project >>
+          mode: << pipeline.parameters.mode >>
+          tests: << pipeline.parameters.tests >>
+          new_run: true
+          test_limit: << pipeline.parameters.test_limit >>
+          single_turn: << pipeline.parameters.single_turn >>
+          tests_file: "tests_paraphrase.json"
+          prompt_version: << pipeline.parameters.prompt_version >>
+          parallel_browsers: << pipeline.parameters.parallel_browsers >>
+          sheet_prefix: "PAR"
+          skip_screenshots: << pipeline.parameters.skip_screenshots >>
+
+      # GGP tests (tests_ggp.json)
+      - run-tests:
+          name: "testset-ggp-<< pipeline.parameters.project >>"
+          project: << pipeline.parameters.project >>
+          mode: << pipeline.parameters.mode >>
+          tests: << pipeline.parameters.tests >>
+          new_run: true
+          test_limit: << pipeline.parameters.test_limit >>
+          single_turn: << pipeline.parameters.single_turn >>
+          tests_file: "tests_ggp.json"
+          prompt_version: << pipeline.parameters.prompt_version >>
+          parallel_browsers: << pipeline.parameters.parallel_browsers >>
+          sheet_prefix: "GGP"
+          skip_screenshots: << pipeline.parameters.skip_screenshots >>
