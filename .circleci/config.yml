@@ -110,7 +110,9 @@ commands:
         type: string
         default: "completed"
     steps:
-      # MS Teams disabled - riattivare quando configurato
+      - run:
+          name: Teams notification (disabled)
+          command: echo "MS Teams notifications disabled - configure MS_TEAMS_WEBHOOK_URL to enable"
       # - ms-teams/report:
       #     only_on_fail: false
       #     webhook_url: ${MS_TEAMS_WEBHOOK_URL}
