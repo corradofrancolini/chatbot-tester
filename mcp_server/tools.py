@@ -409,6 +409,19 @@ Per ogni progetto mostra i test set disponibili (es. standard, paraphrase, ggp).
                             "default": 1,
                             "minimum": 1,
                             "maximum": 5
+                        },
+                        "multi_testset": {
+                            "type": "boolean",
+                            "description": "Lancia 3 test set in parallelo (standard, paraphrase, GGP) con una singola pipeline. "
+                                          "Usa questo quando l'utente chiede di lanciare 'tutti i test set', 'standard e paraphrase e ggp', "
+                                          "'i 3 test set', etc. Ogni test set crea il proprio foglio Google Sheets.",
+                            "default": False
+                        },
+                        "testsets": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["standard", "paraphrase", "ggp"]},
+                            "description": "Quali test set includere quando multi_testset=true. Default: tutti e 3.",
+                            "default": ["standard", "paraphrase", "ggp"]
                         }
                     },
                     "required": ["project"]
@@ -1565,6 +1578,8 @@ async def handle_trigger_circleci(arguments: dict) -> list[TextContent]:
     prompt_version = arguments.get("prompt_version", "")
     parallel = arguments.get("parallel", False)
     repeat = arguments.get("repeat", 1)
+    multi_testset = arguments.get("multi_testset", False)
+    testsets = arguments.get("testsets", ["standard", "paraphrase", "ggp"])
 
     # Se parallel=True, usa 3 container CircleCI per velocizzare
     native_parallelism = 3 if parallel else 0
@@ -1584,6 +1599,67 @@ async def handle_trigger_circleci(arguments: dict) -> list[TextContent]:
             type="text",
             text=f"Progetto '{project}' non trovato. Usa list_projects per vedere i progetti disponibili."
         )]
+
+    # Se multi_testset=True, usa il workflow dedicato
+    if multi_testset:
+        testset_standard = "standard" in testsets
+        testset_paraphrase = "paraphrase" in testsets
+        testset_ggp = "ggp" in testsets
+
+        client = CircleCIClient()
+        if not client.is_available():
+            return [TextContent(
+                type="text",
+                text="Errore: CircleCI non configurato. Assicurarsi che CIRCLECI_TOKEN sia impostato."
+            )]
+
+        success, response = client.trigger_pipeline(
+            project=project,
+            mode=mode,
+            tests=tests,
+            new_run=True,  # Sempre new_run per multi_testset
+            test_limit=test_limit,
+            prompt_version=prompt_version,
+            multi_testset=True,
+            testset_standard=testset_standard,
+            testset_paraphrase=testset_paraphrase,
+            testset_ggp=testset_ggp
+        )
+
+        if not success:
+            error = response.get("error", "Errore sconosciuto") if response else "Errore sconosciuto"
+            return [TextContent(type="text", text=f"Errore nell'avvio della pipeline: {error}")]
+
+        pipeline_id = response.get("id", "?")
+        pipeline_number = response.get("number", "?")
+        pipeline_url = f"https://app.circleci.com/pipelines/gh/corradofrancolini/chatbot-tester-private/{pipeline_number}"
+
+        active_testsets = []
+        if testset_standard:
+            active_testsets.append("standard (→ Run NNN)")
+        if testset_paraphrase:
+            active_testsets.append("paraphrase (→ PAR NNN)")
+        if testset_ggp:
+            active_testsets.append("ggp (→ GGP NNN)")
+
+        result = f"""✅ **Pipeline Multi-Testset avviata!**
+
+**Dettagli:**
+- Pipeline ID: `{pipeline_id}`
+- Numero: #{pipeline_number}
+- Progetto: {project}
+- Modalita': {mode}
+
+**Test set in esecuzione (3 job paralleli):**
+{chr(10).join(f'  • {ts}' for ts in active_testsets)}
+
+**Ogni test set crea il proprio foglio Google Sheets.**
+
+**Link:** {pipeline_url}
+
+Usa `get_workflow_status` con pipeline_id `{pipeline_id}` per monitorare lo stato."""
+
+        return [TextContent(type="text", text=result)]
 
     # If a non-standard test_set is specified, use the tests_file parameter instead of test_ids
     tests_file = "tests.json"
