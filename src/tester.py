@@ -893,6 +893,11 @@ class ChatbotTester:
             if self.perf_collector and not skip_ss:
                 self.perf_collector.end_phase()
 
+            # Estrai HTML per structured validation (se disponibile)
+            html_response = None
+            if self.settings.screenshot_on_complete and not skip_ss:
+                html_response = await self.browser.get_thread_html()
+
             # Valutazione LLM
             final_response = conversation[-1].content if conversation else ""
             evaluation = None
@@ -955,13 +960,19 @@ class ChatbotTester:
                         if rag_context:
                             self.on_status(f"  Auto RAG context: {len(report.sources)} docs")
 
+                    # Ottieni output_validation dal test (per structured validation)
+                    output_validation = getattr(test, 'output_validation', None)
+
                     eval_result = self.evaluator.evaluate(
                         question=test.question,
                         response=final_response,
                         expected_answer=expected_answer,
                         expected_behavior=test.expected,
                         rag_context_file=rag_context_file,
-                        rag_context=rag_context  # Contesto automatico da LangSmith
+                        rag_context=rag_context,  # Contesto automatico da LangSmith
+                        output_validation=output_validation,  # Structured validation criteria
+                        html_response=html_response,  # HTML per parsing
+                        screenshot_path=screenshot_path if screenshot_path else None  # Per vision mode
                     )
 
                     # Converti EvaluationResult in formato compatibile

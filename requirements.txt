@@ -24,3 +24,7 @@ nest-asyncio>=1.5.0  # Per asyncio.run() dentro event loop esistenti
 
 # Evaluation (OpenAI GPT-4o-mini)
 openai>=1.0.0
+
+# HTML Parsing (per structured output validation)
+beautifulsoup4>=4.12.0
+lxml>=5.0.0

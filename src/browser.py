@@ -586,6 +586,36 @@ class BrowserManager:
             print(f"Errore screenshot conversazione: {e}")
             return False
 
+    async def get_thread_html(self, selector: str = '.llm__thread') -> Optional[str]:
+        """
+        Estrae HTML grezzo della conversazione chatbot.
+
+        Usato per structured output validation (parsing prodotti, tabelle, ecc.)
+
+        Args:
+            selector: Selettore CSS del container conversazione
+
+        Returns:
+            HTML come stringa, o None se non trovato
+        """
+        if not self._page:
+            return None
+
+        try:
+            thread = self._page.locator(selector)
+            if await thread.count() > 0:
+                return await thread.inner_html()
+            else:
+                # Fallback: prova con selettori alternativi
+                for alt_selector in ['.chat-messages', '.messages', '.conversation']:
+                    alt_thread = self._page.locator(alt_selector)
+                    if await alt_thread.count() > 0:
+                        return await alt_thread.inner_html()
+        except Exception as e:
+            print(f"Errore estrazione HTML thread: {e}")
+
+        return None
+
     async def take_scrollable_screenshot(self,
                                           selector: str,
                                           path: Path,

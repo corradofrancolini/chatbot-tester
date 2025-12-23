@@ -35,11 +35,16 @@ class EvaluationConfig:
     semantic_threshold: float = 0.8
     judge_threshold: float = 0.7
     rag_threshold: float = 0.6
+    structured_threshold: float = 0.7  # For structured output validation
 
     # Weights for overall score
     semantic_weight: float = 0.3
     judge_weight: float = 0.4
     rag_weight: float = 0.3
+    structured_weight: float = 0.0  # Set > 0 to include in overall
+
+    # Vision model for screenshot analysis
+    vision_model: str = "gpt-4o"
 
     @classmethod
     def from_settings(cls, settings: Dict[str, Any]) -> 'EvaluationConfig':
@@ -54,9 +59,12 @@ class EvaluationConfig:
             semantic_threshold=eval_cfg.get('semantic_threshold', 0.8),
             judge_threshold=eval_cfg.get('judge_threshold', 0.7),
             rag_threshold=eval_cfg.get('rag_threshold', 0.6),
+            structured_threshold=eval_cfg.get('structured_threshold', 0.7),
             semantic_weight=eval_cfg.get('semantic_weight', 0.3),
             judge_weight=eval_cfg.get('judge_weight', 0.4),
             rag_weight=eval_cfg.get('rag_weight', 0.3),
+            structured_weight=eval_cfg.get('structured_weight', 0.0),
+            vision_model=eval_cfg.get('vision_model', 'gpt-4o'),
         )
 
     @classmethod
@@ -71,9 +79,12 @@ class EvaluationConfig:
             semantic_threshold=getattr(eval_settings, 'semantic_threshold', 0.8),
             judge_threshold=getattr(eval_settings, 'judge_threshold', 0.7),
             rag_threshold=getattr(eval_settings, 'rag_threshold', 0.6),
+            structured_threshold=getattr(eval_settings, 'structured_threshold', 0.7),
             semantic_weight=getattr(eval_settings, 'semantic_weight', 0.3),
             judge_weight=getattr(eval_settings, 'judge_weight', 0.4),
             rag_weight=getattr(eval_settings, 'rag_weight', 0.3),
+            structured_weight=getattr(eval_settings, 'structured_weight', 0.0),
+            vision_model=getattr(eval_settings, 'vision_model', 'gpt-4o'),
         )
 
 
@@ -96,6 +107,12 @@ class EvaluationResult:
     relevance: Optional[float] = None  # 0-1
     context_precision: Optional[float] = None  # 0-1
 
+    # Structured output validation
+    structured_score: Optional[float] = None  # 0-1
+    structured_details: Dict[str, Any] = field(default_factory=dict)
+    extracted_items: List[Dict[str, Any]] = field(default_factory=list)
+    extraction_method: str = ""
+
     # Overall
     overall_score: Optional[float] = None  # 0-1
     passed: bool = False
@@ -113,6 +130,10 @@ class EvaluationResult:
             'faithfulness': self.faithfulness,
             'relevance': self.relevance,
             'context_precision': self.context_precision,
+            'structured_score': self.structured_score,
+            'structured_details': self.structured_details,
+            'extracted_items': self.extracted_items,
+            'extraction_method': self.extraction_method,
             'overall_score': self.overall_score,
             'passed': self.passed,
             'error': self.error,
@@ -553,6 +574,16 @@ class Evaluator:
         self.judge = LLMJudge(config)
         self.rag_evaluator = RAGEvaluator(config)
 
+        # Structured output validators
+        self.structured_validator = None
+        self.vision_validator = None
+        try:
+            from .validators import StructuredValidator, VisionValidator
+            self.structured_validator = StructuredValidator(config)
+            self.vision_validator = VisionValidator(config)
+        except ImportError:
+            logger.debug("Structured validators not available")
+
     def load_rag_context(self, context_file: str) -> Optional[str]:
         """Load RAG context from file"""
         if not self.project_path or not context_file:
@@ -577,7 +608,10 @@ class Evaluator:
         expected_behavior: Optional[str] = None,
         rag_context_file: Optional[str] = None,
         rag_context: Optional[str] = None,
-        criteria: Optional[Dict[str, str]] = None
+        criteria: Optional[Dict[str, str]] = None,
+        output_validation: Optional[Dict[str, Any]] = None,
+        html_response: Optional[str] = None,
+        screenshot_path: Optional[str] = None
     ) -> EvaluationResult:
         """
         Perform complete evaluation of a chatbot response.
@@ -590,6 +624,9 @@ class Evaluator:
             rag_context_file: Path to RAG context file (relative to project)
             rag_context: Direct RAG context string (alternative to file)
             criteria: Custom LLM-as-judge criteria
+            output_validation: Structured output validation criteria
+            html_response: HTML content for structured validation
+            screenshot_path: Screenshot path for vision validation
 
         Returns:
             EvaluationResult with all scores and pass/fail determination
@@ -654,7 +691,36 @@ class Evaluator:
                     scores_for_overall.append(rag_avg)
                     weights.append(self.config.rag_weight)
 
-            # 4. Calculate overall score
+            # 4. Structured output validation (if criteria provided)
+            if output_validation and (self.structured_validator or self.vision_validator):
+                mode = output_validation.get("mode", "html")
+
+                if mode == "vision" and self.vision_validator and screenshot_path:
+                    struct_result = self.vision_validator.validate(
+                        screenshot_path=screenshot_path,
+                        criteria=output_validation
+                    )
+                elif self.structured_validator:
+                    struct_result = self.structured_validator.validate(
+                        html_response=html_response,
+                        text_response=response,
+                        screenshot_path=screenshot_path,
+                        criteria=output_validation
+                    )
+                else:
+                    struct_result = None
+
+                if struct_result:
+                    result.structured_score = struct_result.score
+                    result.structured_details = struct_result.to_dict()
+                    result.extracted_items = struct_result.extracted_items
+                    result.extraction_method = struct_result.extraction_method
+
+                    if struct_result.score is not None and self.config.structured_weight > 0:
+                        scores_for_overall.append(struct_result.score)
+                        weights.append(self.config.structured_weight)
+
+            # 5. Calculate overall score
             if scores_for_overall:
                 total_weight = sum(weights)
                 if total_weight > 0:
@@ -697,11 +763,17 @@ class Evaluator:
             if result.judge_score < self.config.judge_threshold:
                 return False
 
+        # Check structured validation threshold
+        if result.structured_score is not None:
+            if result.structured_score < self.config.structured_threshold:
+                return False
+
         # Check overall score against minimum threshold
         min_threshold = min(
             self.config.semantic_threshold,
             self.config.judge_threshold,
-            self.config.rag_threshold
+            self.config.rag_threshold,
+            self.config.structured_threshold
         )
 
         if result.overall_score is not None:
