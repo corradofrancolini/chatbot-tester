@@ -71,7 +71,7 @@ class TestTrace:
     model: Optional[str] = None
     duration_ms: int = 0
     first_token_ms: int = 0
-    esito: str = "UNKNOWN"
+    result: str = "UNKNOWN"
     notes: Optional[str] = None
 
 
@@ -533,7 +533,7 @@ class TestDataExtractor:
             model=model,
             duration_ms=int(row.get('duration_ms', 0)) or duration,
             first_token_ms=first_token,
-            esito=row.get('esito', 'UNKNOWN'),
+            result=row.get('esito', 'UNKNOWN'),
             notes=notes
         )
 
@@ -871,7 +871,7 @@ class HTMLRenderer:
         timeline_html = HTMLRenderer._trace_to_timeline(trace)
         comparison_html = HTMLRenderer._trace_to_comparison(trace, prompt_structure)
 
-        status_color = '#3fb950' if trace.esito == 'PASS' else '#f85149'
+        status_color = '#3fb950' if trace.result == 'PASS' else '#f85149'
 
         return f'''<!DOCTYPE html>
 <html lang="it">
@@ -1040,7 +1040,7 @@ class HTMLRenderer:
     <div class="container">
         <h1>
             Test: {trace.test_id}
-            <span class="status">{trace.esito}</span>
+            <span class="status">{trace.result}</span>
         </h1>
 
         <div class="metrics">
@@ -1131,7 +1131,7 @@ class HTMLRenderer:
         if trace.sources:
             items.append(('', 'Sources consultate', f'{len(trace.sources)} documenti'))
 
-        items.append((f'{trace.duration_ms}ms', 'Response completata', f'Esito: {trace.esito}'))
+        items.append((f'{trace.duration_ms}ms', 'Response completata', f'Esito: {trace.result}'))
 
         html_parts = ['<div class="timeline">']
         for time, label, detail in items:
@@ -1257,12 +1257,12 @@ class TerminalRenderer:
     @classmethod
     def test_view(cls, trace: TestTrace, prompt_structure: Optional[PromptStructure] = None) -> str:
         """Genera vista terminale del test."""
-        status_color = cls.GREEN if trace.esito == 'PASS' else cls.RED
+        status_color = cls.GREEN if trace.result == 'PASS' else cls.RED
 
         lines = [
             '',
             f'{cls.BOLD}{cls.BLUE}TEST VISUALIZER: {trace.test_id}{cls.RESET} '
-            f'{status_color}[{trace.esito}]{cls.RESET}',
+            f'{status_color}[{trace.result}]{cls.RESET}',
             f'{cls.DIM}{"=" * 60}{cls.RESET}',
             '',
             f'{cls.DIM}Duration:{cls.RESET} {trace.duration_ms}ms  '
@@ -1301,7 +1301,7 @@ class TerminalRenderer:
             lines.append(f'       .......... Tools: {", ".join(trace.tools_used)}')
         if trace.sources:
             lines.append(f'       .......... Sources: {len(trace.sources)} docs')
-        lines.append(f'  {trace.duration_ms}ms .......... Response [{trace.esito}]')
+        lines.append(f'  {trace.duration_ms}ms .......... Response [{trace.result}]')
 
         lines.append('')
         return '\n'.join(lines)

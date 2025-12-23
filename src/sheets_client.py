@@ -89,7 +89,7 @@ class TestResult:
     prompt_version: str = ""
     model_version: str = ""
     environment: str = "DEV"  # Default DEV
-    esito: str = ""  # Vuoto - compilato dal reviewer (Corretto/Non Corretto/Parzialmente corretto)
+    result: str = ""  # Vuoto - compilato dal reviewer (Pass/Fail/Partial)
     notes: str = ""  # Vuoto - note del reviewer
     langsmith_report: str = ""  # Report LangSmith (testo)
     langsmith_url: str = ""  # Link al trace LangSmith
@@ -145,7 +145,8 @@ class GoogleSheetsClient:
         "MODEL VER",       # provider/modello
         "ENV",             # DEV/PROD (dropdown)
         "TIMING",          # TTFR → Total (es. "2.3s → 12.0s")
-        "ESITO",           # Corretto/Non Corretto/Parzialmente corretto (dropdown, compilato da reviewer)
+        "RESULT",          # Pass/Fail/Partial (dropdown, compilato da reviewer)
+        "BASELINE",        # Checkbox: se ✓, questa risposta è il golden answer per questo test
         "NOTES",           # Note del reviewer (campo libero)
         "LS REPORT",       # Report LangSmith (testo)
         "LS TRACE LINK",   # Link al trace LangSmith
@@ -159,8 +160,8 @@ class GoogleSheetsClient:
         "JUDGE REASON"     # LLM-as-judge reasoning
     ]
 
-    # Larghezze colonne in pixel (22 colonne)
-    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 200, 200, 100, 100, 60, 110, 100, 200, 300, 350, 70, 70, 70, 70, 70, 70, 200]
+    # Larghezze colonne in pixel (23 colonne)
+    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 200, 200, 100, 100, 60, 110, 100, 70, 200, 300, 350, 70, 70, 70, 70, 70, 70, 200]
 
     def __init__(self,
                  credentials_path: str,
@@ -394,8 +395,8 @@ class GoogleSheetsClient:
             # Aggiungi header
             worksheet.update('A1', [self.COLUMNS])
 
-            # Formatta header (bold, centrato) - 15 colonne (A-O)
-            worksheet.format('A1:O1', {
+            # Formatta header (bold, centrato) - 23 colonne (A-W)
+            worksheet.format('A1:W1', {
                 'textFormat': {'bold': True},
                 'horizontalAlignment': 'CENTER'
             })
@@ -646,8 +647,8 @@ class GoogleSheetsClient:
             def fmt_score(val):
                 return f"{val:.0%}" if val is not None else ""
 
-            # 22 colonne: TEST ID, DATE, MODE, QUESTION, CONVERSATION, SCREENSHOT,
-            # SCREENSHOT URL, PROMPT VER, MODEL VER, ENV, TIMING, ESITO, NOTES, LS REPORT, LS TRACE LINK,
+            # 23 colonne: TEST ID, DATE, MODE, QUESTION, CONVERSATION, SCREENSHOT,
+            # SCREENSHOT URL, PROMPT VER, MODEL VER, ENV, TIMING, RESULT, BASELINE, NOTES, LS REPORT, LS TRACE LINK,
             # SEMANTIC, JUDGE, GROUND, FAITH, RELEV, OVERALL, JUDGE REASON
             row = [
                 result.test_id,
@@ -661,7 +662,8 @@ class GoogleSheetsClient:
                 result.model_version,                   # MODEL VER: provider/modello
                 result.environment or "DEV",            # ENV: default DEV
                 result.timing,                          # TIMING: "TTFR → Total"
-                "",                                     # ESITO: vuoto (compilato dal reviewer)
+                "",                                     # RESULT: vuoto (compilato dal reviewer)
+                "",                                     # BASELINE: vuoto (checkbox golden answer)
                 "",                                     # NOTES: vuoto (note del reviewer)
                 escape_formula(result.langsmith_report), # LS REPORT: report LangSmith (escaped)
                 result.langsmith_url,                   # LS TRACE LINK: link al trace
@@ -732,14 +734,15 @@ class GoogleSheetsClient:
                 def fmt_score(val):
                     return f"{val:.0%}" if val is not None else ""
 
-                # 22 colonne
+                # 23 colonne
                 rows.append([
                     r.test_id, r.date, r.mode, r.question, r.conversation,
                     screenshot_formula, screenshot_view_url,
                     r.prompt_version, r.model_version,
                     r.environment or "DEV",           # ENV: default DEV
                     r.timing,                         # TIMING: "TTFR → Total"
-                    "",                               # ESITO: vuoto (reviewer)
+                    "",                               # RESULT: vuoto (reviewer)
+                    "",                               # BASELINE: vuoto (golden answer)
                     "",                               # NOTES: vuoto (reviewer)
                     escape_formula(r.langsmith_report), # LS REPORT (escaped)
                     r.langsmith_url,                  # LS TRACE LINK
@@ -768,6 +771,95 @@ class GoogleSheetsClient:
         except Exception as e:
             print(f"✗ Errore batch append: {e}")
             return 0
+
+    # ==================== BASELINES (GOLDEN ANSWERS) ====================
+
+    def get_all_baselines(self) -> List[Dict[str, Any]]:
+        """
+        Recupera tutte le baseline (golden answers) da tutti i fogli RUN.
+
+        Cerca in ogni foglio RUN le righe dove la colonna BASELINE
+        contiene un valore truthy (✓, TRUE, 1, X, ecc.).
+
+        Returns:
+            Lista di dizionari con i dati delle baseline:
+            {
+                'test_id': str,
+                'question': str,
+                'conversation': str,
+                'run_number': int,
+                'date': str,
+                'prompt_version': str,
+                'model_version': str,
+                'notes': str
+            }
+        """
+        if not self._spreadsheet:
+            return []
+
+        baselines = []
+
+        # Indici colonne (0-based)
+        col_indices = {col: i for i, col in enumerate(self.COLUMNS)}
+        baseline_col = col_indices.get('BASELINE', 12)
+        test_id_col = col_indices.get('TEST ID', 0)
+        date_col = col_indices.get('DATE', 1)
+        question_col = col_indices.get('QUESTION', 3)
+        conversation_col = col_indices.get('CONVERSATION', 4)
+        prompt_ver_col = col_indices.get('PROMPT VER', 7)
+        model_ver_col = col_indices.get('MODEL VER', 8)
+        notes_col = col_indices.get('NOTES', 13)
+
+        try:
+            for worksheet in self._spreadsheet.worksheets():
+                # Estrai numero RUN dal titolo (es. "Run 038 [DEV] auto - 2024-01-15")
+                match = re.match(r'^(?:Run|GGP|PARA)\s*(\d{3})', worksheet.title)
+                if not match:
+                    continue
+
+                run_number = int(match.group(1))
+
+                # Leggi tutti i dati del foglio
+                try:
+                    all_values = worksheet.get_all_values()
+                except Exception:
+                    continue
+
+                if len(all_values) < 2:
+                    continue  # Solo header o vuoto
+
+                # Salta header
+                for row in all_values[1:]:
+                    # Verifica che la riga abbia abbastanza colonne
+                    if len(row) <= baseline_col:
+                        continue
+
+                    # Controlla se BASELINE è marcata
+                    baseline_value = row[baseline_col].strip().upper()
+                    is_baseline = baseline_value in ('TRUE', '✓', '✔', 'X', '1', 'YES', 'SI', 'SÌ')
+
+                    if not is_baseline:
+                        continue
+
+                    # Estrai dati
+                    def safe_get(idx: int) -> str:
+                        return row[idx] if idx < len(row) else ""
+
+                    baselines.append({
+                        'test_id': safe_get(test_id_col),
+                        'question': safe_get(question_col),
+                        'conversation': safe_get(conversation_col),
+                        'run_number': run_number,
+                        'date': safe_get(date_col),
+                        'prompt_version': safe_get(prompt_ver_col),
+                        'model_version': safe_get(model_ver_col),
+                        'notes': safe_get(notes_col)
+                    })
+
+        except Exception as e:
+            print(f"Errore lettura baseline: {e}")
+
+        return baselines
 
     # ==================== UPLOAD & UTILITY ====================
 
@@ -1327,10 +1419,10 @@ class ParallelResultsCollector:
     def get_summary(self) -> Dict[str, int]:
         """Statistiche sui risultati raccolti"""
         with self._lock:
-            passed = sum(1 for r in self._results if r.esito == "PASS")
-            failed = sum(1 for r in self._results if r.esito == "FAIL")
-            errors = sum(1 for r in self._results if r.esito == "ERROR")
-            skipped = sum(1 for r in self._results if r.esito == "SKIP")
+            passed = sum(1 for r in self._results if r.result == "PASS")
+            failed = sum(1 for r in self._results if r.result == "FAIL")
+            errors = sum(1 for r in self._results if r.result == "ERROR")
+            skipped = sum(1 for r in self._results if r.result == "SKIP")
 
             return {
                 "total": len(self._results),

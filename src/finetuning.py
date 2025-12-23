@@ -136,8 +136,8 @@ PASS|FAIL|SKIP - [spiegazione breve]"""
                 if not ex.get("question") or not ex.get("response"):
                     continue
 
-                esito = ex.get("esito", "").upper()
-                if esito not in ["PASS", "FAIL", "SKIP"]:
+                test_result = ex.get("result", ex.get("esito", "")).upper()
+                if test_result not in ["PASS", "FAIL", "SKIP"]:
                     continue
 
                 # Costruisci messaggio utente
@@ -152,9 +152,9 @@ La risposta è corretta?"""
                 # Costruisci risposta attesa
                 notes = ex.get("notes", "")
                 if include_notes and notes:
-                    assistant_msg = f"{esito} - {notes[:100]}"
+                    assistant_msg = f"{test_result} - {notes[:100]}"
                 else:
-                    assistant_msg = esito
+                    assistant_msg = test_result
 
                 # Formato OpenAI chat completions
                 record = {
@@ -182,8 +182,8 @@ La risposta è corretta?"""
             if not ex.get("question") or not ex.get("response"):
                 continue
 
-            esito = ex.get("esito", "").upper()
-            if esito not in ["PASS", "FAIL", "SKIP"]:
+            test_result = ex.get("result", ex.get("esito", "")).upper()
+            if test_result not in ["PASS", "FAIL", "SKIP"]:
                 continue
 
             notes = ex.get("notes", "")
@@ -192,7 +192,7 @@ La risposta è corretta?"""
             examples_text.append(f"""Esempio {i}:
 Q: {ex['question'][:200]}
 A: {ex['response'][:300]}
-Valutazione: {esito}{explanation}
+Valutazione: {test_result}{explanation}
 """)
 
         # Genera Modelfile
@@ -243,7 +243,7 @@ PARAMETER top_p 0.9
                         examples.append({
                             "question": user_msg,
                             "response": "",
-                            "esito": assistant_msg.split()[0] if assistant_msg else ""
+                            "result": assistant_msg.split()[0] if assistant_msg else ""
                         })
                     except:
                         stats.issues.append(f"Riga JSON non valida")
@@ -263,13 +263,13 @@ PARAMETER top_p 0.9
         response_lengths = []
 
         for ex in examples:
-            esito = ex.get("esito", "").upper()
+            test_result = ex.get("result", ex.get("esito", "")).upper()
 
-            if esito == "PASS":
+            if test_result == "PASS":
                 stats.pass_count += 1
-            elif esito == "FAIL":
+            elif test_result == "FAIL":
                 stats.fail_count += 1
-            elif esito == "SKIP":
+            elif test_result == "SKIP":
                 stats.skip_count += 1
 
             # Categoria
@@ -472,7 +472,7 @@ PARAMETER top_p 0.9
         }
 
         for ex in test_examples:
-            ground_truth = ex.get("esito", "").upper()
+            ground_truth = ex.get("result", ex.get("esito", "")).upper()
             if ground_truth not in ["PASS", "FAIL", "SKIP"]:
                 continue
 

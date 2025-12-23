@@ -29,6 +29,7 @@ from .report_local import ReportGenerator, TestResultLocal
 from .training import TrainingData, TrainModeUI
 from .performance import PerformanceCollector, PerformanceReporter, PerformanceAlerter, PerformanceHistory
 from .evaluation import Evaluator, EvaluationConfig, EvaluationResult, create_evaluator_from_settings
+from .baselines import BaselinesCache, get_baseline, preload_baselines
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
@@ -82,7 +83,7 @@ class TestExecution:
     """Risultato esecuzione di un test"""
     test_case: TestCase
     conversation: List[ConversationTurn]
-    esito: str  # PASS, FAIL, SKIP, ERROR
+    result: str  # PASS, FAIL, SKIP, ERROR
     duration_ms: int
     screenshot_path: str = ""
     langsmith_url: str = ""
@@ -154,6 +155,7 @@ class ChatbotTester:
         self.ollama: Optional[OllamaClient] = None
         self.langsmith: Optional[LangSmithClient] = None
         self.sheets: Optional[GoogleSheetsClient] = None
+        self.baselines_cache: Optional[BaselinesCache] = None
 
         # Report locale
         self.report: Optional[ReportGenerator] = None
@@ -291,6 +293,20 @@ class ChatbotTester:
                     self.on_status("✓ Google Sheets autenticato")
                     # Il foglio RUN e i test completati vengono configurati
                     # da run.py tramite sheets.setup_run_sheet()
+
+                    # Precarica baseline (golden answers) per evaluation
+                    try:
+                        self.baselines_cache = BaselinesCache(ttl_seconds=300)
+                        baseline_count = self.baselines_cache.load(
+                            self.sheets,
+                            self.project.name,
+                            force=True
+                        )
+                        if baseline_count > 0:
+                            self.on_status(f"✓ Baselines caricate: {baseline_count} golden answers")
+                    except Exception as e:
+                        self.on_status(f"! Baselines non disponibili: {e}")
+                        self.baselines_cache = None
                 else:
                     self.sheets = None
             except Exception as e:
@@ -624,7 +640,7 @@ class ChatbotTester:
             return TestExecution(
                 test_case=test,
                 conversation=conversation,
-                esito="SKIP" if skipped else "PASS",
+                result="SKIP" if skipped else "PASS",
                 duration_ms=duration_ms,
                 screenshot_path=screenshot_path,
                 notes="",  # Vuoto - per il reviewer
@@ -640,7 +656,7 @@ class ChatbotTester:
             return TestExecution(
                 test_case=test,
                 conversation=conversation,
-                esito="ERROR",
+                result="ERROR",
                 duration_ms=0,
                 notes=f"Errore: {e}"
             )
@@ -943,6 +959,13 @@ class ChatbotTester:
                     expected_answer = getattr(test, 'expected_answer', None)
                     rag_context_file = getattr(test, 'rag_context_file', None)
 
+                    # Fallback: usa baseline (golden answer) da Google Sheets se disponibile
+                    if not expected_answer and self.baselines_cache:
+                        baseline = self.baselines_cache.get(test.id)
+                        if baseline:
+                            expected_answer = baseline.answer
+                            self.on_status(f"  Baseline: usando golden answer da RUN {baseline.run_number}")
+
                     # Determina contesto RAG con priorità:
                     # 1. File manuale (override esplicito)
                     # 2. Contesto automatico da LangSmith (se abilitato)
@@ -1000,14 +1023,14 @@ class ChatbotTester:
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
 
             # Finalize test metrics
-            esito = "PASS" if evaluation.get('passed', False) else "FAIL"
+            test_result = "PASS" if evaluation.get('passed', False) else "FAIL"
             if self.perf_collector:
-                self.perf_collector.end_test(esito)
+                self.perf_collector.end_test(test_result)
 
             return TestExecution(
                 test_case=test,
                 conversation=conversation,
-                esito=esito,
+                result=esito,
                 duration_ms=duration_ms,
                 screenshot_path=screenshot_path,
                 langsmith_url=langsmith_url,
@@ -1027,7 +1050,7 @@ class ChatbotTester:
             return TestExecution(
                 test_case=test,
                 conversation=conversation,
-                esito="ERROR",
+                result="ERROR",
                 duration_ms=0,
                 notes=f"Errore: {e}"
             )
@@ -1105,7 +1128,8 @@ class ChatbotTester:
 
     def _save_result(self, result: TestExecution) -> None:
         """Salva risultato nei report"""
-        date_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        from zoneinfo import ZoneInfo
+        date_str = datetime.now(ZoneInfo("Europe/Rome")).strftime('%Y-%m-%d %H:%M:%S')
 
         # Formatta conversazione
         conv_str = "\n".join([
@@ -1122,7 +1146,7 @@ class ChatbotTester:
                 question=result.test_case.question,
                 conversation=conv_str,
                 screenshot_path=result.screenshot_path,
-                esito=result.esito,
+                result=result.result,
                 notes=result.notes,
                 langsmith_url=result.langsmith_url,
                 duration_ms=result.duration_ms,
@@ -1165,7 +1189,7 @@ class ChatbotTester:
                 prompt_version=result.prompt_version,
                 model_version=result.model_version,
                 environment=self.run_config.env if self.run_config else "DEV",
-                esito="",  # Vuoto - compilato dal reviewer
+                result="",  # Vuoto - compilato dal reviewer
                 notes="",  # Vuoto - note del reviewer
                 langsmith_report=result.langsmith_report,
                 langsmith_url=result.langsmith_url,

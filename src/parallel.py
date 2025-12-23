@@ -337,7 +337,7 @@ class ParallelTestRunner:
                     results.append(TestExecution(
                         test_case=tests[i],
                         conversation=[],
-                        esito="ERROR",
+                        result="ERROR",
                         duration_ms=0,
                         notes=f"Exception: {result}"
                     ))
@@ -351,10 +351,10 @@ class ParallelTestRunner:
 
         # Calcola statistiche
         duration_ms = int((time.time() - start_time) * 1000)
-        passed = sum(1 for r in results if r.esito == "PASS")
-        failed = sum(1 for r in results if r.esito == "FAIL")
-        errors = sum(1 for r in results if r.esito == "ERROR")
-        skipped = sum(1 for r in results if r.esito == "SKIP")
+        passed = sum(1 for r in results if r.result == "PASS")
+        failed = sum(1 for r in results if r.result == "FAIL")
+        errors = sum(1 for r in results if r.result == "ERROR")
+        skipped = sum(1 for r in results if r.result == "SKIP")
 
         return ParallelResult(
             total_tests=len(tests),
@@ -424,7 +424,7 @@ class ParallelTestRunner:
         return TestExecution(
             test_case=test,
             conversation=[],
-            esito="ERROR",
+            result="ERROR",
             duration_ms=0,
             notes=f"Fallito dopo {self.config.max_retries + 1} tentativi: {last_error}"
         )
@@ -570,7 +570,7 @@ class ParallelTestRunner:
         return TestExecution(
             test_case=test,
             conversation=conversation,
-            esito="PASS" if evaluation.get('passed', False) else "FAIL",
+            result="PASS" if evaluation.get('passed', False) else "FAIL",
             duration_ms=duration_ms,
             screenshot_path=screenshot_path,
             notes=evaluation.get('reason', ''),
