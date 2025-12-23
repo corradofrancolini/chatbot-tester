@@ -2,6 +2,43 @@
 
 **Mantra: If it can be done, it must be visible, explained, and configurable.**
 
+---
+
+## Quick Reference
+
+| What | Command/Location |
+|------|------------------|
+| Run tests | `python run.py -p silicon-b -m auto --no-interactive` |
+| Trigger from cloud | MCP tool `trigger_circleci` o CircleCI dashboard |
+| Results | Google Sheets `chatbot-tester-results` |
+| Traces | LangSmith project `silicon-b` |
+| MCP Server | `fly.io/chatbot-tester-mcp` |
+
+---
+
+## Active Project: silicon-b
+
+Il progetto principale in uso è **silicon-b** (chatbot Silicon per Banca).
+
+```
+projects/silicon-b/
+├── project.yaml      # Config: URLs, credenziali, LangSmith
+├── tests.json        # Test set standard (54 test)
+├── tests_paraphrase.json  # Parafrasi (54 test)
+├── tests_ggp.json    # GGP varianti (54 test)
+└── run_config.json   # Stato runtime (active_run, env, flags)
+```
+
+### Test Sets
+
+| File | Prefisso | Descrizione |
+|------|----------|-------------|
+| `tests.json` | `TEST_` | Domande standard |
+| `tests_paraphrase.json` | `PARA_` | Stesse domande riformulate |
+| `tests_ggp.json` | `GRD_` | Varianti GGP |
+
+---
+
 ## Documentation
 
 | Guide | Content |
@@ -547,7 +584,174 @@ pyinstaller chatbot-tester.spec
 
 ## Configured Projects
 
-- `my-chatbot` → Example chatbot project (customize in projects/ directory)
+- `silicon-b` → Chatbot Silicon Banca (progetto attivo)
+
+---
+
+## MCP Server (Claude Desktop Integration)
+
+Server MCP deployato su Fly.io per controllo da Claude Desktop.
+
+### Deployment
+
+```bash
+# Deploy su Fly.io
+fly deploy
+
+# Logs
+fly logs --app chatbot-tester-mcp
+
+# Secrets
+fly secrets list
+fly secrets set CIRCLECI_TOKEN="..."
+```
+
+### Struttura
+
+```
+mcp_server/
+├── __init__.py       # Version
+├── main.py           # Entry point, SSE transport
+└── tools.py          # Tutti i tool MCP (~3500 righe)
+```
+
+### Tool Principali
+
+| Tool | Descrizione | Trigger phrases |
+|------|-------------|-----------------|
+| `trigger_circleci` | Lancia test su CircleCI | "Esegui test", "Lancia run" |
+| `get_run_results` | Risultati da Sheets | "Mostra risultati", "Com'è andata?" |
+| `debug_trace` | Analizza trace LangSmith | "Analizza trace xyz", "Debug trace" |
+| `detect_flaky_tests` | Test instabili | "Test flaky?", "Quali sono instabili?" |
+| `get_regressions` | Regressioni | "Cosa si è rotto?", "Regressioni?" |
+| `notify_corrado` | Invia messaggio Telegram | "Avvisa Corrado che..." |
+
+### Aggiungere un Tool
+
+1. Aggiungi `Tool()` nella lista in `list_tools()` (~riga 270)
+2. Aggiungi `elif name == "tool_name":` in `call_tool()` (~riga 1190)
+3. Crea funzione `async def handle_tool_name(arguments):` in fondo
+4. Test: `fly deploy` e riavvia Claude Desktop
+
+---
+
+## CircleCI (Cloud Execution)
+
+### Workflows
+
+| Workflow | Trigger | Uso |
+|----------|---------|-----|
+| `manual-test` | `manual_trigger=true` | Singolo test set |
+| `native-parallel-test` | `native_parallelism>0` | Test distribuiti su N container |
+| `multi-testset` | `multi_testset=true` | 3 test set in parallelo (standard, paraphrase, GGP) |
+
+### Parametri Pipeline
+
+```yaml
+parameters:
+  project: "silicon-b"
+  mode: "auto"              # auto | assisted | train
+  tests: "pending"          # all | pending | failed
+  new_run: false            # Crea nuova RUN su Sheets
+  test_limit: 0             # 0 = tutti
+  test_ids: ""              # "TEST_001,TEST_002"
+  single_turn: false        # Solo domanda iniziale
+  tests_file: "tests.json"  # File test set
+  native_parallelism: 3     # Container paralleli (0 = disabilitato)
+  multi_testset: false      # Esegui tutti e 3 i test set
+```
+
+### Race Condition Warning
+
+**NON lanciare più pipeline `native-parallel-test` contemporaneamente!**
+I container 1+ cercano la RUN "più recente" e scrivono tutti sullo stesso foglio.
+
+Usa invece `multi_testset: true` per eseguire più test set in sicurezza.
+
+---
+
+## Debug & Troubleshooting
+
+### LangSmith Trace Analysis
+
+```bash
+# CLI (installato)
+langsmith-fetch trace <TRACE_ID>
+langsmith-fetch trace <ID> | claude -p "analizza errori"
+
+# Da Claude Desktop
+"Analizza il trace abc-123-def-456"
+```
+
+### Google Sheets Cleanup
+
+```bash
+# Rimuovi righe con prefisso sbagliato
+python scripts/cleanup_run.py -p silicon-b -r 38 --keep-prefix TEST_
+
+# Rimuovi duplicati (tiene prima occorrenza)
+python scripts/deduplicate_run.py -p silicon-b -r 38
+
+# Dry run (mostra senza modificare)
+python scripts/cleanup_run.py -p silicon-b -r 38 --dry-run
+```
+
+### Errori Comuni
+
+| Errore | Causa | Soluzione |
+|--------|-------|-----------|
+| `429 Too Many Requests` | Rate limit LangSmith/Sheets | Retry automatico con backoff |
+| `Trace non trovato` | ID errato o progetto sbagliato | Verifica URL completo in Sheets |
+| `RUN non trovata` | Foglio non esiste | Controlla numero run in Sheets |
+| `BASELINE column not found` | Template Sheets vecchio | Aggiungi colonna BASELINE |
+
+### Log Levels
+
+```bash
+# Debug dettagliato
+python run.py -p silicon-b -m auto --debug
+
+# Solo errori
+LOG_LEVEL=ERROR python run.py ...
+```
+
+---
+
+## Code Conventions
+
+### Python Style
+
+- **Python 3.11+** richiesto
+- **Type hints** su tutte le funzioni pubbliche
+- **Docstrings** in italiano (progetto interno)
+- **f-strings** per formatting
+- **Niente print()** in produzione - usa `logger` o `self.on_status()`
+
+### Naming
+
+| Tipo | Convenzione | Esempio |
+|------|-------------|---------|
+| Classi | PascalCase | `GoogleSheetsClient` |
+| Funzioni | snake_case | `get_run_results()` |
+| Costanti | UPPER_SNAKE | `MAX_RETRIES` |
+| File | snake_case | `sheets_client.py` |
+
+### Error Handling
+
+```python
+# Pattern standard
+try:
+    result = risky_operation()
+except SpecificError as e:
+    logger.error(f"Operazione fallita: {e}")
+    return None  # o raise con contesto
+```
+
+### Async
+
+- MCP tools sono tutti `async def`
+- Usa `await` per I/O (API calls, file)
+- Non bloccare con `time.sleep()` - usa `asyncio.sleep()`
 
 ---
 
