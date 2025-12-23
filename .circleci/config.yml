@@ -103,19 +103,17 @@ commands:
           paths:
             - /home/circleci/.cache/ms-playwright
 
-  notify-teams:
-    description: "Send notification to Microsoft Teams"
-    parameters:
-      status:
-        type: string
-        default: "completed"
-    steps:
-      - run:
-          name: Teams notification (disabled)
-          command: echo "MS Teams notifications disabled - configure MS_TEAMS_WEBHOOK_URL to enable"
-      # - ms-teams/report:
-      #     only_on_fail: false
-      #     webhook_url: ${MS_TEAMS_WEBHOOK_URL}
+  # notify-teams: DISABLED - non utilizzato
+  # notify-teams:
+  #   description: "Send notification to Microsoft Teams"
+  #   parameters:
+  #     status:
+  #       type: string
+  #       default: "completed"
+  #   steps:
+  #     - ms-teams/report:
+  #         only_on_fail: false
+  #         webhook_url: ${MS_TEAMS_WEBHOOK_URL}
 
   setup-credentials:
     description: "Setup Google and LangSmith credentials"
