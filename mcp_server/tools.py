@@ -1084,6 +1084,40 @@ Formati disponibili: excel, html, csv.""",
                     "required": ["project"]
                 }
             ),
+            Tool(
+                name="debug_trace",
+                description="""Analizza un trace LangSmith per debug di test falliti o con esito negativo.
+
+USA QUESTO TOOL quando l'utente chiede:
+- "Analizza il trace xyz"
+- "Perché questo trace ha fallito?"
+- "Debug trace abc-123"
+- "Cosa è successo nel trace?"
+- "Fammi vedere il trace"
+
+Fetcha il trace completo da LangSmith e mostra:
+- Input/output della conversazione
+- Tool chiamati e loro output
+- Timing breakdown
+- Errori e problemi
+
+Il trace_id si trova nella colonna LS TRACE URL dei risultati su Google Sheets.""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "trace_id": {
+                            "type": "string",
+                            "description": "ID del trace LangSmith (es. abc123-def456-...)"
+                        },
+                        "project": {
+                            "type": "string",
+                            "description": "Progetto per le credenziali LangSmith (default: silicon-b)",
+                            "default": "silicon-b"
+                        }
+                    },
+                    "required": ["trace_id"]
+                }
+            ),
         ]
         logger.info(f"=== Returning {len(tools)} tools ===")
         return tools
@@ -1154,6 +1188,8 @@ Formati disponibili: excel, html, csv.""",
                 return await handle_calibrate_thresholds(arguments)
             elif name == "export_report":
                 return await handle_export_report(arguments)
+            elif name == "debug_trace":
+                return await handle_debug_trace(arguments)
             else:
                 return [TextContent(
                     type="text",
@@ -3345,3 +3381,135 @@ tr:nth-child(even){{background:#f9f9f9}}
     except Exception as e:
         logger.error(f"Error exporting report: {e}")
         return [TextContent(type="text", text=f"Errore nell'export: {str(e)}")]
+
+
+async def handle_debug_trace(arguments: dict) -> list[TextContent]:
+    """
+    Fetch e analizza un trace LangSmith per debug.
+
+    Mostra input/output, tool calls, timing e errori.
+    """
+    trace_id = arguments.get("trace_id", "").strip()
+    project = arguments.get("project", "silicon-b")
+
+    if not trace_id:
+        return [TextContent(type="text", text="❌ Specifica un trace_id. Lo trovi nella colonna LS TRACE URL dei risultati.")]
+
+    # Estrai solo l'ID se è un URL completo
+    if "/" in trace_id:
+        # URL format: https://smith.langchain.com/o/ORG/projects/p/PROJECT/r/TRACE_ID
+        trace_id = trace_id.rstrip("/").split("/")[-1]
+        # Rimuovi eventuali query params
+        if "?" in trace_id:
+            trace_id = trace_id.split("?")[0]
+
+    # Carica config progetto per credenziali LangSmith
+    project_dir = PROJECTS_DIR / project
+    if not project_dir.exists():
+        return [TextContent(type="text", text=f"❌ Progetto '{project}' non trovato")]
+
+    try:
+        from src.config_loader import ConfigLoader
+        config_loader = ConfigLoader()
+        proj_config = config_loader.load_project(project)
+
+        if not proj_config:
+            return [TextContent(type="text", text=f"❌ Impossibile caricare la configurazione di '{project}'")]
+
+        if not proj_config.langsmith:
+            return [TextContent(type="text", text=f"❌ LangSmith non configurato per '{project}'.\n\nConfigura langsmith in projects/{project}/project.yaml")]
+
+        # Inizializza client
+        from src.langsmith_client import LangSmithClient
+        client = LangSmithClient(
+            api_key=proj_config.langsmith.api_key,
+            project_id=proj_config.langsmith.project_id,
+            org_id=proj_config.langsmith.org_id or ""
+        )
+
+        # Fetch trace
+        trace = client.get_trace_by_id(trace_id)
+        if not trace:
+            return [TextContent(type="text", text=f"❌ Trace '{trace_id}' non trovato.\n\nVerifica che l'ID sia corretto e che il trace esista nel progetto LangSmith.")]
+
+        # Analizza
+        analysis = client.analyze_trace(trace)
+
+        # Ottieni child runs per errori dettagliati
+        child_runs = client.get_child_runs(trace_id)
+
+        # Formatta output
+        output = []
+        output.append("## 🔍 Trace Analysis\n")
+        output.append(f"**URL**: [{trace_id[:8]}...]({analysis['trace_url']})")
+        output.append(f"**Status**: {analysis['status']}")
+
+        # Duration formattata
+        duration_ms = analysis['duration_ms']
+        if duration_ms >= 1000:
+            output.append(f"**Duration**: {duration_ms/1000:.2f}s")
+        else:
+            output.append(f"**Duration**: {duration_ms}ms")
+
+        if analysis.get('model'):
+            output.append(f"**Model**: {analysis['model']}")
+
+        output.append("")
+
+        # Input
+        output.append("### 📝 Input")
+        input_text = trace.input[:1500] if trace.input else "(vuoto)"
+        if len(trace.input) > 1500:
+            input_text += "..."
+        output.append(f"```\n{input_text}\n```")
+        output.append("")
+
+        # Output
+        output.append("### 💬 Output")
+        output_text = trace.output[:2000] if trace.output else "(vuoto)"
+        if len(trace.output) > 2000:
+            output_text += "..."
+        output.append(f"```\n{output_text}\n```")
+        output.append("")
+
+        # Tools
+        if analysis['tool_summary']['tools_used']:
+            output.append(f"### 🔧 Tools ({analysis['tool_summary']['total_calls']} calls)")
+            for tool_detail in analysis['tool_details'][:15]:
+                icon = "❌" if tool_detail['has_error'] else "✓"
+                duration_str = f"{tool_detail['duration_ms']}ms" if tool_detail['duration_ms'] < 1000 else f"{tool_detail['duration_ms']/1000:.1f}s"
+                output.append(f"- {icon} **{tool_detail['name']}** ({duration_str})")
+
+            if analysis['tool_summary']['failed_calls'] > 0:
+                output.append(f"\n⚠️ **{analysis['tool_summary']['failed_calls']} tool calls fallite**")
+            output.append("")
+
+        # Tokens
+        if analysis.get('tokens_used', 0) > 0:
+            output.append(f"### 📊 Tokens: {analysis['tokens_used']:,}")
+            output.append("")
+
+        # Errors
+        errors = [r for r in child_runs if r.get('error')]
+        if errors:
+            output.append("### ❌ Errori")
+            for err in errors[:5]:
+                err_name = err.get('name', 'unknown')
+                err_msg = str(err.get('error', ''))[:300]
+                output.append(f"- **{err_name}**: {err_msg}")
+            output.append("")
+
+        # Suggerimenti per debug
+        if analysis['status'] != 'success' or errors:
+            output.append("### 💡 Suggerimenti")
+            if errors:
+                output.append("- Verifica i tool che hanno fallito e i loro input")
+            if analysis['duration_ms'] > 30000:
+                output.append("- Il trace è lento (>30s) - considera ottimizzazioni")
+            output.append("- Apri il link LangSmith per dettagli completi")
+
+        return [TextContent(type="text", text="\n".join(output))]
+
+    except Exception as e:
+        logger.error(f"Error in debug_trace: {e}")
+        return [TextContent(type="text", text=f"❌ Errore durante l'analisi del trace: {str(e)}")]
