@@ -9,6 +9,7 @@ Handles:
 """
 
 import requests
+import time
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
@@ -345,6 +346,71 @@ class LangSmithClient:
             'Content-Type': 'application/json'
         })
 
+        # Retry config
+        self._max_retries = 3
+        self._base_delay = 1.0  # secondi
+        self._max_delay = 30.0  # secondi
+
+    def _request_with_retry(self, method: str, url: str, **kwargs) -> Optional[requests.Response]:
+        """
+        Esegue richiesta HTTP con retry e exponential backoff per 429.
+
+        Args:
+            method: 'get' o 'post'
+            url: URL da chiamare
+            **kwargs: argomenti per requests (json, timeout, etc.)
+
+        Returns:
+            Response o None se tutti i retry falliscono
+        """
+        delay = self._base_delay
+
+        for attempt in range(self._max_retries + 1):
+            try:
+                if method == 'get':
+                    response = self._session.get(url, **kwargs)
+                else:
+                    response = self._session.post(url, **kwargs)
+
+                # Successo
+                if response.status_code == 200:
+                    return response
+
+                # Rate limit - retry con backoff
+                if response.status_code == 429:
+                    if attempt < self._max_retries:
+                        # Cerca Retry-After header
+                        retry_after = response.headers.get('Retry-After')
+                        if retry_after:
+                            delay = min(float(retry_after), self._max_delay)
+
+                        print(f"  ⏳ LangSmith rate limit, retry in {delay:.1f}s...")
+                        time.sleep(delay)
+                        delay = min(delay * 2, self._max_delay)  # Exponential backoff
+                        continue
+                    else:
+                        print(f"! LangSmith rate limit, max retries reached")
+                        return None
+
+                # Altri errori - non ritentare
+                print(f"! LangSmith API error: {response.status_code}")
+                return response
+
+            except requests.exceptions.Timeout:
+                if attempt < self._max_retries:
+                    print(f"  ⏳ LangSmith timeout, retry in {delay:.1f}s...")
+                    time.sleep(delay)
+                    delay = min(delay * 2, self._max_delay)
+                    continue
+                print(f"! LangSmith timeout, max retries reached")
+                return None
+
+            except Exception as e:
+                print(f"! LangSmith request error: {e}")
+                return None
+
+        return None
+
     @property
     def project_url(self) -> str:
         """URL del progetto in LangSmith"""
@@ -385,30 +451,25 @@ class LangSmithClient:
         if end_time:
             payload['end_time'] = end_time.isoformat()
 
-        try:
-            response = self._session.post(
-                f"{self.BASE_URL}/runs/query",
-                json=payload,
-                timeout=30
-            )
+        response = self._request_with_retry(
+            'post',
+            f"{self.BASE_URL}/runs/query",
+            json=payload,
+            timeout=30
+        )
 
-            if response.status_code != 200:
-                print(f"! LangSmith API error: {response.status_code}")
-                return []
-
-            runs = response.json().get('runs', [])
-            traces = []
-
-            for run in runs:
-                trace = self._parse_run(run)
-                if trace:
-                    traces.append(trace)
-
-            return traces
-
-        except Exception as e:
-            print(f"! Errore recupero traces: {e}")
+        if not response or response.status_code != 200:
             return []
+
+        runs = response.json().get('runs', [])
+        traces = []
+
+        for run in runs:
+            trace = self._parse_run(run)
+            if trace:
+                traces.append(trace)
+
+        return traces
 
     def get_latest_trace(self,
                          after: Optional[datetime] = None,
@@ -445,17 +506,14 @@ class LangSmithClient:
         Returns:
             TraceInfo o None
         """
-        try:
-            response = self._session.get(
-                f"{self.BASE_URL}/runs/{trace_id}",
-                timeout=30
-            )
+        response = self._request_with_retry(
+            'get',
+            f"{self.BASE_URL}/runs/{trace_id}",
+            timeout=30
+        )
 
-            if response.status_code == 200:
-                return self._parse_run(response.json())
-
-        except:
-            pass
+        if response and response.status_code == 200:
+            return self._parse_run(response.json())
 
         return None
 
@@ -469,21 +527,18 @@ class LangSmithClient:
         Returns:
             Lista di run nel trace
         """
-        try:
-            response = self._session.post(
-                f"{self.BASE_URL}/runs/query",
-                json={
-                    'trace': parent_id,
-                    'limit': 100
-                },
-                timeout=30
-            )
+        response = self._request_with_retry(
+            'post',
+            f"{self.BASE_URL}/runs/query",
+            json={
+                'trace': parent_id,
+                'limit': 100
+            },
+            timeout=30
+        )
 
-            if response.status_code == 200:
-                return response.json().get('runs', [])
-
-        except:
-            pass
+        if response and response.status_code == 200:
+            return response.json().get('runs', [])
 
         return []
 
@@ -746,20 +801,18 @@ class LangSmithClient:
 
         # Se non trovato nei child, cerca nel run principale
         if not model_info['model']:
-            try:
-                response = self._session.get(
-                    f"{self.BASE_URL}/runs/{trace_id}",
-                    timeout=10
-                )
-                if response.status_code == 200:
-                    run_data = response.json()
-                    extra = run_data.get('extra', {})
-                    metadata = extra.get('metadata', {})
+            response = self._request_with_retry(
+                'get',
+                f"{self.BASE_URL}/runs/{trace_id}",
+                timeout=10
+            )
+            if response and response.status_code == 200:
+                run_data = response.json()
+                extra = run_data.get('extra', {})
+                metadata = extra.get('metadata', {})
 
-                    model_info['model'] = metadata.get('model', '') or metadata.get('ls_model_name', '')
-                    model_info['provider'] = metadata.get('ls_provider', '')
-            except:
-                pass
+                model_info['model'] = metadata.get('model', '') or metadata.get('ls_model_name', '')
+                model_info['provider'] = metadata.get('ls_provider', '')
 
         return model_info
 
