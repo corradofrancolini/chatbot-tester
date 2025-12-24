@@ -23,7 +23,7 @@ JOB_RUN_MAP = {
     65: 37,  # Pipeline #64
 }
 
-CCI_TOKEN = "REDACTED"
+CCI_TOKEN = os.environ.get("CIRCLECI_TOKEN", "")
 
 def get_artifacts(job_number: int) -> list[dict]:
     """Ottiene artifacts da job CircleCI"""
