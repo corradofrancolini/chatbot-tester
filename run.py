@@ -3462,24 +3462,19 @@ async def run_test_session(
         # Cleanup automatico dei vecchi report
         # Carica cleanup config direttamente dal YAML (non è in GlobalSettings dataclass)
         cleanup_cfg = {}
+        keep_last_n = 50
         try:
             settings_path = Path("config/settings.yaml")
             if settings_path.exists():
                 with open(settings_path, 'r', encoding='utf-8') as f:
                     yaml_data = yaml.safe_load(f) or {}
                 cleanup_cfg = yaml_data.get('reports', {}).get('cleanup', {})
+                keep_last_n = yaml_data.get('reports', {}).get('local', {}).get('keep_last_n', 50)
         except Exception:
             pass
 
         if cleanup_cfg.get('enabled', False):
             from src.cleanup import ReportCleanup, CleanupConfig, cleanup_interactive
-
-            # Carica keep_last_n separatamente
-            keep_last_n = 50
-            try:
-                keep_last_n = yaml_data.get('reports', {}).get('local', {}).get('keep_last_n', 50)
-            except Exception:
-                pass
 
             cleanup_config = CleanupConfig(
                 enabled=True,
