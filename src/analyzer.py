@@ -40,18 +40,9 @@ class AnalyzerProvider(str, Enum):
     GROQ = "groq"
 
 
-@dataclass
-class TestFailure:
-    """Rappresenta un test fallito."""
-    test_id: str
-    test_name: str
-    question: str
-    expected: str
-    actual: str
-    notes: Optional[str] = None
-    langsmith_url: Optional[str] = None
-    langsmith_trace: Optional[Dict[str, Any]] = None
-    screenshot_path: Optional[str] = None
+# Import shared TestFailure from models
+from .models import TestFailure
+
 
 
 @dataclass

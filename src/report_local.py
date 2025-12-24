@@ -17,24 +17,7 @@ from dataclasses import dataclass, asdict
 from collections import Counter
 
 
-@dataclass
-class TestResultLocal:
-    """Test result for local report"""
-    test_id: str
-    date: str
-    mode: str
-    question: str
-    conversation: str
-    screenshot_path: str = ""
-    prompt_version: str = ""
-    model_version: str = ""
-    environment: str = ""
-    result: str = ""
-    notes: str = ""
-    langsmith_url: str = ""
-    duration_ms: int = 0
-    category: str = ""
-    followups_count: int = 0
+from .models import TestResult
 
 
 @dataclass
@@ -88,7 +71,7 @@ class ReportGenerator:
         self.screenshots_dir.mkdir(exist_ok=True)
 
         # Results
-        self.results: List[TestResultLocal] = []
+        self.results: List[TestResult] = []
 
         # Timing
         self.start_time = datetime.utcnow()
@@ -108,7 +91,7 @@ class ReportGenerator:
             pass
         return 0
 
-    def add_result(self, result: TestResultLocal) -> None:
+    def add_result(self, result: TestResult) -> None:
         """Add a result"""
         self.results.append(result)
 
@@ -116,7 +99,7 @@ class ReportGenerator:
         if not self.mode and result.mode:
             self.mode = result.mode
 
-    def add_results(self, results: List[TestResultLocal]) -> None:
+    def add_results(self, results: List[TestResult]) -> None:
         """Add multiple results"""
         for r in results:
             self.add_result(r)
@@ -208,7 +191,7 @@ class ReportGenerator:
                     'followups_count': r.followups_count,
                     'notes': r.notes,
                     'conversation': r.conversation[:1000],  # Truncate
-                    'screenshot_path': r.screenshot_path,
+                    'screenshot_path': r.screenshot_path or "",
                     'langsmith_url': r.langsmith_url,
                     'prompt_version': r.prompt_version,
                     'model_version': r.model_version,

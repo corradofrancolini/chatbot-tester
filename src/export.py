@@ -53,21 +53,8 @@ except ImportError:
     PIL_AVAILABLE = False
 
 
-@dataclass
-class TestResult:
-    """Single test result for export"""
-    test_id: str
-    category: str
-    question: str
-    expected: str
-    actual_response: str
-    status: str  # PASS, FAIL, SKIP
-    score: Optional[float] = None
-    evaluation: Optional[str] = None
-    sources: List[str] = field(default_factory=list)
-    screenshot_path: Optional[str] = None
-    duration_seconds: float = 0
-    conversation: List[Dict[str, str]] = field(default_factory=list)
+# Import shared models
+from .models import TestResult
 
 
 @dataclass
@@ -108,7 +95,7 @@ class RunReport:
                 sources=t.get('sources', []),
                 screenshot_path=t.get('screenshot'),
                 duration_seconds=t.get('duration', 0),
-                conversation=t.get('conversation', [])
+                conversation_history=t.get('conversation', [])
             ))
 
         return cls(
@@ -162,7 +149,7 @@ class RunReport:
                         sources=[],
                         screenshot_path=screenshot_path,
                         duration_seconds=float(row.get('duration', 0)) if row.get('duration') else 0,
-                        conversation=[]
+                        conversation_history=[]
                     ))
 
         total = summary.get('total_tests', len(tests))
@@ -593,10 +580,10 @@ class ExcelExporter:
 
         row = 2
         for test in report.tests:
-            if not test.conversation:
+            if not test.conversation_history:
                 continue
 
-            for turn_idx, turn in enumerate(test.conversation, start=1):
+            for turn_idx, turn in enumerate(test.conversation_history, start=1):
                 ws.cell(row=row, column=1, value=test.test_id)
                 ws.cell(row=row, column=2, value=turn_idx)
                 ws.cell(row=row, column=3, value=turn.get('role', ''))

@@ -28,7 +28,9 @@ class OllamaResponse:
     eval_count: Optional[int] = None
 
 
-class OllamaClient:
+from .clients.base import BaseClient
+
+class OllamaClient(BaseClient):
     """
     Client for Ollama communication.
 
