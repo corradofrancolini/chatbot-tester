@@ -17,6 +17,7 @@ from textual.widgets import Static, Footer, Header
 from textual.screen import Screen
 
 from wizard.utils import WizardState, StateManager
+from wizard.widgets.sidebar import ProgressSidebar
 
 
 class WizardGroup:
@@ -108,7 +109,6 @@ class WizardApp(App):
 
     def _create_sidebar(self) -> Container:
         """Create the progress sidebar."""
-        from wizard.widgets.sidebar import ProgressSidebar
         return ProgressSidebar(
             current=self.current_group,
             completed=self.completed_groups,
@@ -196,9 +196,12 @@ class WizardApp(App):
 
     def watch_current_group(self, group: int) -> None:
         """React to group changes."""
-        # Update sidebar
-        sidebar = self.query_one("#sidebar", ProgressSidebar)
-        sidebar.current = group
+        # Update sidebar (only if it exists - not during initial compose)
+        try:
+            sidebar = self.query_one("#sidebar", ProgressSidebar)
+            sidebar.current = group
+        except Exception:
+            pass  # Sidebar not yet mounted
 
     def action_save_and_exit(self) -> None:
         """Save state and exit."""
