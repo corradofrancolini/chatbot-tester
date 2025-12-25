@@ -43,6 +43,8 @@ projects/silicon-b/
 
 | Guide | Content |
 |-------|---------|
+| [PRD.md](PRD.md) | Vision, priorities, constraints |
+| [DECISIONS.md](DECISIONS.md) | Architectural decision log |
 | [README.md](README.md) | Overview and quick start |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Complete configuration guide |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, GitHub Actions, PyPI |
