@@ -29,7 +29,8 @@
 │                              ▼                                  │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │                    ORCHESTRATION                         │   │
-│  │  tester.py — Main loop, test execution, state machine   │   │
+│  │  tester.py — Orchestrator (Session & State Manager)      │   │
+│  │  executor.py — Logic (Deep Module: Execute & Persist)    │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                              │                                  │
 │         ┌────────────────────┼────────────────────┐            │
@@ -60,7 +61,8 @@
 | Layer | Responsibility | Never Does |
 |-------|----------------|------------|
 | `run.py` | CLI parsing, menu, orchestration | Business logic |
-| `tester.py` | Test execution flow, state | Direct I/O |
+| `tester.py` | Session orchestration, UI/CLI interactions | Deep test execution logic |
+| `executor.py` | Core test logic, standalone persistence | Direct Terminal I/O or CLI menus |
 | `browser.py` | Playwright automation | Evaluation logic |
 | `sheets_client.py` | Google Sheets CRUD | Test logic |
 | `ollama_client.py` | AI evaluation | Persistence |
@@ -145,6 +147,22 @@ def run_parallel_tests(tester, pool, collector):
         collector.add(result)
 ```
 
+### 6. Context Objects > Bloated Parameters
+Se un componente ha più di 5 dipendenze, raggruppale in un context object. Mantiene i costruttori puliti e facilita l'estensione senza rompere le API.
+
+```python
+# ❌ Troppi parametri
+def __init__(self, browser, settings, ollama, langsmith, training,
+             evaluator, baselines, perf_collector, report, ...):
+
+# ✅ Context object
+def __init__(self, context: ExecutionContext):
+    self.ctx = context
+    self.browser = context.browser  # Alias per comodità
+```
+
+Vedi `src/models/execution.py` per l'implementazione di `ExecutionContext`.
+
 ---
 
 ## Anti-patterns (Don't)
@@ -162,11 +180,12 @@ def run_parallel_tests(tester, pool, collector):
 
 ### Smells da evitare
 
-- **File > 500 righe**: Probabilmente fa troppe cose, splitta
+- **File > 500 righe**: Probabilmente fa troppe cose, splitta (post-refactoring siamo in linea)
 - **Funzione > 50 righe**: Estrai sottofunzioni
-- **Più di 5 parametri**: Usa dataclass o dict config
+- **Più di 5 parametri**: Usa `ExecutionContext` o dataclass
 - **Import circolari**: Ripensa le dipendenze
 - **Test che dipendono dall'ordine**: Ogni test deve essere indipendente
+- **Stringhe per modalità**: Usa `TestMode` enum per type safety
 
 ---
 
@@ -200,7 +219,10 @@ Prima di lavorare su una feature, leggi questi file per capire i pattern esisten
 
 | Task | Leggi prima |
 |------|-------------|
-| Modificare esecuzione test | `src/tester.py` (loop principale, state machine) |
+| Modificare logica esecuzione | `src/engine/executor.py` (metodi `execute_auto_test`, `persist`) |
+| Gestire dipendenze e config | `src/models/execution.py` (`ExecutionContext`, `TestMode`) |
+| Modificare schema report | `src/models/sheet_schema.py` (centralizzazione colonne) |
+| Orchestrazione sessione | `src/tester.py` (session manager, train mode) |
 | Aggiungere API esterna | `src/sheets_client.py` (pattern retry, auth, error handling) |
 | Nuovo tool MCP | `mcp_server/server.py` (struttura tools, async patterns) |
 | Modificare browser automation | `src/browser.py` (Playwright patterns, screenshots) |
