@@ -755,6 +755,13 @@ except SpecificError as e:
 - Usa `await` per I/O (API calls, file)
 - Non bloccare con `time.sleep()` - usa `asyncio.sleep()`
 
+### Decision Log
+
+Aggiorna [DECISIONS.md](DECISIONS.md) quando fai scelte architetturali significative:
+- Nuovi pattern o refactoring
+- Scelta tra alternative (con motivazione)
+- Decisioni "ON HOLD" con rationale
+
 ---
 
 ## TODO / Backlog
