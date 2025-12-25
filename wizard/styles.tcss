@@ -1,0 +1,435 @@
+/* =============================================================================
+   CHATBOT TESTER WIZARD - Global Styles (Textual CSS)
+   Design System: Modern dark theme with cyan accents
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   Color Variables (used via classes)
+   Primary:    #00D9FF (cyan)
+   Success:    #00FF88 (green)
+   Warning:    #FFD93D (yellow)
+   Error:      #FF6B6B (red)
+   Background: #1a1a1a
+   Panel:      #2a2a2a
+   Border:     #444444
+   ----------------------------------------------------------------------------- */
+
+/* -----------------------------------------------------------------------------
+   App Root
+   ----------------------------------------------------------------------------- */
+
+Screen {
+    background: #1a1a1a;
+}
+
+#main-container {
+    layout: horizontal;
+    height: 100%;
+}
+
+/* -----------------------------------------------------------------------------
+   Header & Footer
+   ----------------------------------------------------------------------------- */
+
+Header {
+    background: #2a2a2a;
+    color: #00D9FF;
+    text-style: bold;
+}
+
+Footer {
+    background: #2a2a2a;
+}
+
+/* -----------------------------------------------------------------------------
+   Sidebar
+   ----------------------------------------------------------------------------- */
+
+#sidebar {
+    width: 28;
+    background: #2a2a2a;
+    border-right: solid #444444;
+    padding: 1 2;
+}
+
+.sidebar-title {
+    text-style: bold;
+    color: #00D9FF;
+    text-align: center;
+    padding-bottom: 1;
+    border-bottom: solid #444444;
+    margin-bottom: 1;
+}
+
+.sidebar-item {
+    padding: 0 1;
+    margin: 0 0 1 0;
+}
+
+.sidebar-item.current {
+    background: #3a3a3a;
+    color: #00D9FF;
+    text-style: bold;
+}
+
+.sidebar-item.completed {
+    color: #00FF88;
+}
+
+.sidebar-item.pending {
+    color: #888888;
+}
+
+.sidebar-footer {
+    dock: bottom;
+    padding-top: 1;
+    border-top: solid #444444;
+    color: #888888;
+    text-align: center;
+}
+
+/* -----------------------------------------------------------------------------
+   Main Content Area
+   ----------------------------------------------------------------------------- */
+
+#main-content {
+    width: 1fr;
+    padding: 1 2;
+}
+
+.content-title {
+    text-style: bold;
+    color: #FFFFFF;
+    padding-bottom: 1;
+    border-bottom: solid #444444;
+    margin-bottom: 1;
+}
+
+.content-description {
+    color: #888888;
+    margin-bottom: 2;
+}
+
+/* -----------------------------------------------------------------------------
+   Form Elements
+   ----------------------------------------------------------------------------- */
+
+.form-group {
+    margin-bottom: 2;
+}
+
+.form-label {
+    color: #FFFFFF;
+    text-style: bold;
+    margin-bottom: 0;
+}
+
+.form-help {
+    color: #888888;
+    text-style: italic;
+}
+
+Input {
+    background: #3a3a3a;
+    border: solid #444444;
+    padding: 0 1;
+}
+
+Input:focus {
+    border: solid #00D9FF;
+}
+
+Input.-valid {
+    border: solid #00FF88;
+}
+
+Input.-invalid {
+    border: solid #FF6B6B;
+}
+
+/* -----------------------------------------------------------------------------
+   Buttons
+   ----------------------------------------------------------------------------- */
+
+Button {
+    margin: 0 1;
+}
+
+Button.primary {
+    background: #00D9FF;
+    color: #1a1a1a;
+    text-style: bold;
+}
+
+Button.primary:hover {
+    background: #00A5C0;
+}
+
+Button.secondary {
+    background: #3a3a3a;
+    border: solid #444444;
+    color: #FFFFFF;
+}
+
+Button.secondary:hover {
+    background: #4a4a4a;
+}
+
+Button.warning {
+    background: #FFD93D;
+    color: #1a1a1a;
+}
+
+Button.danger {
+    background: #FF6B6B;
+    color: #1a1a1a;
+}
+
+Button.ghost {
+    background: transparent;
+    color: #888888;
+    border: none;
+}
+
+Button.ghost:hover {
+    color: #FFFFFF;
+}
+
+/* -----------------------------------------------------------------------------
+   Button Bar (bottom action buttons)
+   ----------------------------------------------------------------------------- */
+
+.button-bar {
+    dock: bottom;
+    height: 3;
+    padding: 0 1;
+    background: #2a2a2a;
+    border-top: solid #444444;
+    layout: horizontal;
+    align: center middle;
+}
+
+/* -----------------------------------------------------------------------------
+   Tabs (for Integrations group)
+   ----------------------------------------------------------------------------- */
+
+TabbedContent {
+    background: #2a2a2a;
+}
+
+Tabs {
+    background: #2a2a2a;
+}
+
+Tab {
+    background: #2a2a2a;
+    color: #888888;
+    padding: 0 2;
+}
+
+Tab:hover {
+    background: #3a3a3a;
+    color: #FFFFFF;
+}
+
+Tab.-active {
+    background: #3a3a3a;
+    color: #00D9FF;
+    text-style: bold;
+    border-bottom: solid #00D9FF;
+}
+
+TabPane {
+    padding: 1 2;
+}
+
+/* -----------------------------------------------------------------------------
+   Badges
+   ----------------------------------------------------------------------------- */
+
+.badge {
+    padding: 0 1;
+    text-style: bold;
+}
+
+.badge-required {
+    background: #FF6B6B;
+    color: #FFFFFF;
+}
+
+.badge-optional {
+    background: #FFD93D;
+    color: #1a1a1a;
+}
+
+.badge-configured {
+    background: #00FF88;
+    color: #1a1a1a;
+}
+
+.badge-skipped {
+    background: #555555;
+    color: #FFFFFF;
+}
+
+/* -----------------------------------------------------------------------------
+   Status Indicators
+   ----------------------------------------------------------------------------- */
+
+.status-success {
+    color: #00FF88;
+}
+
+.status-warning {
+    color: #FFD93D;
+}
+
+.status-error {
+    color: #FF6B6B;
+}
+
+.status-info {
+    color: #6C99FF;
+}
+
+/* -----------------------------------------------------------------------------
+   Preview Panel
+   ----------------------------------------------------------------------------- */
+
+.preview-panel {
+    background: #2a2a2a;
+    border: solid #444444;
+    padding: 1;
+    margin-top: 1;
+}
+
+.preview-title {
+    color: #00D9FF;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.preview-item {
+    color: #888888;
+}
+
+.preview-value {
+    color: #FFFFFF;
+}
+
+/* -----------------------------------------------------------------------------
+   Dialogs
+   ----------------------------------------------------------------------------- */
+
+#quit-dialog {
+    width: 50;
+    height: 10;
+    background: #2a2a2a;
+    border: solid #FF6B6B;
+    padding: 2;
+    align: center middle;
+}
+
+#quit-message {
+    text-align: center;
+    color: #FFFFFF;
+    text-style: bold;
+}
+
+#quit-warning {
+    text-align: center;
+    color: #FFD93D;
+    margin: 1 0;
+}
+
+#quit-buttons {
+    layout: horizontal;
+    align: center middle;
+    margin-top: 1;
+}
+
+/* -----------------------------------------------------------------------------
+   Loading States
+   ----------------------------------------------------------------------------- */
+
+.loading {
+    color: #888888;
+    text-style: italic;
+}
+
+LoadingIndicator {
+    color: #00D9FF;
+}
+
+/* -----------------------------------------------------------------------------
+   Validation Messages
+   ----------------------------------------------------------------------------- */
+
+.validation-error {
+    color: #FF6B6B;
+    text-style: italic;
+    padding-left: 2;
+}
+
+.validation-success {
+    color: #00FF88;
+    padding-left: 2;
+}
+
+/* -----------------------------------------------------------------------------
+   DataTable (for test import preview)
+   ----------------------------------------------------------------------------- */
+
+DataTable {
+    background: #2a2a2a;
+}
+
+DataTable > .datatable--header {
+    background: #3a3a3a;
+    color: #00D9FF;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #00D9FF;
+    color: #1a1a1a;
+}
+
+/* -----------------------------------------------------------------------------
+   Scrollbars
+   ----------------------------------------------------------------------------- */
+
+ScrollBar {
+    background: #2a2a2a;
+}
+
+ScrollBar > .scrollbar--bar {
+    background: #444444;
+}
+
+ScrollBar > .scrollbar--bar:hover {
+    background: #555555;
+}
+
+/* -----------------------------------------------------------------------------
+   Utility Classes
+   ----------------------------------------------------------------------------- */
+
+.text-primary { color: #00D9FF; }
+.text-success { color: #00FF88; }
+.text-warning { color: #FFD93D; }
+.text-error { color: #FF6B6B; }
+.text-dim { color: #888888; }
+.text-muted { color: #555555; }
+
+.text-bold { text-style: bold; }
+.text-italic { text-style: italic; }
+
+.bg-panel { background: #2a2a2a; }
+.bg-hover { background: #3a3a3a; }
+
+.border-primary { border: solid #00D9FF; }
+.border-success { border: solid #00FF88; }
+.border-error { border: solid #FF6B6B; }
+
+.hidden { display: none; }

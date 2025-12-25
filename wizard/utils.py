@@ -91,6 +91,21 @@ class WizardState:
         """Check if a step is complete."""
         return step in self.completed_steps
 
+    # Compatibility properties for new wizard
+    @property
+    def requires_login(self) -> bool:
+        """Alias for needs_login (new wizard uses this name)."""
+        return self.needs_login
+
+    @requires_login.setter
+    def requires_login(self, value: bool) -> None:
+        self.needs_login = value
+
+    @property
+    def sheets_enabled(self) -> bool:
+        """Alias for google_sheets_enabled."""
+        return self.google_sheets_enabled
+
 
 class StateManager:
     """
@@ -341,6 +356,37 @@ def check_ollama_model(model: str = "mistral") -> bool:
     except:
         pass
     return False
+
+
+def check_prerequisites() -> List[str]:
+    """
+    Run all prerequisite checks.
+
+    Returns:
+        List of issue descriptions (empty if all checks pass)
+    """
+    issues = []
+
+    # Python version
+    py_ok, py_version = check_python_version()
+    if not py_ok:
+        issues.append(f"Python {py_version} is below minimum (3.10)")
+
+    # Internet
+    if not check_internet():
+        issues.append("No internet connection")
+
+    # Disk space
+    disk_ok, disk_mb = check_disk_space(500)
+    if not disk_ok:
+        issues.append(f"Low disk space: {disk_mb}MB available (need 500MB)")
+
+    # Git (warning only)
+    git_ok, _ = check_git()
+    if not git_ok:
+        issues.append("Git not found (recommended)")
+
+    return issues
 
 
 # Network helpers

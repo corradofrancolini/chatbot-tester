@@ -218,19 +218,26 @@ class Wizard:
         ))
 
 
-def run_wizard(language: str = "it", project_name: str = "") -> bool:
+def run_wizard(language: str = "it", project_name: str = "", legacy: bool = False) -> bool:
     """
     Convenience function to run the wizard.
 
     Args:
         language: 'it' or 'en'
         project_name: Optional project name for reconfiguration
+        legacy: If True, use the old Rich-based wizard
 
     Returns:
         True if completed, False if cancelled
     """
-    wizard = Wizard(language=language, project_name=project_name)
-    return wizard.run()
+    if legacy:
+        # Use legacy Rich-based wizard
+        wizard = Wizard(language=language, project_name=project_name)
+        return wizard.run()
+    else:
+        # Use new Textual-based wizard
+        from wizard.app import run_textual_wizard
+        return run_textual_wizard(language=language, project_name=project_name)
 
 
 if __name__ == "__main__":
@@ -239,8 +246,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Chatbot Tester Setup Wizard")
     parser.add_argument("--lang", choices=["it", "en"], default="it", help="Language")
     parser.add_argument("--project", default="", help="Project name (for reconfiguration)")
+    parser.add_argument("--legacy", action="store_true", help="Use legacy Rich-based wizard")
 
     args = parser.parse_args()
 
-    success = run_wizard(language=args.lang, project_name=args.project)
+    success = run_wizard(language=args.lang, project_name=args.project, legacy=args.legacy)
     sys.exit(0 if success else 1)
