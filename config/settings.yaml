@@ -70,6 +70,12 @@ evaluation:
   semantic_weight: 0.3                    # Peso semantic similarity
   judge_weight: 0.4                       # Peso LLM-as-judge
   rag_weight: 0.3                         # Peso metriche RAG
+  # Auto RAG context from LangSmith
+  auto_rag_context:
+    enabled: true                         # Abilita estrazione automatica da LangSmith
+    max_documents: 5                      # Max documenti da includere
+    max_chars: 10000                      # Max caratteri totali contesto
+    prefer_manual: true                   # Se true, rag_context_file ha priorità
 notifications:
   email:
     enabled: false

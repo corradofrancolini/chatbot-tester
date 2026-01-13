@@ -16,6 +16,49 @@
 
 ---
 
+## 1Password CLI - Secrets Management
+
+**IMPORTANTE**: Tutte le API keys e credentials devono essere gestite tramite 1Password CLI. Mai hardcodare secrets in file o ~/.zshrc.
+
+### Items in 1Password (vault: Personal)
+
+| Item | Campo | Variabile |
+|------|-------|-----------|
+| LangSmith | api-key | `LANGSMITH_API_KEY` |
+| Anthropic | api-key | `ANTHROPIC_API_KEY` |
+| OpenAI | api-key | `OPENAI_API_KEY` |
+| Google API | api-key | `GOOGLE_API_KEY` |
+| CircleCI | token | `CIRCLECI_TOKEN` |
+
+### Comandi disponibili
+
+```bash
+# Genera .env dal template
+env-inject
+
+# Esegui comando con secrets (senza file .env su disco)
+opr python run.py -p silicon-b -m auto
+
+# Carica API keys globali nella shell
+load-secrets
+
+# Leggi singolo secret
+opread "op://Personal/OpenAI/api-key"
+```
+
+### Aggiungere nuove API keys
+
+1. Crea item in 1Password: `op item create --category="API Credential" --title="NomeServizio" --vault="Personal" "api-key=xxx"`
+2. Aggiungi a `config/.env.template`: `NOME_VAR=op://Personal/NomeServizio/api-key`
+3. Se serve globalmente, aggiungi a `load-secrets()` in `~/.zshrc`
+
+### File
+
+- `config/.env.template` - Template con riferimenti `op://` (committabile)
+- `config/.env` - File generato con valori reali (in .gitignore)
+
+---
+
 ## Architecture Overview
 
 ```

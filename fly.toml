@@ -1,0 +1,37 @@
+# fly.toml - Fly.io configuration for chatbot-tester MCP server
+
+app = "chatbot-tester-mcp"
+primary_region = "fra"
+
+[build]
+  dockerfile = "mcp_server/Dockerfile"
+
+[env]
+  PORT = "8080"
+  HOST = "0.0.0.0"
+  PYTHONUNBUFFERED = "1"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false  # Keep at least one running
+  auto_start_machines = true
+  min_machines_running = 1    # Always have 1 machine ready
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+# Health check per verificare che il server sia pronto
+[[http_service.checks]]
+  interval = "10s"
+  timeout = "2s"
+  grace_period = "5s"
+  method = "GET"
+  path = "/health"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

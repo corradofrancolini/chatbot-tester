@@ -90,3 +90,6 @@ htmlcov/
 projects/*/
 !projects/.gitkeep
 !projects/example-chatbot/
+!projects/efg-intranet/
+!projects/silicon-b/
+!projects/ws-corporate-ai/

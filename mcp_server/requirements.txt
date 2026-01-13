@@ -1,0 +1,19 @@
+# MCP Server dependencies
+# These are additional to the main project requirements.txt
+
+# MCP SDK
+mcp>=1.0.0
+
+# ASGI server and framework
+uvicorn>=0.24.0
+starlette>=0.32.0
+
+# SSE support (for MCP HTTP transport)
+sse-starlette>=1.8.0
+
+# HTTP client (for CircleCI API)
+httpx>=0.25.0
+
+# HTML Parsing (for structured validation)
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
