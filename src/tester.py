@@ -24,65 +24,20 @@ from .config_loader import (
 from .browser import BrowserManager, BrowserSettings, ChatbotSelectors
 from .ollama_client import OllamaClient
 from .langsmith_client import LangSmithClient, LangSmithDebugger, LangSmithReport
-from .sheets_client import GoogleSheetsClient, TestResult, ScreenshotUrls
-from .report_local import ReportGenerator, TestResultLocal
+from .models import (
+    TestResult, ScreenshotUrls, TestMode,
+    ConversationTurn, TestCase, TestExecution, ExecutionContext
+)
+from .sheets_client import GoogleSheetsClient
+from .report_local import ReportGenerator
+from .engine.executor import TestExecutor
 from .training import TrainingData, TrainModeUI
 from .performance import PerformanceCollector, PerformanceReporter, PerformanceAlerter, PerformanceHistory
+from .evaluation import Evaluator, EvaluationConfig, EvaluationResult, create_evaluator_from_settings
+from .baselines import BaselinesCache, get_baseline, preload_baselines
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
-from rich.text import Text
-from rich.console import Console
-from rich.panel import Panel
-from rich.text import Text
-from rich.text import Text
-from rich.console import Console
-from rich.panel import Panel
-from rich.text import Text
-from rich.text import Text
-
-
-class TestMode(Enum):
-    """Modalità di test disponibili"""
-    TRAIN = "train"       # Apprendimento da interazione umana
-    ASSISTED = "assisted"  # LLM con supervisione umana
-    AUTO = "auto"         # Completamente automatico
-
-
-@dataclass
-class TestCase:
-    """Definizione di un test case"""
-    id: str
-    question: str
-    category: str = ""
-    expected: str = ""
-    followups: List[str] = field(default_factory=list)
-    data: Dict[str, Any] = field(default_factory=dict)  # email, country, etc.
-    tags: List[str] = field(default_factory=list)
-
-
-@dataclass
-class ConversationTurn:
-    """Singolo turno di conversazione"""
-    role: str  # 'user' o 'assistant'
-    content: str
-    timestamp: str = ""
-
-
-@dataclass
-class TestExecution:
-    """Risultato esecuzione di un test"""
-    test_case: TestCase
-    conversation: List[ConversationTurn]
-    esito: str  # PASS, FAIL, SKIP, ERROR
-    duration_ms: int
-    screenshot_path: str = ""
-    langsmith_url: str = ""
-    langsmith_report: str = ""  # Report LangSmith (testo)
-    notes: str = ""  # Note interne (non per il reviewer)
-    llm_evaluation: Optional[Dict] = None
-    model_version: str = ""
-    prompt_version: str = ""  # Versione prompt da run config
 
 
 class ChatbotTester:
@@ -144,6 +99,7 @@ class ChatbotTester:
         self.ollama: Optional[OllamaClient] = None
         self.langsmith: Optional[LangSmithClient] = None
         self.sheets: Optional[GoogleSheetsClient] = None
+        self.baselines_cache: Optional[BaselinesCache] = None
 
         # Report locale
         self.report: Optional[ReportGenerator] = None
@@ -161,6 +117,9 @@ class ChatbotTester:
         # Performance metrics
         self.perf_collector: Optional[PerformanceCollector] = None
         self._service_start_time: Optional[float] = None
+
+        # Evaluation system
+        self.evaluator: Optional[Evaluator] = None
 
     async def initialize(self) -> bool:
         """
@@ -217,6 +176,18 @@ class ChatbotTester:
                 self.on_status("! Ollama non disponibile")
                 self.ollama = None
 
+        # Evaluation system (opzionale - usa OpenAI GPT-4o-mini)
+        if self.settings.evaluation.enabled:
+            try:
+                self.evaluator = create_evaluator_from_settings(
+                    self.settings.evaluation,
+                    self.project.project_dir
+                )
+                self.on_status("✓ Evaluation system attivo (OpenAI)")
+            except Exception as e:
+                self.on_status(f"! Evaluation system non disponibile: {e}")
+                self.evaluator = None
+
         # LangSmith (opzionale) - rispetta toggle use_langsmith
         if self.use_langsmith and self.project.langsmith.enabled and self.project.langsmith.api_key:
             self.langsmith = LangSmithClient(
@@ -239,15 +210,47 @@ class ChatbotTester:
             self.on_status("> Google Sheets disabilitato (dry run)")
         elif self.project.google_sheets.enabled:
             try:
+                # Ottieni configurazione colonne
+                columns_config = self.project.google_sheets.columns
+                column_preset = columns_config.preset if columns_config else "standard"
+                column_list = columns_config.custom if columns_config and columns_config.preset == "custom" else None
+
                 self.sheets = GoogleSheetsClient(
                     credentials_path=self.project.google_sheets.credentials_path,
                     spreadsheet_id=self.project.google_sheets.spreadsheet_id,
-                    drive_folder_id=self.project.google_sheets.drive_folder_id
+                    drive_folder_id=self.project.google_sheets.drive_folder_id,
+                    column_preset=column_preset,
+                    column_list=column_list
                 )
+
+                # Applica configurazione colonne per test file specifico se configurato
+                if columns_config and columns_config.by_test_file:
+                    test_file_name = self.project.tests_file.name if self.project.tests_file else 'tests.json'
+                    self.sheets.set_columns_for_test_file(
+                        test_file_name,
+                        columns_config.by_test_file,
+                        column_preset,
+                        column_list
+                    )
+
                 if self.sheets.authenticate():
                     self.on_status("✓ Google Sheets autenticato")
                     # Il foglio RUN e i test completati vengono configurati
                     # da run.py tramite sheets.setup_run_sheet()
+
+                    # Precarica baseline (golden answers) per evaluation
+                    try:
+                        self.baselines_cache = BaselinesCache(ttl_seconds=300)
+                        baseline_count = self.baselines_cache.load(
+                            self.sheets,
+                            self.project.name,
+                            force=True
+                        )
+                        if baseline_count > 0:
+                            self.on_status(f"✓ Baselines caricate: {baseline_count} golden answers")
+                    except Exception as e:
+                        self.on_status(f"! Baselines non disponibili: {e}")
+                        self.baselines_cache = None
                 else:
                     self.sheets = None
             except Exception as e:
@@ -294,6 +297,27 @@ class ChatbotTester:
                 return False
 
         self.on_status("✓ Chatbot pronto")
+
+        # Initialize Executor with bundled context
+        context = ExecutionContext(
+            browser=self.browser,
+            settings=self.settings,
+            ollama=self.ollama,
+            langsmith=self.langsmith,
+            evaluator=self.evaluator,
+            training=self.training,
+            baselines=self.baselines_cache,
+            perf_collector=self.perf_collector,
+            report=self.report,
+            sheets=self.sheets,
+            console=self._console,
+            run_config=self.run_config,
+            project=self.project,
+            single_turn=self.single_turn,
+            current_mode=self.current_mode if self.current_mode else TestMode.AUTO
+        )
+        self.executor = TestExecutor(context)
+
         return True
 
     def load_test_cases(self) -> List[TestCase]:
@@ -309,7 +333,14 @@ class ChatbotTester:
                 expected=t.get('expected', ''),
                 followups=t.get('followups', []),
                 data=t.get('data', {}),
-                tags=t.get('tags', [])
+                tags=t.get('tags', []),
+                notes=t.get('notes', ''),
+                # Campi GGP
+                section=t.get('section', ''),
+                test_target=t.get('test_target', ''),
+                # Campi evaluation
+                expected_answer=t.get('expected_answer'),
+                rag_context_file=t.get('rag_context_file')
             ))
 
         return tests
@@ -336,6 +367,9 @@ class ChatbotTester:
             Lista risultati
         """
         self.current_mode = TestMode.TRAIN
+        # Aggiorna anche il context dell'executor
+        if self.executor and self.executor.ctx:
+            self.executor.ctx.current_mode = TestMode.TRAIN
 
         if skip_completed:
             tests = self.filter_pending_tests(tests)
@@ -394,8 +428,75 @@ class ChatbotTester:
         - Terminare con [end], uscire con [q]uit
         - Saltare con [skip]
         """
-        conversation = []
+        conversation: List[ConversationTurn] = []
         start_time = datetime.utcnow()
+
+        try:
+            # Phase 1: Navigate and start conversation
+            conversation = await self._train_navigate_and_start(test)
+
+            # Phase 2: Interactive loop
+            loop_result = await self._train_interactive_loop(test, conversation)
+            conversation = loop_result['conversation']
+            skipped = loop_result['skipped']
+            turn = loop_result['turn']
+            patterns_learned = loop_result['patterns_learned']
+
+            # Phase 3: Finalize execution
+            return await self._train_finalize(
+                test=test,
+                conversation=conversation,
+                start_time=start_time,
+                skipped=skipped,
+                turn=turn,
+                patterns_learned=patterns_learned
+            )
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return TestExecution(
+                test_case=test,
+                conversation=conversation,
+                result="ERROR",
+                duration_ms=0,
+                notes=f"Errore: {e}"
+            )
+
+    async def _train_navigate_and_start(self, test: TestCase) -> List[ConversationTurn]:
+        """Phase 1: Navigate to chatbot and send initial question."""
+        conversation: List[ConversationTurn] = []
+
+        # Ricarica la pagina per iniziare una nuova conversazione
+        await self.browser.navigate(self.project.chatbot.url)
+        await asyncio.sleep(0.5)
+
+        # Invia domanda iniziale
+        await self.browser.send_message(test.question)
+        print(f"\nYOU → {test.question}")
+
+        conversation.append(ConversationTurn(
+            role='user',
+            content=test.question,
+            timestamp=datetime.utcnow().isoformat()
+        ))
+
+        return conversation
+
+    async def _train_interactive_loop(
+        self,
+        test: TestCase,
+        conversation: List[ConversationTurn]
+    ) -> Dict[str, Any]:
+        """
+        Phase 2: Interactive conversation loop.
+
+        Returns dict with:
+            conversation: Updated conversation
+            skipped: True if user skipped
+            turn: Number of turns completed
+            patterns_learned: Number of new patterns learned
+        """
         patterns_learned = 0
         followup_idx = 0
         turn = 0
@@ -405,194 +506,191 @@ class ChatbotTester:
         # UI helper
         ui = TrainModeUI(self.training) if self.training else None
 
-        try:
-            # Ricarica la pagina per iniziare una nuova conversazione
-            await self.browser.navigate(self.project.chatbot.url)
-            await asyncio.sleep(0.5)
+        while turn < max_turns:
+            turn += 1
 
-            # Invia domanda iniziale
-            await self.browser.send_message(test.question)
-            print(f"\nYOU → {test.question}")
+            # Attendi risposta bot
+            response = await self.browser.wait_for_response()
+
+            if not response:
+                print("  [nessuna risposta dal bot]")
+                break
+
+            # Mostra risposta bot (troncata per leggibilità)
+            response_preview = response[:200] + "..." if len(response) > 200 else response
+            print(f"BOT ← {response_preview}")
 
             conversation.append(ConversationTurn(
-                role='user',
-                content=test.question,
+                role='assistant',
+                content=response,
                 timestamp=datetime.utcnow().isoformat()
             ))
 
-            # Loop interattivo
-            while turn < max_turns:
-                turn += 1
+            # Prepara suggerimenti
+            next_followup = test.followups[followup_idx] if followup_idx < len(test.followups) else None
+            suggestions = self.training.get_suggestions(response) if self.training else []
 
-                # Attendi risposta bot
-                response = await self.browser.wait_for_response()
+            # Mostra UI suggerimenti
+            if ui:
+                print(ui.format_suggestions(response, next_followup))
+            else:
+                if next_followup:
+                    print(f"  [f] followup: \"{next_followup[:50]}...\"")
 
-                if not response:
-                    print("  [nessuna risposta dal bot]")
-                    break
+            # Barra comandi
+            self._console.print("[dim]" + "─" * 50 + "[/dim]")
+            self._console.print("[reverse cyan]e[/reverse cyan]nd  [reverse cyan]s[/reverse cyan]kip  [reverse cyan]f[/reverse cyan]ollowup  [reverse cyan]q[/reverse cyan]uit")
 
-                # Mostra risposta bot (troncata per leggibilità)
-                response_preview = response[:200] + "..." if len(response) > 200 else response
-                print(f"BOT ← {response_preview}")
+            # Attendi input utente
+            print(">>> ", end="", flush=True)
+            user_input = await self._async_input()
+            user_input = user_input.strip()
 
-                conversation.append(ConversationTurn(
-                    role='assistant',
-                    content=response,
-                    timestamp=datetime.utcnow().isoformat()
-                ))
+            # Gestisci comandi speciali
+            if user_input.lower() == 'end':
+                break
 
-                # Prepara suggerimenti
-                next_followup = test.followups[followup_idx] if followup_idx < len(test.followups) else None
-                suggestions = self.training.get_suggestions(response) if self.training else []
+            if user_input.lower() in ('quit', 'q'):
+                self._quit_requested = True
+                break
 
-                # Mostra UI suggerimenti
+            if user_input.lower() == 'skip':
+                skipped = True
+                break
+
+            # Determina risposta da inviare
+            user_response = self._determine_user_response(
+                user_input, next_followup, suggestions
+            )
+
+            if user_response == '__use_followup__':
+                user_response = next_followup
+                followup_idx += 1
+            elif user_response is None:
+                print("  [input non valido, riprova]")
+                turn -= 1  # Non conta come turno
+                continue
+
+            # Impara pattern
+            pattern, is_new = self._record_training_pattern(response, user_response)
+            if pattern:
+                patterns_learned += 1 if is_new else 0
                 if ui:
-                    print(ui.format_suggestions(response, next_followup))
-                else:
-                    if next_followup:
-                        print(f"  [f] followup: \"{next_followup[:50]}...\"")
-
-                # Barra comandi
-                self._console.print("[dim]" + "─" * 50 + "[/dim]")
-                self._console.print("[reverse cyan]e[/reverse cyan]nd  [reverse cyan]s[/reverse cyan]kip  [reverse cyan]f[/reverse cyan]ollowup  [reverse cyan]q[/reverse cyan]uit")
-
-                # Attendi input utente
-                print(">>> ", end="", flush=True)
-                user_input = await self._async_input()
-                user_input = user_input.strip()
-
-                # Gestisci comandi speciali
-                if user_input.lower() == 'end':
-                    break
-
-                if user_input.lower() in ('quit', 'q'):
-                    self._quit_requested = True
-                    break
-
-                if user_input.lower() in ('quit', 'q'):
-                    self._quit_requested = True
-                    break
-
-                if user_input.lower() == 'skip':
-                    skipped = True
-                    break
-
-                # Determina risposta da inviare
-                user_response = None
-
-                if user_input.lower() == 'f' and next_followup:
-                    # Usa followup
-                    user_response = next_followup
-                    followup_idx += 1
-
-                elif user_input.isdigit() and suggestions:
-                    # Scegli suggerimento numerato
-                    idx = int(user_input) - 1
-                    if 0 <= idx < len(suggestions):
-                        user_response = suggestions[idx]['text']
-
-                elif user_input == '' and next_followup:
-                    # INVIO = usa followup
-                    user_response = next_followup
-                    followup_idx += 1
-
-                elif user_input:
-                    # Risposta libera
-                    user_response = user_input
-
-                if not user_response:
-                    print("  [input non valido, riprova]")
-                    turn -= 1  # Non conta come turno
-                    continue
-
-                # Impara pattern
-                pattern, is_new = self._record_training_pattern(response, user_response)
-                if pattern:
-                    patterns_learned += 1 if is_new else 0
-                    if ui:
-                        print(ui.format_learned(pattern, user_response, is_new))
-                    else:
-                        print(f"  ✓ {user_response}")
+                    print(ui.format_learned(pattern, user_response, is_new))
                 else:
                     print(f"  ✓ {user_response}")
-
-                # Invia risposta al bot
-                await self.browser.send_message(user_response)
-                print(f"\nYOU → {user_response}")
-
-                conversation.append(ConversationTurn(
-                    role='user',
-                    content=user_response,
-                    timestamp=datetime.utcnow().isoformat()
-                ))
-
-            # Screenshot finale (skip if configured)
-            screenshot_path = ""
-            skip_ss = getattr(self.project.chatbot, 'skip_screenshot', False)
-            if self.settings.screenshot_on_complete and self.report and not skip_ss:
-                ss_path = self.report.get_screenshot_path(test.id)
-                if await self.browser.take_screenshot(
-                    ss_path,
-                    inject_css=self.project.chatbot.screenshot_css
-                ):
-                    screenshot_path = str(ss_path)
-
-            duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-
-            # Registra conversazione nel training
-            if self.training:
-                turns_data = []
-                for i in range(0, len(conversation) - 1, 2):
-                    if i + 1 < len(conversation):
-                        turns_data.append({
-                            'bot': conversation[i + 1].content if conversation[i + 1].role == 'assistant' else '',
-                            'user': conversation[i].content if conversation[i].role == 'user' else ''
-                        })
-                self.training.record_conversation(test.id, test.question, turns_data)
-
-            # Riepilogo
-            if ui:
-                print(f"\n{ui.format_test_complete(test.id, turn, patterns_learned)}")
             else:
-                print(f"\n✓ {test.id} completato │ {turn} turni")
+                print(f"  ✓ {user_response}")
 
-            # LangSmith debug (anche in Train mode per estrarre model_version e report)
-            langsmith_url = ""
-            langsmith_report = ""
-            model_version = ""
-            if self.langsmith:
-                try:
-                    report = self.langsmith.get_report_for_question(test.question)
-                    if report.trace_url:
-                        langsmith_url = report.trace_url
-                        langsmith_report = report.format_for_sheets()
-                        model_version = report.get_model_version()
-                except:
-                    pass
+            # Invia risposta al bot
+            await self.browser.send_message(user_response)
+            print(f"\nYOU → {user_response}")
 
-            return TestExecution(
-                test_case=test,
-                conversation=conversation,
-                esito="SKIP" if skipped else "PASS",
-                duration_ms=duration_ms,
-                screenshot_path=screenshot_path,
-                notes="",  # Vuoto - per il reviewer
-                langsmith_url=langsmith_url,
-                langsmith_report=langsmith_report,
-                model_version=model_version,
-                prompt_version=self.run_config.prompt_version if self.run_config else ""
-            )
+            conversation.append(ConversationTurn(
+                role='user',
+                content=user_response,
+                timestamp=datetime.utcnow().isoformat()
+            ))
 
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return TestExecution(
-                test_case=test,
-                conversation=conversation,
-                esito="ERROR",
-                duration_ms=0,
-                notes=f"Errore: {e}"
-            )
+        return {
+            'conversation': conversation,
+            'skipped': skipped,
+            'turn': turn,
+            'patterns_learned': patterns_learned
+        }
+
+    def _determine_user_response(
+        self,
+        user_input: str,
+        next_followup: Optional[str],
+        suggestions: List[Dict]
+    ) -> Optional[str]:
+        """Determine what response to send based on user input."""
+        if user_input.lower() == 'f' and next_followup:
+            return '__use_followup__'
+
+        if user_input.isdigit() and suggestions:
+            idx = int(user_input) - 1
+            if 0 <= idx < len(suggestions):
+                return suggestions[idx]['text']
+
+        if user_input == '' and next_followup:
+            return '__use_followup__'
+
+        if user_input:
+            return user_input
+
+        return None
+
+    async def _train_finalize(
+        self,
+        test: TestCase,
+        conversation: List[ConversationTurn],
+        start_time: datetime,
+        skipped: bool,
+        turn: int,
+        patterns_learned: int
+    ) -> TestExecution:
+        """Phase 3: Finalize test - screenshot, training record, langsmith."""
+        ui = TrainModeUI(self.training) if self.training else None
+
+        # Screenshot finale (skip if configured)
+        screenshot_path = ""
+        skip_ss = getattr(self.project.chatbot, 'skip_screenshot', False)
+        skip_ss = skip_ss or (self.run_config and getattr(self.run_config, 'skip_screenshots', False))
+        if self.settings.screenshot_on_complete and self.report and not skip_ss:
+            ss_path = self.report.get_screenshot_path(test.id)
+            if await self.browser.take_screenshot(
+                ss_path,
+                inject_css=self.project.chatbot.screenshot_css
+            ):
+                screenshot_path = str(ss_path)
+
+        duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+
+        # Registra conversazione nel training
+        if self.training:
+            turns_data = []
+            for i in range(0, len(conversation) - 1, 2):
+                if i + 1 < len(conversation):
+                    turns_data.append({
+                        'bot': conversation[i + 1].content if conversation[i + 1].role == 'assistant' else '',
+                        'user': conversation[i].content if conversation[i].role == 'user' else ''
+                    })
+            self.training.record_conversation(test.id, test.question, turns_data)
+
+        # Riepilogo
+        if ui:
+            print(f"\n{ui.format_test_complete(test.id, turn, patterns_learned)}")
+        else:
+            print(f"\n✓ {test.id} completato │ {turn} turni")
+
+        # LangSmith debug (anche in Train mode per estrarre model_version e report)
+        langsmith_url = ""
+        langsmith_report = ""
+        model_version = ""
+        if self.langsmith:
+            try:
+                report = self.langsmith.get_report_for_question(test.question)
+                if report.trace_url:
+                    langsmith_url = report.trace_url
+                    langsmith_report = report.format_for_sheets()
+                    model_version = report.get_model_version()
+            except:
+                pass
+
+        return TestExecution(
+            test_case=test,
+            conversation=conversation,
+            result="SKIP" if skipped else "PASS",
+            duration_ms=duration_ms,
+            screenshot_path=screenshot_path,
+            notes="",  # Vuoto - per il reviewer
+            langsmith_url=langsmith_url,
+            langsmith_report=langsmith_report,
+            model_version=model_version,
+            prompt_version=self.run_config.prompt_version if self.run_config else ""
+        )
 
     async def _async_input(self) -> str:
         """Input asincrono per non bloccare event loop"""
@@ -625,6 +723,9 @@ class ChatbotTester:
             self.on_status("! AUTO mode senza Ollama - solo esecuzione e screenshot")
 
         self.current_mode = TestMode.AUTO
+        # Aggiorna anche il context dell'executor
+        if self.executor and self.executor.ctx:
+            self.executor.ctx.current_mode = TestMode.AUTO
         max_turns = max_turns or self.settings.max_turns
 
         if skip_completed:
@@ -650,6 +751,12 @@ class ChatbotTester:
             environment="cloud" if self.settings.browser.headless else "local"
         )
 
+        # Update executor with session components
+        self.executor.report = self.report
+        self.executor.perf_collector = self.perf_collector
+        if self.perf_collector:
+            self.executor.perf_collector = self.perf_collector
+
         results = []
 
         for i, test in enumerate(tests):
@@ -658,7 +765,7 @@ class ChatbotTester:
 
             self.on_status(f"\n--- Test {i+1}/{len(tests)}: {test.id} ---")
 
-            result = await self._execute_auto_test(test, max_turns)
+            result = await self.executor.execute_auto_test(test, max_turns)
             results.append(result)
 
             # Check quit
@@ -700,267 +807,6 @@ class ChatbotTester:
 
         return results
 
-    async def _execute_auto_test(self, test: TestCase, max_turns: int) -> TestExecution:
-        """Esegue un singolo test in modalità auto"""
-        conversation = []
-        start_time = datetime.utcnow()
-        remaining_followups = test.followups.copy()
-
-        # Start performance tracking for this test
-        if self.perf_collector:
-            self.perf_collector.start_test(test.id)
-
-        try:
-            # PHASE: Setup - navigate to chatbot
-            if self.perf_collector:
-                self.perf_collector.start_phase("setup")
-
-            await self.browser.navigate(self.project.chatbot.url)
-            await asyncio.sleep(0.5)
-
-            if self.perf_collector:
-                self.perf_collector.end_phase()
-
-            # PHASE: Send question
-            if self.perf_collector:
-                self.perf_collector.start_phase("send_question")
-
-            self.on_status(f"{test.question[:60]}...")
-            await self.browser.send_message(test.question)
-
-            if self.perf_collector:
-                self.perf_collector.end_phase()
-
-            conversation.append(ConversationTurn(
-                role='user',
-                content=test.question,
-                timestamp=datetime.utcnow().isoformat()
-            ))
-
-            # Loop conversazione
-            turn = 0
-            while turn < max_turns:
-                turn += 1
-
-                # PHASE: Wait for bot response
-                if self.perf_collector:
-                    self.perf_collector.start_phase("wait_response")
-
-                chatbot_start = time.perf_counter()
-                response = await self.browser.wait_for_response()
-                chatbot_duration_ms = (time.perf_counter() - chatbot_start) * 1000
-
-                if self.perf_collector:
-                    self.perf_collector.end_phase()
-                    # Record chatbot latency as external service
-                    self.perf_collector.record_service_call(
-                        service="chatbot",
-                        operation="response",
-                        duration_ms=chatbot_duration_ms,
-                        success=response is not None
-                    )
-                    # Record TTFR (Time To First Render) if available
-                    if self.browser.last_response_timing:
-                        self.perf_collector.record_service_call(
-                            service="chatbot",
-                            operation="ttfr",
-                            duration_ms=self.browser.last_response_timing.ttfr_ms,
-                            success=True
-                        )
-
-                if not response:
-                    self.on_status("! Nessuna risposta dal bot")
-                    if self.perf_collector:
-                        self.perf_collector.record_timeout()
-                    break
-
-                conversation.append(ConversationTurn(
-                    role='assistant',
-                    content=response,
-                    timestamp=datetime.utcnow().isoformat()
-                ))
-
-                self.on_status(f"Bot: {response[:60]}...")
-
-                # Se single_turn, esci dopo la prima risposta (no followup)
-                if self.single_turn:
-                    self.on_status("Conversazione completata (single turn)")
-                    break
-
-                # Decidi prossimo messaggio
-                next_message = self._decide_next_message(
-                    conversation,
-                    remaining_followups,
-                    test
-                )
-
-                if not next_message:
-                    self.on_status("Conversazione completata")
-                    break
-
-                # Rimuovi followup usato
-                if next_message in remaining_followups:
-                    remaining_followups.remove(next_message)
-
-                # Invia followup
-                self.on_status(f"{next_message[:60]}...")
-                await self.browser.send_message(next_message)
-
-                conversation.append(ConversationTurn(
-                    role='user',
-                    content=next_message,
-                    timestamp=datetime.utcnow().isoformat()
-                ))
-
-            # PHASE: Screenshot finale COMPLETO (skip if configured)
-            skip_ss = getattr(self.project.chatbot, 'skip_screenshot', False)
-            if self.perf_collector and not skip_ss:
-                self.perf_collector.start_phase("screenshot")
-
-            screenshot_path = ""
-            if self.settings.screenshot_on_complete and not skip_ss:
-                ss_path = self.report.get_screenshot_path(test.id)
-                # Usa take_conversation_screenshot che:
-                # - Nasconde input bar, footer, scroll arrows
-                # - ESPANDE tutti i container (scroller, thread, products)
-                # - Cattura l'elemento .llm__thread che contiene TUTTA la conversazione
-                success = await self.browser.take_conversation_screenshot(
-                    path=ss_path,
-                    hide_elements=['.llm__prompt', '.llm__footer', '.llm__busyIndicator', '.llm__scrollDown'],
-                    thread_selector='.llm__thread'
-                )
-                # Fallback a screenshot normale se fallisce
-                if not success:
-                    success = await self.browser.take_screenshot(
-                        ss_path,
-                        inject_css=self.project.chatbot.screenshot_css
-                    )
-                if success:
-                    screenshot_path = str(ss_path)
-
-            if self.perf_collector and not skip_ss:
-                self.perf_collector.end_phase()
-
-            # Valutazione LLM (solo se Ollama disponibile)
-            final_response = conversation[-1].content if conversation else ""
-            if self.ollama:
-                evaluation = self.ollama.evaluate_test_result(
-                    test_case={'question': test.question, 'category': test.category, 'expected': test.expected},
-                    conversation=[{'role': t.role, 'content': t.content} for t in conversation],
-                    final_response=final_response
-                )
-            else:
-                # Senza Ollama, segna come pending (valutazione manuale richiesta)
-                evaluation = {'passed': None, 'reason': 'Valutazione manuale richiesta (Ollama non disponibile)'}
-
-            # LangSmith debug
-            langsmith_url = ""
-            langsmith_report = ""
-            model_version = ""
-            if self.langsmith:
-                try:
-                    langsmith_start = time.perf_counter()
-                    report = self.langsmith.get_report_for_question(test.question)
-                    langsmith_duration_ms = (time.perf_counter() - langsmith_start) * 1000
-
-                    if self.perf_collector:
-                        self.perf_collector.record_service_call(
-                            service="langsmith",
-                            operation="get_report",
-                            duration_ms=langsmith_duration_ms,
-                            success=report.trace_url is not None
-                        )
-
-                    if report.trace_url:
-                        langsmith_url = report.trace_url
-                        langsmith_report = report.format_for_sheets()
-                        model_version = report.get_model_version()
-                except Exception as e:
-                    self.on_status(f"! Errore LangSmith: {e}")
-                    if self.perf_collector:
-                        self.perf_collector.record_service_call(
-                            service="langsmith",
-                            operation="get_report",
-                            duration_ms=0,
-                            success=False,
-                            error=str(e)
-                        )
-
-            duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-
-            # Finalize test metrics
-            esito = "PASS" if evaluation.get('passed', False) else "FAIL"
-            if self.perf_collector:
-                self.perf_collector.end_test(esito)
-
-            return TestExecution(
-                test_case=test,
-                conversation=conversation,
-                esito=esito,
-                duration_ms=duration_ms,
-                screenshot_path=screenshot_path,
-                langsmith_url=langsmith_url,
-                langsmith_report=langsmith_report,
-                notes="",  # Note vuote (per il reviewer)
-                llm_evaluation=evaluation,
-                model_version=model_version,
-                prompt_version=self.run_config.prompt_version if self.run_config else ""
-            )
-
-        except Exception as e:
-            # Record error in performance metrics
-            if self.perf_collector:
-                self.perf_collector.record_error(str(e))
-                self.perf_collector.end_test("ERROR")
-
-            return TestExecution(
-                test_case=test,
-                conversation=conversation,
-                esito="ERROR",
-                duration_ms=0,
-                notes=f"Errore: {e}"
-            )
-
-    def _decide_next_message(self,
-                              conversation: List[ConversationTurn],
-                              remaining_followups: List[str],
-                              test: TestCase) -> Optional[str]:
-        """
-        Decide il prossimo messaggio da inviare.
-
-        Usa in ordine:
-        1. Pattern matching dal training (se trova match)
-        2. Ollama con training context (se disponibile)
-        3. Primo followup disponibile (fallback)
-        """
-        # Estrai ultimo messaggio del bot
-        bot_message = ""
-        for turn in reversed(conversation):
-            if turn.role == 'assistant':
-                bot_message = turn.content
-                break
-
-        if self.ollama:
-            # Usa decide_response che sfrutta training + LLM
-            conv_dicts = [{'role': t.role, 'content': t.content} for t in conversation]
-            return self.ollama.decide_response(
-                bot_message=bot_message,
-                conversation=conv_dicts,
-                followups=remaining_followups if remaining_followups else None,
-                test_context=test.category
-            )
-        elif self.training:
-            # Senza LLM, prova pattern matching dal training
-            suggestions = self.training.get_suggestions(bot_message, limit=1)
-            if suggestions:
-                response = suggestions[0]['text']
-                # Impara (incrementa contatore)
-                self.training.learn(bot_message, response)
-                return response
-
-        # Fallback: primo followup o None
-        return remaining_followups[0] if remaining_followups else None
-
     # ==================== MODALITÀ ASSISTED ====================
 
     async def run_assisted_session(self,
@@ -983,6 +829,9 @@ class ChatbotTester:
             return await self.run_train_session(tests, skip_completed)
 
         self.current_mode = TestMode.ASSISTED
+        # Aggiorna anche il context dell'executor
+        if self.executor and self.executor.ctx:
+            self.executor.ctx.current_mode = TestMode.ASSISTED
 
         # Implementazione simile a auto ma con conferme utente
         # Per brevità, delega a auto con logging extra
@@ -993,83 +842,8 @@ class ChatbotTester:
     # ==================== HELPERS ====================
 
     def _save_result(self, result: TestExecution) -> None:
-        """Salva risultato nei report"""
-        date_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-
-        # Formatta conversazione
-        conv_str = "\n".join([
-            f"{'USER' if t.role == 'user' else 'BOT'}: {t.content}"
-            for t in result.conversation
-        ])
-
-        # Report locale
-        if self.report:
-            self.report.add_result(TestResultLocal(
-                test_id=result.test_case.id,
-                date=date_str,
-                mode=self.current_mode.value.upper(),
-                question=result.test_case.question,
-                conversation=conv_str,
-                screenshot_path=result.screenshot_path,
-                esito=result.esito,
-                notes=result.notes,
-                langsmith_url=result.langsmith_url,
-                duration_ms=result.duration_ms,
-                category=result.test_case.category,
-                followups_count=len(result.test_case.followups)
-            ))
-
-        # Google Sheets (con tracking performance)
-        if self.sheets:
-            # Track Sheets performance - start
-            sheets_start = time.perf_counter()
-
-            screenshot_urls = None
-            if result.screenshot_path:
-                screenshot_urls = self.sheets.upload_screenshot(
-                    Path(result.screenshot_path),
-                    result.test_case.id
-                )
-
-            # Build timing string from browser timing if available
-            timing_str = ""
-            if self.browser and self.browser.last_response_timing:
-                timing = self.browser.last_response_timing
-                if timing.ttfr_ms > 0 or timing.total_ms > 0:
-                    ttfr_sec = timing.ttfr_ms / 1000
-                    total_sec = timing.total_ms / 1000
-                    timing_str = f"{ttfr_sec:.1f}s → {total_sec:.1f}s"
-
-            self.sheets.append_result(TestResult(
-                test_id=result.test_case.id,
-                date=date_str,
-                mode=self.current_mode.value.upper(),
-                question=result.test_case.question,
-                conversation=conv_str[:5000],  # Limite Sheets
-                screenshot_urls=screenshot_urls,
-                prompt_version=result.prompt_version,
-                model_version=result.model_version,
-                environment=self.run_config.env if self.run_config else "DEV",
-                esito="",  # Vuoto - compilato dal reviewer
-                notes="",  # Vuoto - note del reviewer
-                langsmith_report=result.langsmith_report,
-                langsmith_url=result.langsmith_url,
-                timing=timing_str
-            ))
-
-            # Track Sheets performance - end
-            sheets_duration_ms = (time.perf_counter() - sheets_start) * 1000
-            if self.perf_collector and self.perf_collector._current_test is None:
-                # Record in last test metrics if available
-                if self.perf_collector.run_metrics.test_metrics:
-                    self.perf_collector.run_metrics.test_metrics[-1].add_service_call(
-                        service="google_sheets",
-                        operation="save_result",
-                        duration_ms=sheets_duration_ms,
-                        success=True
-                    )
-
-        # Aggiorna test completati
+        """Salva risultato nei report - delega all'executor."""
+        self.executor.persist(result)
         self.completed_tests.add(result.test_case.id)
 
     def _record_training_pattern(self, bot_message: str, user_response: str) -> tuple:

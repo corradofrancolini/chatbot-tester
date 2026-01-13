@@ -29,7 +29,7 @@ class Wizard:
     Manages step flow, state, and navigation.
     """
 
-    TOTAL_STEPS = 9
+    TOTAL_STEPS = 10
 
     def __init__(self, language: str = "it", project_name: str = ""):
         """
@@ -62,19 +62,21 @@ class Wizard:
         from wizard.steps.google_sheets import GoogleSheetsStep
         from wizard.steps.langsmith import LangSmithStep
         from wizard.steps.ollama import OllamaStep
+        from wizard.steps.evaluation import EvaluationStep
         from wizard.steps.test_import import TestImportStep
         from wizard.steps.summary import SummaryStep
 
         step_classes = [
-            PrerequisitesStep,
-            ProjectInfoStep,
-            ChatbotUrlStep,
-            SelectorsStep,
-            GoogleSheetsStep,
-            LangSmithStep,
-            OllamaStep,
-            TestImportStep,
-            SummaryStep,
+            PrerequisitesStep,      # Step 1
+            ProjectInfoStep,        # Step 2
+            ChatbotUrlStep,         # Step 3
+            SelectorsStep,          # Step 4
+            GoogleSheetsStep,       # Step 5
+            LangSmithStep,          # Step 6
+            OllamaStep,             # Step 7
+            EvaluationStep,         # Step 8 (NEW)
+            TestImportStep,         # Step 9
+            SummaryStep,            # Step 10
         ]
 
         # Instantiate each step with UI and state
@@ -216,19 +218,26 @@ class Wizard:
         ))
 
 
-def run_wizard(language: str = "it", project_name: str = "") -> bool:
+def run_wizard(language: str = "it", project_name: str = "", legacy: bool = False) -> bool:
     """
     Convenience function to run the wizard.
 
     Args:
         language: 'it' or 'en'
         project_name: Optional project name for reconfiguration
+        legacy: If True, use the old Rich-based wizard
 
     Returns:
         True if completed, False if cancelled
     """
-    wizard = Wizard(language=language, project_name=project_name)
-    return wizard.run()
+    if legacy:
+        # Use legacy Rich-based wizard
+        wizard = Wizard(language=language, project_name=project_name)
+        return wizard.run()
+    else:
+        # Use new Textual-based wizard
+        from wizard.app import run_textual_wizard
+        return run_textual_wizard(language=language, project_name=project_name)
 
 
 if __name__ == "__main__":
@@ -237,8 +246,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Chatbot Tester Setup Wizard")
     parser.add_argument("--lang", choices=["it", "en"], default="it", help="Language")
     parser.add_argument("--project", default="", help="Project name (for reconfiguration)")
+    parser.add_argument("--legacy", action="store_true", help="Use legacy Rich-based wizard")
 
     args = parser.parse_args()
 
-    success = run_wizard(language=args.lang, project_name=args.project)
+    success = run_wizard(language=args.lang, project_name=args.project, legacy=args.legacy)
     sys.exit(0 if success else 1)

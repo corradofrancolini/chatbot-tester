@@ -54,6 +54,31 @@ class MenuItem:
     recommended: bool = False
 
 
+@dataclass
+class MenuAction:
+    """Action with direct shortcut for accordion menu"""
+    shortcut: str           # e.g., "cal", "cmp"
+    label: str              # e.g., "Calibrazione Soglie"
+    description: str = ""   # Optional description
+    handler: str = ""       # Handler function name (for reference)
+    disabled: bool = False
+
+
+@dataclass
+class MenuSection:
+    """Expandable menu section for accordion menu"""
+    key: str                        # e.g., "1", "2"
+    title: str                      # e.g., "Analisi Testing"
+    actions: List['MenuAction'] = None  # List of actions in this section
+    expanded: bool = False
+    icon_collapsed: str = "▸"
+    icon_expanded: str = "▾"
+
+    def __post_init__(self):
+        if self.actions is None:
+            self.actions = []
+
+
 class ConsoleUI:
     """
     Console interface with Rich.
@@ -339,6 +364,184 @@ class ConsoleUI:
 
         valid_keys = [i.key for i in items]
         return [s for s in selected if s in valid_keys]
+
+    # ==================== ACCORDION MENU ====================
+
+    def accordion_menu(self,
+                       sections: List['MenuSection'],
+                       title: str = "MENU",
+                       version: str = "",
+                       global_shortcuts: dict = None) -> Optional[str]:
+        """
+        Accordion menu with inline expansion and direct shortcuts.
+
+        Args:
+            sections: List of menu sections
+            title: Menu title
+            version: Version string to display
+            global_shortcuts: Dict mapping shortcut -> handler (for validation)
+
+        Returns:
+            Selected shortcut string or None for quit
+        """
+        expanded_section = None
+
+        # Build set of all valid shortcuts
+        all_shortcuts = set()
+        if global_shortcuts:
+            all_shortcuts.update(global_shortcuts.keys())
+        for section in sections:
+            for action in section.actions:
+                all_shortcuts.add(action.shortcut)
+
+        while True:
+            self._render_accordion(sections, title, version, expanded_section)
+
+            choice = self.input(">").strip().lower()
+
+            # Quit
+            if choice in ['q', 'quit', 'exit']:
+                return None
+
+            # Help
+            if choice == '?':
+                self._show_shortcuts_help(sections)
+                continue
+
+            # Back/collapse current section
+            if choice == 'b' and expanded_section is not None:
+                expanded_section = None
+                continue
+
+            # Section toggle (number)
+            if choice.isdigit():
+                idx = int(choice) - 1
+                if 0 <= idx < len(sections):
+                    if expanded_section == idx:
+                        expanded_section = None  # Collapse
+                    else:
+                        expanded_section = idx   # Expand
+                continue
+
+            # Direct shortcut - check if valid
+            if choice in all_shortcuts:
+                # Check if action is disabled
+                for section in sections:
+                    for action in section.actions:
+                        if action.shortcut == choice:
+                            if action.disabled:
+                                self.warning(f"'{choice}' non disponibile")
+                                break
+                            return choice
+                else:
+                    # Shortcut from global_shortcuts
+                    return choice
+
+            # Invalid input
+            if choice:
+                self.warning(f"Comando non riconosciuto: {choice}")
+
+    def _render_accordion(self,
+                          sections: List['MenuSection'],
+                          title: str,
+                          version: str,
+                          expanded_idx: Optional[int]) -> None:
+        """Render accordion menu to console."""
+        # Clear screen
+        self.clear()
+
+        # Header
+        header_text = f"[bold]{title}[/bold]"
+        if version:
+            header_text += f" [dim]v{version}[/dim]"
+
+        if self.console:
+            self.console.print(Panel(header_text, border_style="cyan", padding=(0, 2)))
+        else:
+            print(f"\n{'=' * 50}")
+            print(f"  {title} {version}")
+            print(f"{'=' * 50}")
+
+        self.print("")
+
+        # Sections
+        for i, section in enumerate(sections):
+            is_expanded = (i == expanded_idx)
+            icon = section.icon_expanded if is_expanded else section.icon_collapsed
+
+            # Section header
+            section_line = f"  [{section.key}] {icon} {section.title}"
+            if is_expanded:
+                if self.console:
+                    self.console.print(f"{section_line}  [dim][ESPANSO][/dim]")
+                else:
+                    print(f"{section_line}  [ESPANSO]")
+            else:
+                self.print(section_line)
+
+            # Show actions if expanded
+            if is_expanded:
+                for j, action in enumerate(section.actions):
+                    is_last = (j == len(section.actions) - 1)
+                    prefix = "└─" if is_last else "├─"
+
+                    if action.disabled:
+                        style = "dim"
+                        if self.console:
+                            self.console.print(
+                                f"       {prefix} [dim]{action.shortcut:5}[/dim] {action.label}",
+                                style=style
+                            )
+                        else:
+                            print(f"       {prefix} {action.shortcut:5} {action.label} [disabled]")
+                    else:
+                        if self.console:
+                            self.console.print(
+                                f"       {prefix} [cyan]{action.shortcut:5}[/cyan] {action.label}"
+                            )
+                        else:
+                            print(f"       {prefix} {action.shortcut:5} {action.label}")
+
+        # Footer
+        self.print("")
+        footer = "  [?] Aiuto    [q] Esci"
+        if expanded_idx is not None:
+            footer += "    [b] Chiudi sezione"
+        self.print(footer, "dim")
+
+        # Shortcuts hint
+        hint_shortcuts = []
+        for section in sections:
+            for action in section.actions[:2]:  # First 2 per section
+                if not action.disabled:
+                    hint_shortcuts.append(action.shortcut)
+        if hint_shortcuts:
+            self.print(f"  Shortcut: {', '.join(hint_shortcuts[:8])}...", "dim")
+
+        self.print("")
+
+    def _show_shortcuts_help(self, sections: List['MenuSection']) -> None:
+        """Show help with all available shortcuts."""
+        self.clear()
+        self.section("Shortcut Disponibili")
+        self.print("")
+
+        for section in sections:
+            self.print(f"  [bold]{section.title}[/bold]")
+            for action in section.actions:
+                status = "[dim]" if action.disabled else ""
+                end_status = "[/dim]" if action.disabled else ""
+                if self.console:
+                    self.console.print(
+                        f"    [cyan]{action.shortcut:6}[/cyan] {status}{action.label}{end_status}"
+                    )
+                else:
+                    disabled_mark = " [disabled]" if action.disabled else ""
+                    print(f"    {action.shortcut:6} {action.label}{disabled_mark}")
+            self.print("")
+
+        self.print("  Premi INVIO per tornare al menu...", "dim")
+        input()
 
     # ==================== WIZARD ====================
 

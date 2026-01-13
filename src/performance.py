@@ -252,13 +252,15 @@ class PerformanceCollector:
         self._phase_start: Optional[float] = None
         self._phase_name: Optional[str] = None
 
-    def start_test(self, test_id: str):
+    def start_test(self, test_id: str, category: str = None):
         """Inizia raccolta metriche per un test"""
         self._current_test = TestMetrics(
             test_id=test_id,
             environment=self.run_metrics.environment,
             start_time=datetime.now()
         )
+        # category stored for potential future use
+        self._current_category = category
 
     def start_phase(self, phase: str):
         """Inizia misurazione di una fase"""

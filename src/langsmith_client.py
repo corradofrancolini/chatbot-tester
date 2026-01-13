@@ -9,246 +9,20 @@ Handles:
 """
 
 import requests
+import time
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
+from .clients.base import BaseClient
+from .models.langsmith import (
+    TraceInfo, ToolCall, WaterfallStep, SourceDocument, LangSmithReport
+)
 
 
-@dataclass
-class ToolCall:
-    """Chiamata a un tool nel trace"""
-    name: str
-    input: Dict[str, Any]
-    output: Optional[Any] = None
-    duration_ms: int = 0
-    error: Optional[str] = None
 
 
-@dataclass
-class TraceInfo:
-    """Informazioni su un trace LangSmith"""
-    id: str
-    name: str
-    start_time: datetime
-    end_time: Optional[datetime] = None
-    duration_ms: int = 0
-    status: str = ""
-    input: str = ""
-    output: str = ""
-    tool_calls: List[ToolCall] = field(default_factory=list)
-    tokens_used: int = 0
-    model: str = ""
-    url: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
 
-
-@dataclass
-class WaterfallStep:
-    """Singolo step nel waterfall tree"""
-    name: str
-    run_type: str  # llm, tool, chain, retriever, etc.
-    duration_ms: int = 0
-    start_offset_ms: int = 0  # Offset dall'inizio del trace
-    status: str = ""
-    error: Optional[str] = None
-    depth: int = 0  # Livello di nesting
-
-
-@dataclass
-class SourceDocument:
-    """Documento fonte recuperato durante la ricerca"""
-    title: str = ""
-    source: str = ""  # URL o path
-    content_preview: str = ""
-    score: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class LangSmithReport:
-    """Report strutturato per un trace LangSmith"""
-    trace_url: str = ""
-    duration_ms: int = 0
-    status: str = ""
-    model: str = ""
-    model_provider: str = ""
-    tokens_input: int = 0
-    tokens_output: int = 0
-    tokens_total: int = 0
-    tools_used: List[str] = field(default_factory=list)
-    tool_count: int = 0
-    failed_tools: int = 0
-    first_token_ms: int = 0
-    error: str = ""
-    # Campi estesi
-    query: str = ""  # Query/input eseguita
-    response: str = ""  # Risposta/output
-    waterfall: List[WaterfallStep] = field(default_factory=list)  # Tree della run
-    sources: List[SourceDocument] = field(default_factory=list)  # Fonti consultate
-    # Metriche timing dettagliate
-    llm_duration_ms: int = 0  # Tempo totale LLM
-    llm_calls: int = 0  # Numero chiamate LLM
-    tool_duration_ms: int = 0  # Tempo totale tool
-    retriever_duration_ms: int = 0  # Tempo retriever/RAG
-    chain_duration_ms: int = 0  # Tempo chain/orchestration
-    queue_time_ms: int = 0  # Tempo in coda (se disponibile)
-    streaming_duration_ms: int = 0  # Durata streaming
-    tokens_per_second: float = 0.0  # Velocità generazione token
-
-    def format_for_sheets(self) -> str:
-        """Formatta il report per inserimento in Google Sheets (colonna LS REPORT)"""
-        lines = []
-
-        # === TIMING (prima, più importante) ===
-        lines.append("=== TIMING ===")
-
-        # Tempo totale
-        if self.duration_ms:
-            duration_sec = self.duration_ms / 1000
-            lines.append(f"⏱️ Total: {self._format_duration(self.duration_ms)}")
-
-        # Time to first token
-        if self.first_token_ms:
-            lines.append(f"⚡ TTFT: {self._format_duration(self.first_token_ms)}")
-
-        # Breakdown per componente
-        breakdown = []
-        if self.llm_duration_ms:
-            pct = (self.llm_duration_ms / self.duration_ms * 100) if self.duration_ms else 0
-            breakdown.append(f"  • LLM: {self._format_duration(self.llm_duration_ms)} ({pct:.0f}%)")
-        if self.tool_duration_ms:
-            pct = (self.tool_duration_ms / self.duration_ms * 100) if self.duration_ms else 0
-            breakdown.append(f"  • Tools: {self._format_duration(self.tool_duration_ms)} ({pct:.0f}%)")
-        if self.retriever_duration_ms:
-            pct = (self.retriever_duration_ms / self.duration_ms * 100) if self.duration_ms else 0
-            breakdown.append(f"  • RAG/Retriever: {self._format_duration(self.retriever_duration_ms)} ({pct:.0f}%)")
-        if self.chain_duration_ms:
-            pct = (self.chain_duration_ms / self.duration_ms * 100) if self.duration_ms else 0
-            breakdown.append(f"  • Chain: {self._format_duration(self.chain_duration_ms)} ({pct:.0f}%)")
-
-        if breakdown:
-            lines.append("Breakdown:")
-            lines.extend(breakdown)
-
-        # Token speed
-        if self.tokens_per_second > 0:
-            lines.append(f"🚀 Speed: {self.tokens_per_second:.1f} tok/s")
-        elif self.tokens_output and self.llm_duration_ms:
-            # Calcola se non fornito
-            tps = self.tokens_output / (self.llm_duration_ms / 1000)
-            lines.append(f"🚀 Speed: {tps:.1f} tok/s")
-
-        # === MODEL ===
-        if self.model:
-            lines.append("")
-            lines.append("=== MODEL ===")
-            model_str = self.model
-            if self.model_provider:
-                model_str = f"{self.model_provider}/{self.model}"
-            lines.append(f"🤖 {model_str}")
-            if self.llm_calls > 1:
-                lines.append(f"   ({self.llm_calls} LLM calls)")
-
-        # === TOKENS ===
-        if self.tokens_total or self.tokens_input or self.tokens_output:
-            lines.append("")
-            lines.append("=== TOKENS ===")
-            lines.append(f"📊 Input: {self.tokens_input:,}")
-            lines.append(f"📊 Output: {self.tokens_output:,}")
-            lines.append(f"📊 Total: {self.tokens_total:,}")
-            # Stima costo (prezzi GPT-4 Turbo)
-            if self.tokens_total > 0:
-                cost_estimate = (self.tokens_input * 0.00001) + (self.tokens_output * 0.00003)
-                if cost_estimate > 0.0001:
-                    lines.append(f"💰 Est. cost: ${cost_estimate:.4f}")
-
-        # === TOOLS ===
-        if self.tools_used:
-            lines.append("")
-            lines.append(f"=== TOOLS ({self.tool_count} calls) ===")
-            lines.append(", ".join(self.tools_used))
-            if self.failed_tools:
-                lines.append(f"❌ Failed: {self.failed_tools}")
-
-        # === WATERFALL TIMING ===
-        if self.waterfall:
-            lines.append("")
-            lines.append(f"=== WATERFALL ({len(self.waterfall)} steps) ===")
-            # Mostra solo gli step principali (depth <= 1) con timing
-            main_steps = [s for s in self.waterfall if s.depth <= 1]
-            for step in main_steps[:10]:  # Max 10 step
-                status_icon = "✓" if step.status == "success" else "✗" if step.error else "→"
-                duration_str = f"{step.duration_ms}ms" if step.duration_ms < 1000 else f"{step.duration_ms/1000:.1f}s"
-                lines.append(f"  {status_icon} {step.name} ({step.run_type}): {duration_str}")
-            if len(main_steps) > 10:
-                lines.append(f"  ... +{len(main_steps) - 10} more steps")
-
-        # === SOURCES ===
-        if self.sources:
-            lines.append("")
-            lines.append(f"=== SOURCES ({len(self.sources)}) ===")
-            for src in self.sources[:5]:  # Max 5 sources
-                title = src.title or src.source or "Unknown"
-                score_str = f" [{src.score:.2f}]" if src.score else ""
-                lines.append(f"• {title}{score_str}")
-            if len(self.sources) > 5:
-                lines.append(f"  ... +{len(self.sources) - 5} more sources")
-
-        # === QUERY (breve) ===
-        if self.query:
-            lines.append("")
-            lines.append("=== QUERY ===")
-            query_preview = self.query[:150] + "..." if len(self.query) > 150 else self.query
-            lines.append(query_preview)
-
-        # === RESPONSE (breve) ===
-        if self.response:
-            lines.append("")
-            lines.append("=== RESPONSE ===")
-            response_preview = self.response[:200] + "..." if len(self.response) > 200 else self.response
-            lines.append(response_preview)
-
-        # === ERRORS ===
-        has_errors = self.error or self.failed_tools or (self.status and self.status != "success")
-        waterfall_errors = [s for s in self.waterfall if s.error]
-
-        if has_errors or waterfall_errors:
-            lines.append("")
-            lines.append("=== ERRORS ===")
-            if self.status and self.status != "success":
-                lines.append(f"Status: {self.status}")
-            if self.error:
-                lines.append(f"Error: {self.error[:150]}")
-            for step in waterfall_errors[:3]:  # Max 3 errori
-                lines.append(f"• {step.name}: {step.error[:80]}")
-
-        # === TRACE URL ===
-        if self.trace_url:
-            lines.append("")
-            lines.append("=== TRACE ===")
-            lines.append(self.trace_url)
-
-        return "\n".join(lines) if lines else ""
-
-    def _format_duration(self, ms: int) -> str:
-        """Formatta durata in modo leggibile"""
-        if ms < 1000:
-            return f"{ms}ms"
-        elif ms < 60000:
-            return f"{ms/1000:.2f}s"
-        else:
-            mins = ms // 60000
-            secs = (ms % 60000) / 1000
-            return f"{mins}m {secs:.1f}s"
-
-    def get_model_version(self) -> str:
-        """Restituisce stringa model version per il report"""
-        if self.model_provider and self.model:
-            return f"{self.model_provider}/{self.model}"
-        return self.model or ""
-
-
-class LangSmithClient:
+class LangSmithClient(BaseClient):
     """
     Client per LangSmith API.
 
@@ -296,6 +70,71 @@ class LangSmithClient:
             'Content-Type': 'application/json'
         })
 
+        # Retry config
+        self._max_retries = 3
+        self._base_delay = 1.0  # secondi
+        self._max_delay = 30.0  # secondi
+
+    def _request_with_retry(self, method: str, url: str, **kwargs) -> Optional[requests.Response]:
+        """
+        Esegue richiesta HTTP con retry e exponential backoff per 429.
+
+        Args:
+            method: 'get' o 'post'
+            url: URL da chiamare
+            **kwargs: argomenti per requests (json, timeout, etc.)
+
+        Returns:
+            Response o None se tutti i retry falliscono
+        """
+        delay = self._base_delay
+
+        for attempt in range(self._max_retries + 1):
+            try:
+                if method == 'get':
+                    response = self._session.get(url, **kwargs)
+                else:
+                    response = self._session.post(url, **kwargs)
+
+                # Successo
+                if response.status_code == 200:
+                    return response
+
+                # Rate limit - retry con backoff
+                if response.status_code == 429:
+                    if attempt < self._max_retries:
+                        # Cerca Retry-After header
+                        retry_after = response.headers.get('Retry-After')
+                        if retry_after:
+                            delay = min(float(retry_after), self._max_delay)
+
+                        print(f"  ⏳ LangSmith rate limit, retry in {delay:.1f}s...")
+                        time.sleep(delay)
+                        delay = min(delay * 2, self._max_delay)  # Exponential backoff
+                        continue
+                    else:
+                        print(f"! LangSmith rate limit, max retries reached")
+                        return None
+
+                # Altri errori - non ritentare
+                print(f"! LangSmith API error: {response.status_code}")
+                return response
+
+            except requests.exceptions.Timeout:
+                if attempt < self._max_retries:
+                    print(f"  ⏳ LangSmith timeout, retry in {delay:.1f}s...")
+                    time.sleep(delay)
+                    delay = min(delay * 2, self._max_delay)
+                    continue
+                print(f"! LangSmith timeout, max retries reached")
+                return None
+
+            except Exception as e:
+                print(f"! LangSmith request error: {e}")
+                return None
+
+        return None
+
     @property
     def project_url(self) -> str:
         """URL del progetto in LangSmith"""
@@ -336,30 +175,25 @@ class LangSmithClient:
         if end_time:
             payload['end_time'] = end_time.isoformat()
 
-        try:
-            response = self._session.post(
-                f"{self.BASE_URL}/runs/query",
-                json=payload,
-                timeout=30
-            )
+        response = self._request_with_retry(
+            'post',
+            f"{self.BASE_URL}/runs/query",
+            json=payload,
+            timeout=30
+        )
 
-            if response.status_code != 200:
-                print(f"! LangSmith API error: {response.status_code}")
-                return []
-
-            runs = response.json().get('runs', [])
-            traces = []
-
-            for run in runs:
-                trace = self._parse_run(run)
-                if trace:
-                    traces.append(trace)
-
-            return traces
-
-        except Exception as e:
-            print(f"! Errore recupero traces: {e}")
+        if not response or response.status_code != 200:
             return []
+
+        runs = response.json().get('runs', [])
+        traces = []
+
+        for run in runs:
+            trace = self._parse_run(run)
+            if trace:
+                traces.append(trace)
+
+        return traces
 
     def get_latest_trace(self,
                          after: Optional[datetime] = None,
@@ -396,17 +230,14 @@ class LangSmithClient:
         Returns:
             TraceInfo o None
         """
-        try:
-            response = self._session.get(
-                f"{self.BASE_URL}/runs/{trace_id}",
-                timeout=30
-            )
+        response = self._request_with_retry(
+            'get',
+            f"{self.BASE_URL}/runs/{trace_id}",
+            timeout=30
+        )
 
-            if response.status_code == 200:
-                return self._parse_run(response.json())
-
-        except:
-            pass
+        if response and response.status_code == 200:
+            return self._parse_run(response.json())
 
         return None
 
@@ -420,21 +251,18 @@ class LangSmithClient:
         Returns:
             Lista di run nel trace
         """
-        try:
-            response = self._session.post(
-                f"{self.BASE_URL}/runs/query",
-                json={
-                    'trace': parent_id,
-                    'limit': 100
-                },
-                timeout=30
-            )
+        response = self._request_with_retry(
+            'post',
+            f"{self.BASE_URL}/runs/query",
+            json={
+                'trace': parent_id,
+                'limit': 100
+            },
+            timeout=30
+        )
 
-            if response.status_code == 200:
-                return response.json().get('runs', [])
-
-        except:
-            pass
+        if response and response.status_code == 200:
+            return response.json().get('runs', [])
 
         return []
 
@@ -574,6 +402,9 @@ class LangSmithClient:
         # Estrai sources/documenti consultati
         sources = self._extract_sources(trace.id)
 
+        # Estrai vector store provider
+        vector_store = self._extract_vector_store(trace.id)
+
         # Calcola metriche di timing dal waterfall
         timing_metrics = self._calculate_timing_metrics(waterfall)
 
@@ -590,6 +421,7 @@ class LangSmithClient:
             status=analysis['status'],
             model=model_info.get('model', '') or analysis.get('model', ''),
             model_provider=model_info.get('provider', ''),
+            vector_store=vector_store,
             tokens_input=model_info.get('tokens_input', 0),
             tokens_output=tokens_output,
             tokens_total=analysis['tokens_used'] or model_info.get('tokens_total', 0),
@@ -693,20 +525,18 @@ class LangSmithClient:
 
         # Se non trovato nei child, cerca nel run principale
         if not model_info['model']:
-            try:
-                response = self._session.get(
-                    f"{self.BASE_URL}/runs/{trace_id}",
-                    timeout=10
-                )
-                if response.status_code == 200:
-                    run_data = response.json()
-                    extra = run_data.get('extra', {})
-                    metadata = extra.get('metadata', {})
+            response = self._request_with_retry(
+                'get',
+                f"{self.BASE_URL}/runs/{trace_id}",
+                timeout=10
+            )
+            if response and response.status_code == 200:
+                run_data = response.json()
+                extra = run_data.get('extra', {})
+                metadata = extra.get('metadata', {})
 
-                    model_info['model'] = metadata.get('model', '') or metadata.get('ls_model_name', '')
-                    model_info['provider'] = metadata.get('ls_provider', '')
-            except:
-                pass
+                model_info['model'] = metadata.get('model', '') or metadata.get('ls_model_name', '')
+                model_info['provider'] = metadata.get('ls_provider', '')
 
         return model_info
 
@@ -897,6 +727,7 @@ class LangSmithClient:
                             title=metadata.get('title', '') or metadata.get('name', ''),
                             source=metadata.get('source', '') or metadata.get('url', '') or metadata.get('file', ''),
                             content_preview=page_content[:300] if page_content else '',
+                            full_content=page_content,  # Contenuto completo per RAG evaluation
                             score=float(metadata.get('score', 0) or doc.get('score', 0) or 0),
                             metadata=metadata
                         )
@@ -908,6 +739,7 @@ class LangSmithClient:
                             seen_sources.add(doc[:50])
                             sources.append(SourceDocument(
                                 content_preview=doc[:300],
+                                full_content=doc,  # Contenuto completo
                                 source="inline"
                             ))
 
@@ -941,6 +773,49 @@ class LangSmithClient:
                             ))
 
         return sources
+
+    def _extract_vector_store(self, trace_id: str) -> str:
+        """
+        Estrae il vector store provider dai retriever runs.
+
+        Cerca nei run di tipo 'retriever' il campo metadata ls_vector_store_provider.
+
+        Args:
+            trace_id: ID del trace
+
+        Returns:
+            Nome del vector store (es. "Qdrant", "FAISS") o stringa vuota
+        """
+        child_runs = self.get_child_runs(trace_id)
+
+        for run in child_runs:
+            run_type = run.get('run_type', '')
+            run_name = run.get('name', '').lower()
+
+            # Cerca nei retriever runs
+            if run_type == 'retriever' or 'retriev' in run_name or 'vectorstore' in run_name:
+                extra = run.get('extra', {})
+                metadata = extra.get('metadata', {})
+
+                # Cerca ls_vector_store_provider
+                vector_store = metadata.get('ls_vector_store_provider', '')
+                if vector_store:
+                    # Pulisci il nome (es. "QdrantVectorStore" -> "Qdrant")
+                    vector_store = vector_store.replace('VectorStore', '').replace('vectorstore', '')
+                    return vector_store
+
+                # Fallback: cerca ls_retriever_name
+                retriever_name = metadata.get('ls_retriever_name', '')
+                if retriever_name and 'qdrant' in retriever_name.lower():
+                    return 'Qdrant'
+                elif retriever_name and 'faiss' in retriever_name.lower():
+                    return 'FAISS'
+                elif retriever_name and 'chroma' in retriever_name.lower():
+                    return 'Chroma'
+                elif retriever_name and 'pinecone' in retriever_name.lower():
+                    return 'Pinecone'
+
+        return ""
 
     def _guess_provider(self, model_name: str) -> str:
         """Indovina il provider dal nome del modello"""
@@ -1161,98 +1036,5 @@ class LangSmithDebugger:
         return results
 
 
-class LangSmithSetup:
-    """Helper per setup LangSmith"""
-
-    @staticmethod
-    def get_setup_instructions() -> str:
-        """Istruzioni per setup LangSmith"""
-        return """
-SETUP LANGSMITH
-
-1. Vai su smith.langchain.com e accedi
-
-2. Crea un nuovo progetto o seleziona esistente
-
-3. Copia i seguenti valori:
-   - Project ID: dalla URL del progetto
-   - Org ID: Settings > Organization (se presente)
-
-4. Genera API Key:
-   Settings > API Keys > Create API Key
-
-5. Inserisci i valori nel wizard o in .env:
-   LANGSMITH_API_KEY=lsv2_sk_xxxxx
-"""
-
-    @staticmethod
-    def validate_api_key(api_key: str) -> tuple[bool, str]:
-        """
-        Valida una API key LangSmith.
-
-        Returns:
-            (is_valid, message)
-        """
-        if not api_key:
-            return False, "API key vuota"
-
-        if not api_key.startswith('lsv2_'):
-            return False, "Formato API key non valido (deve iniziare con lsv2_)"
-
-        # Test connessione
-        try:
-            response = requests.get(
-                "https://api.smith.langchain.com/api/v1/info",
-                headers={'x-api-key': api_key},
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                return True, "API key valida"
-            elif response.status_code == 401:
-                return False, "API key non autorizzata"
-            else:
-                return False, f"Errore verifica: {response.status_code}"
-        except Exception as e:
-            return False, f"Errore connessione: {e}"
-
-    @staticmethod
-    def extract_project_id(url: str) -> Optional[str]:
-        """
-        Estrae project ID da URL LangSmith.
-
-        Args:
-            url: URL del progetto
-
-        Returns:
-            Project ID o None
-        """
-        # Format: https://smith.langchain.com/o/ORG/projects/p/PROJECT_ID
-        # o: https://smith.langchain.com/projects/p/PROJECT_ID
-
-        if '/projects/p/' in url:
-            parts = url.split('/projects/p/')
-            if len(parts) > 1:
-                project_id = parts[1].split('/')[0].split('?')[0]
-                return project_id
-
-        return None
-
-    @staticmethod
-    def extract_org_id(url: str) -> Optional[str]:
-        """
-        Estrae org ID da URL LangSmith.
-
-        Args:
-            url: URL del progetto
-
-        Returns:
-            Org ID o None
-        """
-        if '/o/' in url:
-            parts = url.split('/o/')
-            if len(parts) > 1:
-                org_id = parts[1].split('/')[0]
-                return org_id
-
-        return None
+# Import from clients subpackage
+from .clients.langsmith_setup import LangSmithSetup

@@ -1,0 +1,496 @@
+/* =============================================================================
+   CHATBOT TESTER WIZARD - Global Styles (Textual CSS)
+   Design System: Modern dark theme with cyan accents
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   App Root & Screen
+   ----------------------------------------------------------------------------- */
+
+Screen {
+    background: #1a1a1a;
+}
+
+/* -----------------------------------------------------------------------------
+   Header & Footer
+   ----------------------------------------------------------------------------- */
+
+Header {
+    background: #00D9FF;
+    color: #1a1a1a;
+    text-style: bold;
+    height: 1;
+}
+
+Footer {
+    background: #2a2a2a;
+    height: 1;
+}
+
+/* -----------------------------------------------------------------------------
+   Main Layout
+   ----------------------------------------------------------------------------- */
+
+#main-container {
+    layout: horizontal;
+    height: 1fr;
+}
+
+/* -----------------------------------------------------------------------------
+   Sidebar
+   ----------------------------------------------------------------------------- */
+
+#sidebar {
+    width: 26;
+    min-width: 26;
+    max-width: 26;
+    background: #252525;
+    border-right: tall #3a3a3a;
+    padding: 1 1;
+}
+
+.sidebar-title {
+    text-style: bold;
+    color: #00D9FF;
+    text-align: center;
+    padding: 0 0 1 0;
+    border-bottom: heavy #3a3a3a;
+    margin-bottom: 1;
+}
+
+#sidebar-groups {
+    height: auto;
+}
+
+.sidebar-item {
+    padding: 0 1;
+    height: 2;
+    content-align: left middle;
+}
+
+.sidebar-item.current {
+    background: #3a3a3a;
+    color: #00D9FF;
+    text-style: bold;
+}
+
+.sidebar-item.completed {
+    color: #00FF88;
+}
+
+.sidebar-item.pending {
+    color: #666666;
+}
+
+.sidebar-item:hover {
+    background: #333333;
+}
+
+.sidebar-footer {
+    dock: bottom;
+    padding: 1 0 0 0;
+    border-top: heavy #3a3a3a;
+    color: #666666;
+    text-align: center;
+    height: 2;
+}
+
+/* -----------------------------------------------------------------------------
+   Main Content Area
+   ----------------------------------------------------------------------------- */
+
+#main-content {
+    width: 1fr;
+    height: 1fr;
+    background: #1a1a1a;
+    padding: 1 2;
+}
+
+#form-container {
+    height: auto;
+    width: 1fr;
+}
+
+/* -----------------------------------------------------------------------------
+   Screen Header
+   ----------------------------------------------------------------------------- */
+
+#screen-header {
+    height: auto;
+    padding-bottom: 1;
+    border-bottom: heavy #3a3a3a;
+    margin-bottom: 1;
+}
+
+.screen-title {
+    text-style: bold;
+    color: #ffffff;
+    height: 1;
+}
+
+.screen-description {
+    color: #888888;
+    height: 1;
+}
+
+#screen-content {
+    height: auto;
+}
+
+#screen-container {
+    height: auto;
+}
+
+/* -----------------------------------------------------------------------------
+   Form Elements
+   ----------------------------------------------------------------------------- */
+
+.form-group {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.form-label {
+    color: #ffffff;
+    text-style: bold;
+    height: 1;
+    margin-bottom: 0;
+}
+
+.form-help {
+    color: #666666;
+    height: 1;
+}
+
+Input {
+    background: #2a2a2a;
+    border: tall #444444;
+    height: 3;
+    padding: 0 1;
+}
+
+Input:focus {
+    border: tall #00D9FF;
+    background: #333333;
+}
+
+Input.-valid {
+    border: tall #00FF88;
+}
+
+Input.-invalid {
+    border: tall #FF6B6B;
+}
+
+Input:disabled {
+    background: #222222;
+    color: #555555;
+}
+
+/* Checkbox & Switch */
+
+Checkbox {
+    height: auto;
+    min-height: 1;
+    padding: 0;
+    background: transparent;
+}
+
+Switch {
+    height: auto;
+    min-height: 1;
+}
+
+/* -----------------------------------------------------------------------------
+   Buttons
+   ----------------------------------------------------------------------------- */
+
+Button {
+    min-width: 12;
+    height: 3;
+    margin: 0 1 0 0;
+    color: white;
+    background: #444444;
+}
+
+Button.primary, Button.-primary {
+    background: #00D9FF;
+    color: #1a1a1a;
+}
+
+Button.warning, Button.-warning {
+    background: #FFD93D;
+    color: #1a1a1a;
+}
+
+Button:hover {
+    background: #555555;
+}
+
+Button:focus {
+    text-style: bold reverse;
+}
+
+/* -----------------------------------------------------------------------------
+   Button Bar (bottom navigation)
+   ----------------------------------------------------------------------------- */
+
+#button-bar {
+    dock: bottom;
+    height: 3;
+    padding: 0 2;
+    background: #252525;
+    border-top: heavy #3a3a3a;
+    align: right middle;
+}
+
+/* -----------------------------------------------------------------------------
+   Tabs
+   ----------------------------------------------------------------------------- */
+
+TabbedContent {
+    height: auto;
+}
+
+ContentSwitcher {
+    height: auto;
+}
+
+TabPane {
+    height: auto;
+    padding: 1;
+}
+
+Tabs {
+    height: 3;
+    background: #252525;
+    border-bottom: heavy #3a3a3a;
+}
+
+Tab {
+    background: transparent;
+    color: #888888;
+    padding: 0 2;
+    height: 3;
+}
+
+Tab:hover {
+    background: #333333;
+    color: #ffffff;
+}
+
+Tab.-active {
+    background: #333333;
+    color: #00D9FF;
+    text-style: bold;
+}
+
+.tab-content {
+    height: auto;
+    padding: 1 0;
+}
+
+/* -----------------------------------------------------------------------------
+   DataTable
+   ----------------------------------------------------------------------------- */
+
+DataTable {
+    height: auto;
+    max-height: 15;
+    background: #252525;
+    margin: 1 0;
+}
+
+.datatable--header {
+    background: #333333;
+    color: #00D9FF;
+    text-style: bold;
+}
+
+.datatable--cursor {
+    background: #00D9FF;
+    color: #1a1a1a;
+}
+
+.table-container {
+    height: auto;
+    max-height: 16;
+}
+
+/* -----------------------------------------------------------------------------
+   Preview Panel
+   ----------------------------------------------------------------------------- */
+
+.preview-panel {
+    background: #252525;
+    border: tall #3a3a3a;
+    padding: 1;
+    margin-top: 1;
+    height: auto;
+}
+
+.preview-title {
+    color: #00D9FF;
+    text-style: bold;
+    height: 1;
+    margin-bottom: 1;
+}
+
+.preview-item {
+    color: #cccccc;
+    height: 1;
+}
+
+/* -----------------------------------------------------------------------------
+   Status Messages
+   ----------------------------------------------------------------------------- */
+
+.status-message {
+    height: 1;
+    margin: 1 0;
+}
+
+.status-panel {
+    height: auto;
+    padding: 1;
+    background: #252525;
+    margin: 1 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Integration Toggle
+   ----------------------------------------------------------------------------- */
+
+.integration-toggle {
+    height: 3;
+    padding: 0;
+    margin-bottom: 1;
+}
+
+.toggle-row {
+    height: 3;
+    align: left middle;
+}
+
+.toggle-labels {
+    padding-left: 1;
+    height: auto;
+}
+
+.toggle-description {
+    color: #666666;
+}
+
+/* -----------------------------------------------------------------------------
+   Button Groups
+   ----------------------------------------------------------------------------- */
+
+.button-group {
+    height: auto;
+    layout: horizontal;
+    margin: 1 0;
+}
+
+.button-group Button {
+    margin-right: 1;
+}
+
+/* -----------------------------------------------------------------------------
+   Section Titles
+   ----------------------------------------------------------------------------- */
+
+.text-primary {
+    color: #00D9FF;
+}
+
+.subsection-title {
+    color: #00D9FF;
+    text-style: bold;
+    height: 1;
+    margin-top: 1;
+}
+
+.section-intro {
+    height: auto;
+}
+
+/* -----------------------------------------------------------------------------
+   Validation Messages
+   ----------------------------------------------------------------------------- */
+
+.validation-error {
+    color: #FF6B6B;
+    height: 1;
+}
+
+.validation-error.hidden {
+    display: none;
+}
+
+/* -----------------------------------------------------------------------------
+   Config Section
+   ----------------------------------------------------------------------------- */
+
+.config-section {
+    height: auto;
+    padding: 1 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Spacers
+   ----------------------------------------------------------------------------- */
+
+.spacer {
+    height: 1;
+}
+
+/* -----------------------------------------------------------------------------
+   Quit Dialog
+   ----------------------------------------------------------------------------- */
+
+#quit-dialog {
+    align: center middle;
+    width: 50;
+    height: 12;
+    background: #2a2a2a;
+    border: heavy #FF6B6B;
+    padding: 2;
+}
+
+#quit-message {
+    text-align: center;
+    color: #ffffff;
+    text-style: bold;
+    height: 1;
+}
+
+#quit-warning {
+    text-align: center;
+    color: #FFD93D;
+    height: 2;
+}
+
+#quit-buttons {
+    align: center middle;
+    height: 3;
+    margin-top: 1;
+}
+
+/* -----------------------------------------------------------------------------
+   Scrollbar
+   ----------------------------------------------------------------------------- */
+
+ScrollableContainer {
+    scrollbar-background: #252525;
+    scrollbar-color: #444444;
+    scrollbar-color-hover: #555555;
+    scrollbar-color-active: #00D9FF;
+}
+
+/* -----------------------------------------------------------------------------
+   Utility
+   ----------------------------------------------------------------------------- */
+
+.hidden {
+    display: none;
+}

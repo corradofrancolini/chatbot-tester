@@ -167,6 +167,41 @@ class BrowserManager:
         """Verifica se il browser è pronto"""
         return self._is_initialized and self._page is not None
 
+    async def reset_session(self) -> None:
+        """
+        Reset della sessione chat per iniziare un nuovo test.
+        Refresh della pagina per garantire uno stato pulito.
+        """
+        self._last_message_count = 0
+        self._send_timestamp = 0.0
+        self.last_response_timing = None
+
+        # Sempre refresh della pagina per garantire stato pulito
+        if self._page:
+            await self._page.reload()
+            await asyncio.sleep(2)  # Attendi caricamento completo
+
+            # Attendi che textarea sia visibile
+            if self.selectors and self.selectors.textarea:
+                try:
+                    await self._page.wait_for_selector(
+                        self.selectors.textarea,
+                        state='visible',
+                        timeout=10000
+                    )
+                except Exception:
+                    pass  # Continua comunque
+
+    def start_new_test(self, test_id: str) -> None:
+        """
+        Prepara il browser per un nuovo test.
+
+        Args:
+            test_id: ID del test corrente
+        """
+        self._current_test_id = test_id
+        self._last_message_count = 0
+
     async def navigate(self, url: str, wait_for_selector: Optional[str] = None,
                        auth_config: Optional[dict] = None) -> bool:
         """
@@ -585,6 +620,36 @@ class BrowserManager:
         except Exception as e:
             print(f"Errore screenshot conversazione: {e}")
             return False
+
+    async def get_thread_html(self, selector: str = '.llm__thread') -> Optional[str]:
+        """
+        Estrae HTML grezzo della conversazione chatbot.
+
+        Usato per structured output validation (parsing prodotti, tabelle, ecc.)
+
+        Args:
+            selector: Selettore CSS del container conversazione
+
+        Returns:
+            HTML come stringa, o None se non trovato
+        """
+        if not self._page:
+            return None
+
+        try:
+            thread = self._page.locator(selector)
+            if await thread.count() > 0:
+                return await thread.inner_html()
+            else:
+                # Fallback: prova con selettori alternativi
+                for alt_selector in ['.chat-messages', '.messages', '.conversation']:
+                    alt_thread = self._page.locator(alt_selector)
+                    if await alt_thread.count() > 0:
+                        return await alt_thread.inner_html()
+        except Exception as e:
+            print(f"Errore estrazione HTML thread: {e}")
+
+        return None
 
     async def take_scrollable_screenshot(self,
                                           selector: str,

@@ -1,5 +1,5 @@
 """
-Step 9: Summary
+Step 10: Summary
 Shows configuration summary and saves project.
 """
 
@@ -20,10 +20,10 @@ from src.i18n import t
 
 
 class SummaryStep(BaseStep):
-    """Step 9: Show summary and finalize setup."""
+    """Step 10: Show summary and finalize setup."""
 
-    step_number = 9
-    step_key = "step9"
+    step_number = 10
+    step_key = "step10"
     is_optional = False
     estimated_time = 0.5
 
@@ -110,6 +110,16 @@ class SummaryStep(BaseStep):
         else:
             console.print(f"    Status:      [dim]✗ Disabilitato[/dim]")
             console.print(f"    Modalità:    Solo Train")
+
+        # Evaluation section
+        console.print(f"\n  [bold]Evaluation[/bold]")
+        console.print("  " + "─" * 48)
+        if self.state.evaluation_enabled:
+            console.print(f"    Status:      [green]✓ Abilitato[/green]")
+            console.print(f"    Auto RAG:    {'Sì' if self.state.eval_auto_rag_context else 'No'}")
+            console.print(f"    Soglie:      S:{self.state.eval_semantic_threshold} J:{self.state.eval_judge_threshold} R:{self.state.eval_rag_threshold}")
+        else:
+            console.print(f"    Status:      [dim]✗ Disabilitato[/dim]")
 
         # Test Cases section
         console.print(f"\n  {t('step9.section_tests')}")

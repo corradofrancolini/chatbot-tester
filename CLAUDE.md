@@ -2,10 +2,277 @@
 
 **Mantra: If it can be done, it must be visible, explained, and configurable.**
 
+---
+
+## Quick Reference
+
+| What | Command/Location |
+|------|------------------|
+| Run tests | `python run.py -p {project} -m auto --no-interactive` |
+| Trigger from cloud | MCP tool `trigger_circleci` o CircleCI dashboard |
+| Results | Google Sheets `chatbot-tester-results` |
+| Traces | LangSmith (progetto configurato in `project.yaml`) |
+| MCP Server | `fly.io/chatbot-tester-mcp` |
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         ENTRY POINTS                            │
+├─────────────────────────────────────────────────────────────────┤
+│  CLI (run.py)          MCP Server (fly.io)         CircleCI     │
+│       │                      │                         │        │
+│       └──────────────────────┴─────────────────────────┘        │
+│                              │                                  │
+│                              ▼                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                    ORCHESTRATION                         │   │
+│  │  tester.py — Orchestrator (Session & State Manager)      │   │
+│  │  executor.py — Logic (Deep Module: Execute & Persist)    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              │                                  │
+│         ┌────────────────────┼────────────────────┐            │
+│         ▼                    ▼                    ▼            │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐    │
+│  │  BROWSER    │    │  EVALUATION │    │  PERSISTENCE    │    │
+│  │  browser.py │    │  ollama.py  │    │  sheets_client  │    │
+│  │  Playwright │    │  langsmith  │    │  Google Sheets  │    │
+│  └─────────────┘    └─────────────┘    └─────────────────┘    │
+│         │                    │                    │            │
+│         ▼                    ▼                    ▼            │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐    │
+│  │  CHATBOT    │    │  LOCAL AI   │    │  CLOUD STORAGE  │    │
+│  │  (target)   │    │  (Ollama)   │    │  (GSheets API)  │    │
+│  └─────────────┘    └─────────────┘    └─────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Data Flow
+
+1. **Input**: Test definitions (`tests.json`) + project config (`project.yaml`)
+2. **Execution**: Browser automates chatbot interaction, captures responses
+3. **Evaluation**: Ollama/LangSmith scores responses against expected answers
+4. **Output**: Results written to Google Sheets, screenshots saved locally
+
+### Key Boundaries
+
+| Layer | Responsibility | Never Does |
+|-------|----------------|------------|
+| `run.py` | CLI parsing, menu, orchestration | Business logic |
+| `tester.py` | Session orchestration, UI/CLI interactions | Deep test execution logic |
+| `executor.py` | Core test logic, standalone persistence | Direct Terminal I/O or CLI menus |
+| `browser.py` | Playwright automation | Evaluation logic |
+| `sheets_client.py` | Google Sheets CRUD | Test logic |
+| `ollama_client.py` | AI evaluation | Persistence |
+
+---
+
+## Decision Heuristics
+
+Quando devi scegliere tra alternative, usa queste euristiche:
+
+### 1. Visibilità > Magia
+Preferisci codice esplicito a comportamenti impliciti. Se un'operazione ha side effects, deve essere ovvio dal nome o dai parametri.
+
+```python
+# ❌ Magico - cosa fa internamente?
+process_test(test)
+
+# ✅ Esplicito - chiaro cosa succede
+result = execute_test(test)
+save_result_to_sheets(result)
+update_langsmith_trace(result)
+```
+
+### 2. Configurabile > Hardcoded
+Ogni threshold, timeout, o comportamento variabile deve essere in `settings.yaml`, mai nel codice.
+
+```python
+# ❌ Hardcoded
+MAX_RETRIES = 3
+TIMEOUT = 30
+
+# ✅ Configurabile
+max_retries = config.get("health.max_retries", 3)
+timeout = config.get("browser.timeout", 30)
+```
+
+### 3. Fail Fast > Fail Silent
+Errori chiari con contesto, mai swallowed. L'utente deve sapere cosa è andato storto e perché.
+
+```python
+# ❌ Silent failure
+try:
+    result = risky_operation()
+except Exception:
+    return None
+
+# ✅ Fail fast with context
+try:
+    result = risky_operation()
+except SpecificError as e:
+    logger.error(f"Operazione fallita per {test_id}: {e}")
+    raise TestExecutionError(f"Impossibile completare {test_id}") from e
+```
+
+### 4. Idempotenza
+I comandi devono essere safe da ri-eseguire. Se lancio lo stesso comando due volte, il risultato deve essere coerente.
+
+```python
+# ❌ Non idempotente - duplica righe
+sheets.append_row(result)
+
+# ✅ Idempotente - sovrascrive o salta
+if sheets.row_exists(test_id):
+    sheets.update_row(test_id, result)
+else:
+    sheets.append_row(result)
+```
+
+### 5. Composition > Inheritance
+Preferisci funzioni componibili a gerarchie di classi. Più facile testare, più facile capire.
+
+```python
+# ❌ Inheritance profonda
+class ParallelBrowserTester(BrowserTester):
+    class ThreadSafeBrowserTester(ParallelBrowserTester):
+        ...
+
+# ✅ Composition
+def run_parallel_tests(tester, pool, collector):
+    for browser in pool:
+        result = tester.execute(browser)
+        collector.add(result)
+```
+
+### 6. Context Objects > Bloated Parameters
+Se un componente ha più di 5 dipendenze, raggruppale in un context object. Mantiene i costruttori puliti e facilita l'estensione senza rompere le API.
+
+```python
+# ❌ Troppi parametri
+def __init__(self, browser, settings, ollama, langsmith, training,
+             evaluator, baselines, perf_collector, report, ...):
+
+# ✅ Context object
+def __init__(self, context: ExecutionContext):
+    self.ctx = context
+    self.browser = context.browser  # Alias per comodità
+```
+
+Vedi `src/models/execution.py` per l'implementazione di `ExecutionContext`.
+
+---
+
+## Anti-patterns (Don't)
+
+### Mai fare
+
+| Anti-pattern | Perché | Alternativa |
+|--------------|--------|-------------|
+| `print()` in produzione | Non loggato, non configurabile | `logger.info()` o `self.on_status()` |
+| Credenziali hardcoded | Security risk | Environment variables |
+| `time.sleep()` in async | Blocca event loop | `await asyncio.sleep()` |
+| Catch generico `except Exception` | Nasconde bug | Catch specifico + re-raise |
+| Modificare `run_config.json` durante esecuzione | Race conditions | Usa parametri CLI |
+| Più pipeline `native-parallel` contemporanee | Scrivono sulla stessa RUN | Usa `multi_testset: true` |
+
+### Smells da evitare
+
+- **File > 500 righe**: Probabilmente fa troppe cose, splitta (post-refactoring siamo in linea)
+- **Funzione > 50 righe**: Estrai sottofunzioni
+- **Più di 5 parametri**: Usa `ExecutionContext` o dataclass
+- **Import circolari**: Ripensa le dipendenze
+- **Test che dipendono dall'ordine**: Ogni test deve essere indipendente
+- **Stringhe per modalità**: Usa `TestMode` enum per type safety
+
+---
+
+## When to Extend vs. Modify
+
+### Crea un NUOVO modulo quando:
+- La funzionalità è ortogonale a quelle esistenti (es. nuovo canale notifiche)
+- Può essere disabilitata senza impatto (es. nuovo export format)
+- Ha dipendenze esterne proprie (es. nuovo servizio cloud)
+
+### Estendi un modulo ESISTENTE quando:
+- È una variante di comportamento esistente (es. nuovo tipo di test)
+- Condivide infrastruttura (es. nuovo metodo in `sheets_client.py`)
+- È strettamente accoppiato logicamente
+
+### Crea una NUOVA classe quando:
+- Ha stato interno che deve persistere
+- Implementa un'interfaccia definita (es. `NotificationChannel`)
+- Sarà istanziata più volte con config diverse
+
+### Usa una FUNZIONE quando:
+- È stateless (input → output)
+- È una trasformazione di dati
+- È un'utility riutilizzabile
+
+---
+
+## Key Files for Context
+
+Prima di lavorare su una feature, leggi questi file per capire i pattern esistenti:
+
+| Task | Leggi prima |
+|------|-------------|
+| Modificare logica esecuzione | `src/engine/executor.py` (metodi `execute_auto_test`, `persist`) |
+| Gestire dipendenze e config | `src/models/execution.py` (`ExecutionContext`, `TestMode`) |
+| Modificare schema report | `src/models/sheet_schema.py` (centralizzazione colonne) |
+| Orchestrazione sessione | `src/tester.py` (session manager, train mode) |
+| Aggiungere API esterna | `src/sheets_client.py` (pattern retry, auth, error handling) |
+| Nuovo tool MCP | `mcp_server/server.py` (struttura tools, async patterns) |
+| Modificare browser automation | `src/browser.py` (Playwright patterns, screenshots) |
+| Aggiungere configurazione | `config/settings.yaml` + `src/config_loader.py` |
+| Nuovo tipo di analisi | `src/comparison.py` (pattern per analisi cross-run) |
+| Performance/metriche | `src/performance.py` (collector, reporter, alerter) |
+
+---
+
+## Projects Structure
+
+I progetti testabili si trovano in `projects/`. Ogni progetto ha questa struttura:
+
+```
+projects/{project-name}/
+├── project.yaml           # Config: URLs, credenziali, LangSmith
+├── tests.json             # Test set standard (prefisso TEST_)
+├── tests_paraphrase.json  # Parafrasi (prefisso PARA_) — opzionale
+├── tests_ggp.json         # GGP (prefissi GRD_/GRL_/PRB_) — opzionale
+└── run_config.json        # Stato runtime (active_run, env, flags)
+```
+
+### Test Set Types
+
+| Tipo | Prefisso | Scopo |
+|------|----------|-------|
+| **Standard** | `TEST_` | Funzionalità base del chatbot |
+| **Paraphrase** | `PARA_` | Robustezza a riformulazioni semantiche |
+| **GGP** | `GRD_/GRL_/PRB_` | Grounding, Guardrail, Probing (limiti e sicurezza) |
+
+### GGP Methodology
+
+Test set per verificare limiti e sicurezza:
+
+| Sezione | Verifica |
+|---------|----------|
+| **Grounding** | Non inventa dati (codici, prezzi, link non autorizzati) |
+| **Guardrail** | Rispetta vincoli operativi definiti nel prompt |
+| **Probing** | Resiste a manipolazioni (prompt injection, jailbreak) |
+
+Valutazione GGP: manuale con ESITO (`PASS`/`FAIL`/`PARTIAL`) e RATIONALE obbligatorio.
+
+---
+
 ## Documentation
 
 | Guide | Content |
 |-------|---------|
+| [PRD.md](PRD.md) | Vision, priorities, constraints |
+| [DECISIONS.md](DECISIONS.md) | Architectural decision log |
 | [README.md](README.md) | Overview and quick start |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Complete configuration guide |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, GitHub Actions, PyPI |
@@ -250,318 +517,198 @@ regressions = detector.check_for_regressions(16)
 
 # Flaky tests
 flaky = FlakyTestDetector(project)
-flaky_tests = flaky.detect_flaky_tests(last_n_runs=10, threshold=0.3)
-# FlakyTestReport(test_id, flaky_score, pass_count, fail_count)
+flaky_tests = flaky.analyze(last_n_runs=10)
 
 # Coverage
 coverage = CoverageAnalyzer(project)
-report = coverage.analyze(tests)
-# CoverageReport(total_tests, categories_covered, gaps)
+gaps = coverage.find_gaps()
 ```
-
-### Key Concepts
-
-| Term | Definition |
-|------|------------|
-| **Regression** | Test that passed and now fails (PASS->FAIL) |
-| **Improvement** | Test that failed and now passes (FAIL->PASS) |
-| **Flaky Score** | 0 = stable, 1 = random results |
-| **Coverage Gap** | Categories with few tests |
 
 ---
 
-## Automation (v1.2.0)
+## MCP Server
 
-### Scheduled Runs (Local)
+Il server MCP (`mcp_server/server.py`) espone i tool per Claude Desktop.
 
-```bash
-# Add daily schedule
-python run.py --add-schedule my-chatbot:daily
+### Tool Categories
 
-# Add weekly schedule
-python run.py --add-schedule my-chatbot:weekly
+| Tool | Funzione | Trigger phrases |
+|------|----------|-----------------|
+| `list_projects` | Mostra progetti | "Quali progetti?", "Lista progetti" |
+| `list_tests` | Mostra test di un progetto | "Mostra i test", "Quanti test ci sono?" |
+| `trigger_circleci` | Avvia pipeline | "Lancia i test", "Esegui i test" |
+| `get_run_results` | Risultati da Sheets | "Come è andata?", "Risultati run 38" |
+| `compare_runs` | Confronta due RUN | "Confronta 37 con 38", "Differenze?" |
+| `get_failed_tests` | Test falliti | "Quali sono falliti?", "Errori?" |
+| `detect_flaky_tests` | Test instabili | "Test flaky", "Instabili?" |
+| `get_regressions` | Regressioni | "Cosa si è rotto?", "Regressioni?" |
+| `notify_corrado` | Invia messaggio Telegram | "Avvisa Corrado che..." |
 
-# List configured schedules
-python run.py --list-schedules
+### Aggiungere un Tool
 
-# Start local scheduler (cron-like, Ctrl+C to stop)
-python run.py --scheduler
-```
+1. Aggiungi `Tool()` nella lista in `list_tools()` (~riga 270)
+2. Aggiungi `elif name == "tool_name":` in `call_tool()` (~riga 1190)
+3. Crea funzione `async def handle_tool_name(arguments):` in fondo
+4. Test: `fly deploy` e riavvia Claude Desktop
 
-### Scheduled Runs (GitHub Actions)
+---
 
-The workflow `.github/workflows/scheduled-tests.yml` runs automatically:
-- **Daily** (6:00 UTC): Pending tests on all projects
-- **Weekly** (Mon 2:00 UTC): Full run with new RUN
+## CircleCI (Cloud Execution)
+
+### Workflows
+
+| Workflow | Trigger | Uso |
+|----------|---------|-----|
+| `manual-test` | `manual_trigger=true` | Singolo test set |
+| `native-parallel-test` | `native_parallelism>0` | Test distribuiti su N container |
+| `multi-testset` | `multi_testset=true` | 3 test set in parallelo (standard, paraphrase, GGP) |
+
+### Parametri Pipeline
 
 ```yaml
-# To enable, required secrets are:
-# - LANGSMITH_API_KEY
-# - GOOGLE_OAUTH_CREDENTIALS
-# - GOOGLE_TOKEN_JSON
-# - SLACK_WEBHOOK_URL (optional, for notifications)
+parameters:
+  project: "my-chatbot"
+  mode: "auto"              # auto | assisted | train
+  tests: "pending"          # all | pending | failed
+  new_run: false            # Crea nuova RUN su Sheets
+  test_limit: 0             # 0 = tutti
+  test_ids: ""              # "TEST_001,TEST_002"
+  single_turn: false        # Solo domanda iniziale
+  tests_file: "tests.json"  # File test set
+  native_parallelism: 3     # Container paralleli (0 = disabilitato)
+  multi_testset: false      # Esegui tutti e 3 i test set
 ```
 
-### Scheduler API
+### Race Condition Warning
+
+**NON lanciare più pipeline `native-parallel-test` contemporaneamente!**
+I container 1+ cercano la RUN "più recente" e scrivono tutti sullo stesso foglio.
+
+Usa invece `multi_testset: true` per eseguire più test set in sicurezza.
+
+---
+
+## Debug & Troubleshooting
+
+### LangSmith Trace Analysis
+
+```bash
+# CLI (installato)
+langsmith-fetch trace <TRACE_ID>
+langsmith-fetch trace <ID> | claude -p "analizza errori"
+
+# Da Claude Desktop
+"Analizza il trace abc-123-def-456"
+```
+
+### Google Sheets Cleanup
+
+```bash
+# Rimuovi righe con prefisso sbagliato
+python scripts/cleanup_run.py -p my-chatbot -r 38 --keep-prefix TEST_
+
+# Rimuovi duplicati (tiene prima occorrenza)
+python scripts/deduplicate_run.py -p my-chatbot -r 38
+
+# Dry run (mostra senza modificare)
+python scripts/cleanup_run.py -p my-chatbot -r 38 --dry-run
+```
+
+### Errori Comuni
+
+| Errore | Causa | Soluzione |
+|--------|-------|-----------|
+| `429 Too Many Requests` | Rate limit LangSmith/Sheets | Retry automatico con backoff |
+| `Trace non trovato` | ID errato o progetto sbagliato | Verifica URL completo in Sheets |
+| `RUN non trovata` | Foglio non esiste | Controlla numero run in Sheets |
+| `BASELINE column not found` | Template Sheets vecchio | Aggiungi colonna BASELINE |
+
+### Log Levels
+
+```bash
+# Debug dettagliato
+python run.py -p my-chatbot -m auto --debug
+
+# Solo errori
+LOG_LEVEL=ERROR python run.py ...
+```
+
+---
+
+## Code Conventions
+
+### Python Style
+
+- **Python 3.11+** richiesto
+- **Type hints** su tutte le funzioni pubbliche
+- **Docstrings** in italiano (progetto interno)
+- **f-strings** per formatting
+- **Niente print()** in produzione - usa `logger` o `self.on_status()`
+
+### Naming
+
+| Tipo | Convenzione | Esempio |
+|------|-------------|---------|
+| Classi | PascalCase | `GoogleSheetsClient` |
+| Funzioni | snake_case | `get_run_results()` |
+| Costanti | UPPER_SNAKE | `MAX_RETRIES` |
+| File | snake_case | `sheets_client.py` |
+
+### Error Handling
 
 ```python
-from src.scheduler import LocalScheduler, ScheduleConfig, ScheduleType
-
-scheduler = LocalScheduler()
-
-# Add custom schedule
-scheduler.add_schedule(ScheduleConfig(
-    name="my-schedule",
-    project="my-chatbot",
-    schedule_type=ScheduleType.DAILY,  # DAILY, WEEKLY, HOURLY, INTERVAL
-    mode="auto",
-    tests="pending",
-    cron_hour=6,
-    cron_minute=0
-))
-
-# Start (blocks process)
-scheduler.start()
-
-# Or in background
-scheduler.start_background()
+# Pattern standard
+try:
+    result = risky_operation()
+except SpecificError as e:
+    logger.error(f"Operazione fallita: {e}")
+    return None  # o raise con contesto
 ```
 
-### Distributed Execution
+### Async
 
-```python
-from src.scheduler import DistributedCoordinator, WorkerConfig
+- MCP tools sono tutti `async def`
+- Usa `await` per I/O (API calls, file)
+- Non bloccare con `time.sleep()` - usa `asyncio.sleep()`
 
-coordinator = DistributedCoordinator()
+### Decision Log
 
-# Register worker
-coordinator.register_worker(WorkerConfig(
-    worker_id="worker-1",
-    host="192.168.1.10",
-    port=5000,
-    projects=["my-chatbot"]
-))
-
-# Distribute tests
-distribution = coordinator.distribute_tests(tests, project="my-chatbot")
-# {"worker-1": [test1, test3], "worker-2": [test2, test4]}
-```
-
----
-
-## Report Export (v1.2.0)
-
-### CLI
-
-```bash
-# Export last run to PDF
-python run.py -p my-chatbot --export pdf
-
-# Export specific run to Excel
-python run.py -p my-chatbot --export excel --export-run 15
-
-# Export all formats
-python run.py -p my-chatbot --export all
-
-# Available formats: pdf, excel, html, csv, all
-```
-
-### Optional Dependencies
-
-```bash
-# For PDF
-pip install reportlab pillow
-
-# For Excel
-pip install openpyxl
-```
-
-### Output
-
-Exported files are saved in:
-```
-reports/{project}/run_{N}/exports/
-├── project_runN.pdf
-├── project_runN.xlsx
-├── project_runN.html
-└── project_runN.csv
-```
-
-### API
-
-```python
-from src.export import RunReport, ReportExporter
-
-# Load report
-report = RunReport.from_local_report(Path("reports/my-chatbot/run_15/report.json"))
-
-# Export
-exporter = ReportExporter(report)
-exporter.to_pdf(Path("output.pdf"))
-exporter.to_excel(Path("output.xlsx"))
-exporter.to_html(Path("output.html"))
-exporter.to_csv(Path("output.csv"))
-
-# Multiple export
-results = exporter.export_all(Path("exports/"))
-```
-
----
-
-## Notifications (v1.2.0)
-
-### CLI
-
-```bash
-# Test notification configuration
-python run.py --test-notify
-
-# Send desktop notification (last run)
-python run.py -p my-chatbot --notify desktop
-
-# Send email
-python run.py -p my-chatbot --notify email
-
-# Send to Teams
-python run.py -p my-chatbot --notify teams
-
-# Send on all configured channels
-python run.py -p my-chatbot --notify all
-```
-
-### Configuration (settings.yaml)
-
-```yaml
-notifications:
-  email:
-    enabled: true
-    smtp_host: "smtp.gmail.com"
-    smtp_port: 587
-    smtp_user: "your@email.com"
-    smtp_password_env: "SMTP_PASSWORD"  # export SMTP_PASSWORD=xxx
-    recipients:
-      - "team@example.com"
-
-  desktop:
-    enabled: true
-    sound: true
-
-  teams:
-    enabled: true
-    webhook_url_env: "TEAMS_WEBHOOK_URL"  # export TEAMS_WEBHOOK_URL=https://...
-
-  triggers:
-    on_complete: true     # Every completed run
-    on_failure: true      # Failures only
-    on_regression: false  # Regressions detected
-    on_flaky: true        # Flaky tests detected
-```
-
-### Teams Webhook
-
-To configure Teams:
-1. Go to Teams channel > Connectors > Incoming Webhook
-2. Create webhook and copy URL
-3. `export TEAMS_WEBHOOK_URL="https://..."`
-
-### API
-
-```python
-from src.notifications import NotificationManager, NotificationConfig, TestRunSummary
-
-# Config
-config = NotificationConfig(
-    desktop_enabled=True,
-    email_enabled=True,
-    teams_enabled=True
-)
-
-manager = NotificationManager(config)
-
-# Results summary
-summary = TestRunSummary(
-    project="my-chatbot",
-    run_number=15,
-    total_tests=50,
-    passed=45,
-    failed=5,
-    pass_rate=90.0
-)
-
-# Notify on all channels
-manager.notify_run_complete(summary)
-
-# Single channel notification
-manager.send_desktop("Title", "Message")
-manager.send_email("Subject", "Body")
-manager.send_teams("Title", "Message")
-```
-
----
-
-## Deployment (v1.1.0)
-
-### Docker
-```bash
-docker build -t chatbot-tester .
-docker run -v ./projects:/app/projects chatbot-tester -p my-chatbot -m auto
-```
-
-### GitHub Actions
-```bash
-# Run tests in cloud
-gh workflow run chatbot-test.yml -f project=my-chatbot -f mode=auto
-
-# Monitor with progress bar
-python run.py --watch-cloud
-```
-
-### PyPI (after publishing)
-```bash
-pip install chatbot-tester
-chatbot-tester -p my-chatbot -m auto
-```
-
-### Standalone binary
-```bash
-pip install pyinstaller
-pyinstaller chatbot-tester.spec
-./dist/chatbot-tester -p my-chatbot -m auto
-```
-
----
-
-## Deployment Files
-
-| File | Purpose |
-|------|---------|
-| `Dockerfile` | Docker image build |
-| `.github/workflows/chatbot-test.yml` | Cloud test execution |
-| `.github/workflows/scheduled-tests.yml` | Scheduled test runs |
-| `.github/workflows/build-release.yml` | Automatic release builds |
-| `action.yml` | GitHub Action for marketplace |
-| `pyproject.toml` | PyPI configuration |
-| `chatbot-tester.spec` | PyInstaller configuration |
-
----
-
-## Configured Projects
-
-- `my-chatbot` → Example chatbot project (customize in projects/ directory)
+Aggiorna [DECISIONS.md](DECISIONS.md) quando fai scelte architetturali significative:
+- Nuovi pattern o refactoring
+- Scelta tra alternative (con motivazione)
+- Decisioni "ON HOLD" con rationale
 
 ---
 
 ## TODO / Backlog
 
-### UX
-- [x] **Improved progress bar**: ETA, tests/minute, phase indicator (v1.7.0)
+### Priority: HIGH 🔴
 
-### Automation
-- [x] **Remote notifications**: GitHub Actions workflows with Email/Teams (v1.7.0)
-- [x] **Parallel execution**: Multi-browser via --parallel --workers N (v1.7.0)
+| Task | Rationale | Effort |
+|------|-----------|--------|
+| Complete i18n integration | UX consistency across languages | Medium |
+| Add retry logic to MCP tools | Resilience against transient failures | Low |
 
-### Internationalization
-- [ ] **Complete i18n**: Integrate src/i18n.py in all modules
+### Priority: MEDIUM 🟡
+
+| Task | Rationale | Effort |
+|------|-----------|--------|
+| Dashboard web per risultati | Alternativa a Google Sheets | High |
+| Slack integration | Notifiche team più ampie | Medium |
+| Test coverage report | Capire gap nella suite | Medium |
+
+### Priority: LOW 🟢
+
+| Task | Rationale | Effort |
+|------|-----------|--------|
+| Dark mode per HTML reports | Nice to have | Low |
+| Export to Notion | Integrazione documentazione | Medium |
+
+### Completed ✅
+
+- [x] Improved progress bar: ETA, tests/minute, phase indicator (v1.7.0)
+- [x] Remote notifications: GitHub Actions workflows with Email/Teams (v1.7.0)
+- [x] Parallel execution: Multi-browser via --parallel --workers N (v1.7.0)
 
 ---
 

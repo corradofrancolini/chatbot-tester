@@ -223,7 +223,15 @@ Per configurare CircleCI:
         test_limit: int = 0,
         test_ids: str = "",
         single_turn: bool = False,
-        repeat: int = 1
+        tests_file: str = "tests.json",
+        prompt_version: str = "",
+        repeat: int = 1,
+        parallel_browsers: int = 0,
+        native_parallelism: int = 0,
+        multi_testset: bool = False,
+        testset_standard: bool = True,
+        testset_paraphrase: bool = True,
+        testset_ggp: bool = True
     ) -> Tuple[bool, dict]:
         """
         Trigger a new pipeline.
@@ -236,7 +244,15 @@ Per configurare CircleCI:
             test_limit: Limit to N tests (0 = no limit)
             test_ids: Comma-separated list of test IDs to run
             single_turn: Only initial question, no follow-ups
+            tests_file: Test set file to use (default: tests.json)
+            prompt_version: Prompt version to record (e.g., "v12")
             repeat: Number of parallel runs (1-5) for variance analysis
+            parallel_browsers: Number of parallel browsers within single container (0 = sequential)
+            native_parallelism: Number of CircleCI containers to split tests across (0 = disabled)
+            multi_testset: Run multiple test sets in parallel (standard, paraphrase, GGP)
+            testset_standard: Include tests.json when multi_testset=True
+            testset_paraphrase: Include tests_paraphrase.json when multi_testset=True
+            testset_ggp: Include tests_ggp.json when multi_testset=True
 
         Returns:
             Tuple of (success, response_data)
@@ -252,7 +268,15 @@ Per configurare CircleCI:
                 "test_limit": test_limit,
                 "test_ids": test_ids,
                 "single_turn": single_turn,
-                "repeat": repeat
+                "tests_file": tests_file,
+                "prompt_version": prompt_version,
+                "repeat": repeat,
+                "parallel_browsers": parallel_browsers,
+                "native_parallelism": native_parallelism,
+                "multi_testset": multi_testset,
+                "testset_standard": testset_standard,
+                "testset_paraphrase": testset_paraphrase,
+                "testset_ggp": testset_ggp
             }
         }
 

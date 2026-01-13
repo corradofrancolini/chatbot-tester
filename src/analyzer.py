@@ -40,18 +40,9 @@ class AnalyzerProvider(str, Enum):
     GROQ = "groq"
 
 
-@dataclass
-class TestFailure:
-    """Rappresenta un test fallito."""
-    test_id: str
-    test_name: str
-    question: str
-    expected: str
-    actual: str
-    notes: Optional[str] = None
-    langsmith_url: Optional[str] = None
-    langsmith_trace: Optional[Dict[str, Any]] = None
-    screenshot_path: Optional[str] = None
+# Import shared TestFailure from models
+from .models import TestFailure
+
 
 
 @dataclass
@@ -304,7 +295,7 @@ class DebugPackageGenerator:
         else:
             # Fallback: estrai da summary se disponibile
             for test in summary.get('tests', []):
-                if test.get('esito') == 'FAIL':
+                if test.get('result', test.get('esito', '')) == 'FAIL':
                     failures.append(TestFailure(
                         test_id=test.get('id', 'unknown'),
                         test_name=test.get('name', 'Unknown Test'),
@@ -327,9 +318,9 @@ class DebugPackageGenerator:
         with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                # Cerca colonne con esito FAIL
-                esito = row.get('esito', row.get('Esito', row.get('result', '')))
-                if esito.upper() == 'FAIL':
+                # Cerca colonne con result FAIL
+                test_result = row.get('result', row.get('esito', row.get('Esito', '')))
+                if test_result.upper() == 'FAIL':
                     failures.append(TestFailure(
                         test_id=row.get('id', row.get('ID', row.get('test_id', 'unknown'))),
                         test_name=row.get('name', row.get('Nome', row.get('test_name', 'Unknown'))),

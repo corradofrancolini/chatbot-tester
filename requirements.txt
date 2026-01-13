@@ -21,3 +21,16 @@ pandas>=2.0.0
 # Utilities
 questionary>=2.0.0  # Per prompt interattivi nel wizard
 nest-asyncio>=1.5.0  # Per asyncio.run() dentro event loop esistenti
+
+# Evaluation (OpenAI GPT-4o-mini)
+openai>=1.0.0
+
+# RAGAS Evaluation (opzionale, per metriche faithfulness/relevance)
+ragas>=0.1.0,<0.2.0
+datasets>=2.14.0
+langchain>=0.1.0,<0.3.0
+langchain-openai>=0.1.0
+
+# HTML Parsing (per structured output validation)
+beautifulsoup4>=4.12.0
+lxml>=5.0.0

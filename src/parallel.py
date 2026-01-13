@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Callable, Any, Dict
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 import time
 
 from .browser import BrowserManager, BrowserSettings, ChatbotSelectors
@@ -91,6 +92,9 @@ class BrowserPool:
 
     async def initialize(self) -> bool:
         """Inizializza il pool di browser"""
+        import shutil
+        from pathlib import Path
+
         if self._initialized:
             return True
 
@@ -99,13 +103,26 @@ class BrowserPool:
         for i in range(self.size):
             worker = WorkerState(worker_id=i)
 
+            # Crea directory worker e copia auth state se presente
+            worker_data_dir = None
+            if self.settings.user_data_dir:
+                worker_data_dir = Path(self.settings.user_data_dir) / f"worker_{i}"
+                worker_data_dir.mkdir(parents=True, exist_ok=True)
+
+                # Copia state.json (auth) nella directory worker
+                parent_state = Path(self.settings.user_data_dir) / "state.json"
+                if parent_state.exists():
+                    worker_state = worker_data_dir / "state.json"
+                    shutil.copy2(parent_state, worker_state)
+                    print(f"  Worker {i}: auth state copiato")
+
             # Crea una copia delle settings con user_data_dir univoco
             worker_settings = BrowserSettings(
                 headless=self.settings.headless,
                 viewport_width=self.settings.viewport_width,
                 viewport_height=self.settings.viewport_height,
                 device_scale_factor=self.settings.device_scale_factor,
-                user_data_dir=self.settings.user_data_dir / f"worker_{i}" if self.settings.user_data_dir else None,
+                user_data_dir=worker_data_dir,
                 timeout_page_load=self.settings.timeout_page_load,
                 timeout_bot_response=self.settings.timeout_bot_response
             )
@@ -213,7 +230,10 @@ class ParallelTestRunner:
                  ollama_client: Any = None,
                  langsmith_client: Any = None,
                  on_progress: Optional[Callable[[int, int, str], None]] = None,
-                 on_test_complete: Optional[Callable[[TestExecution], None]] = None):
+                 on_test_complete: Optional[Callable[[TestExecution], None]] = None,
+                 report_dir: Optional[Path] = None,
+                 run_config: Any = None,
+                 screenshot_css: str = ""):
         """
         Args:
             browser_settings: Settings browser
@@ -223,6 +243,9 @@ class ParallelTestRunner:
             langsmith_client: Client LangSmith per debug
             on_progress: Callback (completed, total, current_test_id)
             on_test_complete: Callback per ogni test completato
+            report_dir: Directory per salvare screenshots
+            run_config: Configurazione run (per prompt_version, env)
+            screenshot_css: CSS da iniettare per screenshots
         """
         self.browser_settings = browser_settings
         self.selectors = selectors
@@ -231,6 +254,9 @@ class ParallelTestRunner:
         self.langsmith = langsmith_client
         self.on_progress = on_progress or (lambda c, t, s: None)
         self.on_test_complete = on_test_complete
+        self.report_dir = report_dir
+        self.run_config = run_config
+        self.screenshot_css = screenshot_css
 
         self._pool: Optional[BrowserPool] = None
         self._rate_limiter = RateLimiter(config.rate_limit_per_minute)
@@ -288,44 +314,47 @@ class ParallelTestRunner:
             )
 
         try:
-            # Crea task per ogni test
-            tasks = []
-            for test in tests:
-                task = asyncio.create_task(
-                    self._run_single_test(test, chatbot_url, single_turn)
-                )
-                tasks.append(task)
-
-            # Attendi completamento con semaforo per limitare parallelismo
+            # Semaforo per limitare parallelismo PRIMA di creare i task
             semaphore = asyncio.Semaphore(self.config.max_workers)
 
-            async def run_with_semaphore(task):
+            async def run_with_semaphore(test):
+                """Esegue test con controllo semaforo"""
                 async with semaphore:
-                    return await task
+                    return await self._run_single_test(test, chatbot_url, single_turn)
 
-            # Esegui tutti i task
+            # Esegui tutti i test con parallelismo controllato
+            print(f"Avvio {len(tests)} test con {self.config.max_workers} worker paralleli...")
             completed_results = await asyncio.gather(
-                *[run_with_semaphore(t) for t in tasks],
+                *[run_with_semaphore(test) for test in tests],
                 return_exceptions=True
             )
 
             # Processa risultati
-            for result in completed_results:
+            for i, result in enumerate(completed_results):
                 if isinstance(result, Exception):
-                    # Errore non gestito
-                    continue
-                if isinstance(result, TestExecution):
+                    # Log errore e crea risultato ERROR
+                    print(f"  Test {tests[i].id}: EXCEPTION - {result}")
+                    results.append(TestExecution(
+                        test_case=tests[i],
+                        conversation=[],
+                        result="ERROR",
+                        duration_ms=0,
+                        notes=f"Exception: {result}"
+                    ))
+                elif isinstance(result, TestExecution):
                     results.append(result)
+                else:
+                    print(f"  Test {tests[i].id}: risultato inatteso - {type(result)}")
 
         finally:
             await self._pool.shutdown()
 
         # Calcola statistiche
         duration_ms = int((time.time() - start_time) * 1000)
-        passed = sum(1 for r in results if r.esito == "PASS")
-        failed = sum(1 for r in results if r.esito == "FAIL")
-        errors = sum(1 for r in results if r.esito == "ERROR")
-        skipped = sum(1 for r in results if r.esito == "SKIP")
+        passed = sum(1 for r in results if r.result == "PASS")
+        failed = sum(1 for r in results if r.result == "FAIL")
+        errors = sum(1 for r in results if r.result == "ERROR")
+        skipped = sum(1 for r in results if r.result == "SKIP")
 
         return ParallelResult(
             total_tests=len(tests),
@@ -395,7 +424,7 @@ class ParallelTestRunner:
         return TestExecution(
             test_case=test,
             conversation=[],
-            esito="ERROR",
+            result="ERROR",
             duration_ms=0,
             notes=f"Fallito dopo {self.config.max_retries + 1} tentativi: {last_error}"
         )
@@ -473,6 +502,54 @@ class ParallelTestRunner:
                 else:
                     break
 
+        # Screenshot
+        screenshot_path = ""
+        if self.report_dir:
+            try:
+                ss_dir = self.report_dir / "screenshots"
+                ss_dir.mkdir(parents=True, exist_ok=True)
+                ss_path = ss_dir / f"{test.id}.png"
+
+                # Usa take_conversation_screenshot se disponibile
+                if hasattr(browser, 'take_conversation_screenshot'):
+                    success = await browser.take_conversation_screenshot(
+                        path=ss_path,
+                        hide_elements=['.llm__prompt', '.llm__footer', '.llm__busyIndicator', '.llm__scrollDown'],
+                        thread_selector='.llm__thread'
+                    )
+                else:
+                    success = await browser.take_screenshot(ss_path)
+
+                if success:
+                    screenshot_path = str(ss_path)
+            except Exception as e:
+                print(f"  Screenshot error for {test.id}: {e}")
+
+        # LangSmith
+        langsmith_url = ""
+        langsmith_report = ""
+        model_version = ""
+        vector_store = ""
+        if self.langsmith:
+            try:
+                report = self.langsmith.get_report_for_question(test.question)
+                if report and report.trace_url:
+                    langsmith_url = report.trace_url
+                    langsmith_report = report.format_for_sheets()
+                    model_version = report.get_model_version()
+                    vector_store = report.vector_store
+            except Exception as e:
+                print(f"  LangSmith error for {test.id}: {e}")
+
+        # Timing from browser
+        timing_str = ""
+        if hasattr(browser, 'last_response_timing') and browser.last_response_timing:
+            timing = browser.last_response_timing
+            if timing.ttfr_ms > 0 or timing.total_ms > 0:
+                ttfr_sec = timing.ttfr_ms / 1000
+                total_sec = timing.total_ms / 1000
+                timing_str = f"{ttfr_sec:.1f}s → {total_sec:.1f}s"
+
         # Valutazione
         evaluation = {"passed": None, "reason": ""}
         if self.ollama and conversation:
@@ -485,13 +562,25 @@ class ParallelTestRunner:
 
         duration_ms = int((time.time() - start_time) * 1000)
 
+        # Prompt version from run_config
+        prompt_version = ""
+        if self.run_config and hasattr(self.run_config, 'prompt_version'):
+            prompt_version = self.run_config.prompt_version
+
         return TestExecution(
             test_case=test,
             conversation=conversation,
-            esito="PASS" if evaluation.get('passed', False) else "FAIL",
+            result="PASS" if evaluation.get('passed', False) else "FAIL",
             duration_ms=duration_ms,
+            screenshot_path=screenshot_path,
             notes=evaluation.get('reason', ''),
-            llm_evaluation=evaluation
+            langsmith_url=langsmith_url,
+            langsmith_report=langsmith_report,
+            llm_evaluation=evaluation,
+            model_version=model_version,
+            prompt_version=prompt_version,
+            timing=timing_str,
+            vector_store=vector_store
         )
 
     def _decide_next(self,

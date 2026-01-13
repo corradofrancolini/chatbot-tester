@@ -97,16 +97,8 @@ class Diagnosis:
 
         return "\n".join(lines)
 
-
-@dataclass
-class TestFailure:
-    """Rappresentazione di un test fallito."""
-    test_id: str
-    question: str
-    expected: Optional[str]
-    actual: str
-    error_type: Optional[str] = None
-    notes: Optional[str] = None
+# Import shared TestFailure from models
+from .models import TestFailure
 
 
 # =============================================================================

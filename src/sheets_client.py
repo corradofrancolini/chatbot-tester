@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 try:
     import gspread
     from google.oauth2.credentials import Credentials
+    from google.oauth2.service_account import Credentials as ServiceAccountCredentials
     from google.auth.transport.requests import Request
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
@@ -68,34 +69,13 @@ def escape_formula(value: Any) -> str:
     return str_value
 
 
-@dataclass
-class ScreenshotUrls:
-    """URL screenshot per embedding e visualizzazione"""
-    image_url: str = ""  # URL diretto per =IMAGE()
-    view_url: str = ""   # URL per visualizzazione alta risoluzione
+# Import shared models
+from .models import TestResult, ScreenshotUrls
+from .models.sheet_schema import COLUMNS, COLUMN_WIDTHS, COLUMN_INDEX, CHAR_LIMITS
+from .clients.base import BaseClient
 
 
-@dataclass
-class TestResult:
-    """Risultato di un singolo test per il report"""
-    test_id: str
-    date: str
-    mode: str  # Train, Assisted, Auto
-    question: str
-    conversation: str
-    screenshot_url: str = ""  # Legacy: URL singolo
-    screenshot_urls: Optional[ScreenshotUrls] = None  # Nuovo: entrambi gli URL
-    prompt_version: str = ""
-    model_version: str = ""
-    environment: str = "DEV"  # Default DEV
-    esito: str = ""  # Vuoto - compilato dal reviewer (Corretto/Non Corretto/Parzialmente corretto)
-    notes: str = ""  # Vuoto - note del reviewer
-    langsmith_report: str = ""  # Report LangSmith (testo)
-    langsmith_url: str = ""  # Link al trace LangSmith
-    timing: str = ""  # Timing: "TTFR → Total" (es. "2.3s → 12.0s")
-
-
-class GoogleSheetsClient:
+class GoogleSheetsClient(BaseClient):
     """
     Client per Google Sheets con supporto OAuth e gestione RUN.
 
@@ -119,33 +99,17 @@ class GoogleSheetsClient:
             client.append_result(result)
     """
 
-    # Colonne standard del report (15 colonne)
-    COLUMNS = [
-        "TEST ID",
-        "DATE",
-        "MODE",
-        "QUESTION",
-        "CONVERSATION",
-        "SCREENSHOT",      # Immagine inline (thumbnail)
-        "SCREENSHOT URL",  # Link alta risoluzione
-        "PROMPT VER",      # Versione prompt (da run config)
-        "MODEL VER",       # provider/modello
-        "ENV",             # DEV/PROD (dropdown)
-        "TIMING",          # TTFR → Total (es. "2.3s → 12.0s")
-        "ESITO",           # Corretto/Non Corretto/Parzialmente corretto (dropdown, compilato da reviewer)
-        "NOTES",           # Note del reviewer (campo libero)
-        "LS REPORT",       # Report LangSmith (testo)
-        "LS TRACE LINK"    # Link al trace LangSmith
-    ]
-
-    # Larghezze colonne in pixel (15 colonne)
-    COLUMN_WIDTHS = [100, 140, 80, 250, 400, 200, 200, 100, 100, 60, 110, 100, 200, 300, 350]
+    # Schema imported from models.sheet_schema
+    COLUMNS = COLUMNS
+    COLUMN_WIDTHS = COLUMN_WIDTHS
 
     def __init__(self,
                  credentials_path: str,
                  spreadsheet_id: str,
                  drive_folder_id: str = "",
-                 token_path: Optional[str] = None):
+                 token_path: Optional[str] = None,
+                 column_preset: str = "standard",
+                 column_list: Optional[List[str]] = None):
         """
         Inizializza il client.
 
@@ -154,7 +118,12 @@ class GoogleSheetsClient:
             spreadsheet_id: ID dello spreadsheet Google
             drive_folder_id: ID cartella Drive per screenshot (opzionale)
             token_path: Path per salvare il token (default: accanto a credentials)
+            column_preset: Preset colonne (standard, minimal, custom) - per compatibilità
+            column_list: Lista colonne custom - per compatibilità
         """
+        # Store column config for future use
+        self.column_preset = column_preset
+        self.column_list = column_list
         if not GOOGLE_AVAILABLE:
             raise ImportError("Dipendenze Google non installate. Esegui: pip install gspread google-auth google-auth-oauthlib google-api-python-client")
 
@@ -191,9 +160,26 @@ class GoogleSheetsClient:
         """Numero RUN corrente"""
         return self._current_run
 
+    def _is_service_account_file(self, path: Path) -> bool:
+        """Check if credentials file is a Service Account key."""
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            return data.get('type') == 'service_account'
+        except Exception:
+            return False
+
+    def is_available(self) -> bool:
+        """Check availability."""
+        return self.authenticate()
+
     def authenticate(self) -> bool:
         """
-        Esegue autenticazione OAuth.
+        Esegue autenticazione Google (Service Account o OAuth).
+
+        Rileva automaticamente il tipo di credenziali:
+        - Service Account: usa direttamente il file JSON (nessun token, nessuna scadenza)
+        - OAuth: richiede token.json e refresh periodico
 
         Returns:
             True se autenticazione riuscita
@@ -201,6 +187,26 @@ class GoogleSheetsClient:
         try:
             creds = None
 
+            # Verifica se è un Service Account (preferito per server)
+            if self.credentials_path.exists() and self._is_service_account_file(self.credentials_path):
+                # Service Account - nessun token necessario, nessuna scadenza
+                creds = ServiceAccountCredentials.from_service_account_file(
+                    str(self.credentials_path),
+                    scopes=SCOPES
+                )
+                self._credentials = creds
+
+                # Inizializza clients
+                self._gspread_client = gspread.authorize(creds)
+                self._spreadsheet = self._gspread_client.open_by_key(self.spreadsheet_id)
+
+                # Drive service per upload
+                if self.drive_folder_id:
+                    self._drive_service = build('drive', 'v3', credentials=creds)
+
+                return True
+
+            # Fallback: OAuth flow (per uso locale/interattivo)
             # Prova a caricare token esistente
             if self.token_path.exists():
                 creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
@@ -269,6 +275,9 @@ class GoogleSheetsClient:
         """
         Trova il foglio di una RUN esistente.
 
+        Cerca fogli con qualsiasi prefisso (Run, GGP, PARA, ecc.)
+        che contengano il numero specificato nel formato XXX.
+
         Args:
             run_number: Numero RUN da cercare
 
@@ -278,9 +287,17 @@ class GoogleSheetsClient:
         if not self._spreadsheet:
             return None
 
-        pattern = f"Run {run_number:03d}"
+        # Formato numero a 3 cifre (es. 037, 038)
+        number_pattern = f"{run_number:03d}"
+
+        # Prima cerca con prefisso "Run" (priorità ai test standard)
         for worksheet in self._spreadsheet.worksheets():
-            if worksheet.title.startswith(pattern):
+            if worksheet.title.startswith(f"Run {number_pattern}"):
+                return worksheet
+
+        # Se non trova, cerca qualsiasi foglio con quel numero (GGP, PARA, ecc.)
+        for worksheet in self._spreadsheet.worksheets():
+            if number_pattern in worksheet.title:
                 return worksheet
 
         return None
@@ -322,8 +339,8 @@ class GoogleSheetsClient:
             # Aggiungi header
             worksheet.update('A1', [self.COLUMNS])
 
-            # Formatta header (bold, centrato) - 15 colonne (A-O)
-            worksheet.format('A1:O1', {
+            # Formatta header (bold, centrato) - 23 colonne (A-W)
+            worksheet.format('A1:W1', {
                 'textFormat': {'bold': True},
                 'horizontalAlignment': 'CENTER'
             })
@@ -500,6 +517,29 @@ class GoogleSheetsClient:
         """Ritorna set dei test già completati nella RUN corrente"""
         return self._existing_tests.copy()
 
+    def set_columns_for_test_file(self,
+                                   test_file_name: str,
+                                   by_test_file: Dict[str, Any],
+                                   default_preset: str = "standard",
+                                   default_list: Optional[List[str]] = None) -> None:
+        """
+        Configura colonne per test file specifico.
+
+        Args:
+            test_file_name: Nome del file test (es. "tests.json")
+            by_test_file: Configurazione per file specifici
+            default_preset: Preset di default
+            default_list: Lista colonne custom di default
+        """
+        # Cerca configurazione per questo file
+        file_config = by_test_file.get(test_file_name, {})
+        if file_config:
+            self.column_preset = file_config.get('preset', default_preset)
+            self.column_list = file_config.get('custom', default_list)
+        else:
+            self.column_preset = default_preset
+            self.column_list = default_list
+
     def ensure_headers(self) -> None:
         """Assicura che le intestazioni siano presenti"""
         if not self._worksheet:
@@ -547,8 +587,13 @@ class GoogleSheetsClient:
                 # Legacy: URL singolo (mantieni retrocompatibilità)
                 screenshot_view_url = result.screenshot_url
 
-            # 15 colonne: TEST ID, DATE, MODE, QUESTION, CONVERSATION, SCREENSHOT,
-            # SCREENSHOT URL, PROMPT VER, MODEL VER, ENV, TTFR, ESITO, NOTES, LS REPORT, LS TRACE LINK
+            # Helper per formattare score (0-1 -> percentuale)
+            def fmt_score(val):
+                return f"{val:.0%}" if val is not None else ""
+
+            # 23 colonne: TEST ID, DATE, MODE, QUESTION, CONVERSATION, SCREENSHOT,
+            # SCREENSHOT URL, PROMPT VER, MODEL VER, ENV, TIMING, RESULT, BASELINE, NOTES, LS REPORT, LS TRACE LINK,
+            # SEMANTIC, JUDGE, GROUND, FAITH, RELEV, OVERALL, JUDGE REASON
             row = [
                 result.test_id,
                 result.date,
@@ -561,10 +606,19 @@ class GoogleSheetsClient:
                 result.model_version,                   # MODEL VER: provider/modello
                 result.environment or "DEV",            # ENV: default DEV
                 result.timing,                          # TIMING: "TTFR → Total"
-                "",                                     # ESITO: vuoto (compilato dal reviewer)
+                "",                                     # RESULT: vuoto (compilato dal reviewer)
+                "",                                     # BASELINE: vuoto (checkbox golden answer)
                 "",                                     # NOTES: vuoto (note del reviewer)
                 escape_formula(result.langsmith_report), # LS REPORT: report LangSmith (escaped)
-                result.langsmith_url                    # LS TRACE LINK: link al trace
+                result.langsmith_url,                   # LS TRACE LINK: link al trace
+                # Evaluation metrics
+                fmt_score(result.semantic_score),       # SEMANTIC
+                fmt_score(result.judge_score),          # JUDGE
+                fmt_score(result.groundedness),         # GROUND
+                fmt_score(result.faithfulness),         # FAITH
+                fmt_score(result.relevance),            # RELEV
+                fmt_score(result.overall_score),        # OVERALL
+                result.judge_reasoning                  # JUDGE REASON
             ]
 
             self._worksheet.append_row(row, value_input_option='USER_ENTERED')
@@ -620,17 +674,30 @@ class GoogleSheetsClient:
                 elif r.screenshot_url:
                     screenshot_view_url = r.screenshot_url
 
-                # 15 colonne
+                # Helper per formattare score (0-1 -> percentuale)
+                def fmt_score(val):
+                    return f"{val:.0%}" if val is not None else ""
+
+                # 23 colonne
                 rows.append([
                     r.test_id, r.date, r.mode, r.question, r.conversation,
                     screenshot_formula, screenshot_view_url,
                     r.prompt_version, r.model_version,
                     r.environment or "DEV",           # ENV: default DEV
                     r.timing,                         # TIMING: "TTFR → Total"
-                    "",                               # ESITO: vuoto (reviewer)
+                    "",                               # RESULT: vuoto (reviewer)
+                    "",                               # BASELINE: vuoto (golden answer)
                     "",                               # NOTES: vuoto (reviewer)
                     escape_formula(r.langsmith_report), # LS REPORT (escaped)
-                    r.langsmith_url                   # LS TRACE LINK
+                    r.langsmith_url,                  # LS TRACE LINK
+                    # Evaluation metrics
+                    fmt_score(r.semantic_score),      # SEMANTIC
+                    fmt_score(r.judge_score),         # JUDGE
+                    fmt_score(r.groundedness),        # GROUND
+                    fmt_score(r.faithfulness),        # FAITH
+                    fmt_score(r.relevance),           # RELEV
+                    fmt_score(r.overall_score),       # OVERALL
+                    r.judge_reasoning                 # JUDGE REASON
                 ])
 
             self._worksheet.append_rows(rows, value_input_option='USER_ENTERED')
@@ -648,6 +715,95 @@ class GoogleSheetsClient:
         except Exception as e:
             print(f"✗ Errore batch append: {e}")
             return 0
+
+    # ==================== BASELINES (GOLDEN ANSWERS) ====================
+
+    def get_all_baselines(self) -> List[Dict[str, Any]]:
+        """
+        Recupera tutte le baseline (golden answers) da tutti i fogli RUN.
+
+        Cerca in ogni foglio RUN le righe dove la colonna BASELINE
+        contiene un valore truthy (✓, TRUE, 1, X, ecc.).
+
+        Returns:
+            Lista di dizionari con i dati delle baseline:
+            {
+                'test_id': str,
+                'question': str,
+                'conversation': str,
+                'run_number': int,
+                'date': str,
+                'prompt_version': str,
+                'model_version': str,
+                'notes': str
+            }
+        """
+        if not self._spreadsheet:
+            return []
+
+        baselines = []
+
+        # Indici colonne (0-based)
+        col_indices = {col: i for i, col in enumerate(self.COLUMNS)}
+        baseline_col = col_indices.get('BASELINE', 12)
+        test_id_col = col_indices.get('TEST ID', 0)
+        date_col = col_indices.get('DATE', 1)
+        question_col = col_indices.get('QUESTION', 3)
+        conversation_col = col_indices.get('CONVERSATION', 4)
+        prompt_ver_col = col_indices.get('PROMPT VER', 7)
+        model_ver_col = col_indices.get('MODEL VER', 8)
+        notes_col = col_indices.get('NOTES', 13)
+
+        try:
+            for worksheet in self._spreadsheet.worksheets():
+                # Estrai numero RUN dal titolo (es. "Run 038 [DEV] auto - 2024-01-15")
+                match = re.match(r'^(?:Run|GGP|PARA)\s*(\d{3})', worksheet.title)
+                if not match:
+                    continue
+
+                run_number = int(match.group(1))
+
+                # Leggi tutti i dati del foglio
+                try:
+                    all_values = worksheet.get_all_values()
+                except Exception:
+                    continue
+
+                if len(all_values) < 2:
+                    continue  # Solo header o vuoto
+
+                # Salta header
+                for row in all_values[1:]:
+                    # Verifica che la riga abbia abbastanza colonne
+                    if len(row) <= baseline_col:
+                        continue
+
+                    # Controlla se BASELINE è marcata
+                    baseline_value = row[baseline_col].strip().upper()
+                    is_baseline = baseline_value in ('TRUE', '✓', '✔', 'X', '1', 'YES', 'SI', 'SÌ')
+
+                    if not is_baseline:
+                        continue
+
+                    # Estrai dati
+                    def safe_get(idx: int) -> str:
+                        return row[idx] if idx < len(row) else ""
+
+                    baselines.append({
+                        'test_id': safe_get(test_id_col),
+                        'question': safe_get(question_col),
+                        'conversation': safe_get(conversation_col),
+                        'run_number': run_number,
+                        'date': safe_get(date_col),
+                        'prompt_version': safe_get(prompt_ver_col),
+                        'model_version': safe_get(model_ver_col),
+                        'notes': safe_get(notes_col)
+                    })
+
+        except Exception as e:
+            print(f"Errore lettura baseline: {e}")
+
+        return baselines
 
     # ==================== UPLOAD & UTILITY ====================
 
@@ -863,359 +1019,6 @@ class GoogleSheetsClient:
             return None
 
 
-class GoogleSheetsSetup:
-    """Helper per setup Google Sheets"""
-
-    @staticmethod
-    def get_console_url() -> str:
-        """URL Google Cloud Console per creare progetto"""
-        return "https://console.cloud.google.com/apis/credentials"
-
-    @staticmethod
-    def get_setup_instructions() -> str:
-        """Istruzioni per setup OAuth"""
-        return """
-# SETUP GOOGLE SHEETS
-
-1. Vai su Google Cloud Console:
-   https://console.cloud.google.com/apis/credentials
-
-2. Crea un nuovo progetto (o seleziona esistente)
-
-3. Abilita le API:
-   - Google Sheets API
-   - Google Drive API
-
-4. Crea credenziali OAuth 2.0:
-   - Tipo: Desktop application
-   - Scarica il file JSON
-
-5. Rinomina il file in 'oauth_credentials.json'
-   e copialo nella cartella config/
-
-6. Al primo avvio, si aprirà il browser
-   per autorizzare l'accesso
-"""
-
-    @staticmethod
-    def validate_credentials_file(path: Path) -> tuple[bool, str]:
-        """
-        Valida un file credentials OAuth.
-
-        Returns:
-            (is_valid, message)
-        """
-        if not path.exists():
-            return False, f"File non trovato: {path}"
-
-        try:
-            with open(path) as f:
-                data = json.load(f)
-
-            # Verifica campi richiesti
-            if 'installed' not in data and 'web' not in data:
-                return False, "Formato credentials non valido"
-
-            config = data.get('installed') or data.get('web')
-
-            required = ['client_id', 'client_secret']
-            missing = [r for r in required if r not in config]
-
-            if missing:
-                return False, f"Campi mancanti: {', '.join(missing)}"
-
-            return True, "Credentials valide"
-
-        except json.JSONDecodeError:
-            return False, "File JSON non valido"
-        except Exception as e:
-            return False, f"Errore: {e}"
-
-    @staticmethod
-    def extract_spreadsheet_id(url_or_id: str) -> str:
-        """
-        Estrae l'ID spreadsheet da URL o ID diretto.
-
-        Args:
-            url_or_id: URL completo o ID
-
-        Returns:
-            ID spreadsheet
-        """
-        # Se è già un ID
-        if '/' not in url_or_id:
-            return url_or_id
-
-        # Estrai da URL
-        # Format: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit...
-        parts = url_or_id.split('/')
-        try:
-            d_index = parts.index('d')
-            return parts[d_index + 1]
-        except:
-            return url_or_id
-
-    @staticmethod
-    def extract_folder_id(url_or_id: str) -> str:
-        """
-        Estrae l'ID folder Drive da URL o ID diretto.
-
-        Args:
-            url_or_id: URL completo o ID
-
-        Returns:
-            ID folder
-        """
-        if '/' not in url_or_id:
-            return url_or_id
-
-        # Format: https://drive.google.com/drive/folders/FOLDER_ID
-        parts = url_or_id.split('/')
-        try:
-            folders_index = parts.index('folders')
-            folder_id = parts[folders_index + 1]
-            # Rimuovi query params
-            return folder_id.split('?')[0]
-        except:
-            return url_or_id
-
-
-# =============================================================================
-# THREAD-SAFE WRAPPER PER ESECUZIONE PARALLELA
-# =============================================================================
-
-class ThreadSafeSheetsClient:
-    """
-    Wrapper thread-safe per GoogleSheetsClient.
-
-    Accumula risultati in memoria durante l'esecuzione parallela
-    e li scrive in batch alla fine, evitando race conditions.
-
-    Usage:
-        # Wrap client esistente
-        safe_client = ThreadSafeSheetsClient(sheets_client)
-
-        # Da worker paralleli (thread-safe)
-        safe_client.queue_result(result)
-        safe_client.queue_screenshot(file_path, test_id)
-
-        # Alla fine (scrivi tutto)
-        safe_client.flush()
-    """
-
-    def __init__(self, client: GoogleSheetsClient):
-        """
-        Args:
-            client: GoogleSheetsClient gia autenticato e configurato
-        """
-        self._client = client
-        self._results_queue: List[TestResult] = []
-        self._screenshots_queue: List[tuple] = []  # (file_path, test_id)
-        self._lock = threading.RLock()
-        self._upload_lock = threading.RLock()  # Lock separato per upload Drive
-
-        # Mapping test_id -> screenshot_urls per associazione post-upload
-        self._screenshot_urls: Dict[str, ScreenshotUrls] = {}
-
-    @property
-    def client(self) -> GoogleSheetsClient:
-        """Accesso al client sottostante"""
-        return self._client
-
-    @property
-    def queued_count(self) -> int:
-        """Numero risultati in coda"""
-        with self._lock:
-            return len(self._results_queue)
-
-    def queue_result(self, result: TestResult) -> None:
-        """
-        Accoda un risultato per scrittura batch.
-        Thread-safe.
-
-        Args:
-            result: TestResult da accodare
-        """
-        with self._lock:
-            self._results_queue.append(result)
-
-    def queue_screenshot(self, file_path: Path, test_id: str) -> None:
-        """
-        Accoda uno screenshot per upload batch.
-        Thread-safe.
-
-        Args:
-            file_path: Path al file screenshot
-            test_id: ID del test
-        """
-        with self._lock:
-            self._screenshots_queue.append((file_path, test_id))
-
-    def upload_screenshot_now(self, file_path: Path, test_id: str) -> Optional[ScreenshotUrls]:
-        """
-        Upload screenshot immediatamente (thread-safe).
-        Utile se vuoi fare upload durante l'esecuzione.
-
-        Args:
-            file_path: Path al file screenshot
-            test_id: ID del test
-
-        Returns:
-            ScreenshotUrls o None
-        """
-        with self._upload_lock:
-            urls = self._client.upload_screenshot(file_path, test_id)
-            if urls:
-                with self._lock:
-                    self._screenshot_urls[test_id] = urls
-            return urls
-
-    def get_screenshot_urls(self, test_id: str) -> Optional[ScreenshotUrls]:
-        """Ottiene URL screenshot gia uploadato"""
-        with self._lock:
-            return self._screenshot_urls.get(test_id)
-
-    def flush_screenshots(self) -> int:
-        """
-        Upload tutti gli screenshot in coda.
-
-        Returns:
-            Numero screenshot uploadati
-        """
-        with self._lock:
-            screenshots_to_upload = self._screenshots_queue.copy()
-            self._screenshots_queue.clear()
-
-        uploaded = 0
-        for file_path, test_id in screenshots_to_upload:
-            urls = self.upload_screenshot_now(file_path, test_id)
-            if urls:
-                uploaded += 1
-
-        return uploaded
-
-    def flush_results(self) -> int:
-        """
-        Scrive tutti i risultati in coda su Google Sheets.
-
-        Returns:
-            Numero risultati scritti
-        """
-        with self._lock:
-            if not self._results_queue:
-                return 0
-
-            results_to_write = self._results_queue.copy()
-            self._results_queue.clear()
-
-        # Associa screenshot_urls ai risultati se disponibili
-        for result in results_to_write:
-            if result.test_id in self._screenshot_urls:
-                result.screenshot_urls = self._screenshot_urls[result.test_id]
-
-        # Scrivi batch
-        return self._client.append_results(results_to_write)
-
-    def flush(self) -> tuple:
-        """
-        Flush completo: prima screenshot, poi risultati.
-
-        Returns:
-            (screenshots_uploaded, results_written)
-        """
-        screenshots = self.flush_screenshots()
-        results = self.flush_results()
-        return screenshots, results
-
-    def is_test_completed(self, test_id: str) -> bool:
-        """
-        Verifica se un test e gia completato (nella RUN o in coda).
-        Thread-safe.
-        """
-        with self._lock:
-            # Check coda locale
-            if any(r.test_id == test_id for r in self._results_queue):
-                return True
-
-        # Check foglio remoto
-        return self._client.is_test_completed(test_id)
-
-    def get_completed_tests(self) -> set:
-        """
-        Ottiene tutti i test completati (remoti + in coda).
-        Thread-safe.
-        """
-        with self._lock:
-            queued = {r.test_id for r in self._results_queue}
-
-        remote = self._client.get_completed_tests()
-        return remote | queued
-
-
-class ParallelResultsCollector:
-    """
-    Collector per risultati da esecuzione parallela.
-
-    Versione piu leggera di ThreadSafeSheetsClient che
-    accumula solo in memoria senza dipendere da Sheets.
-    Utile se vuoi gestire la scrittura separatamente.
-
-    Usage:
-        collector = ParallelResultsCollector()
-
-        # Da worker paralleli
-        collector.add(result)
-
-        # Alla fine
-        all_results = collector.get_all()
-        sheets_client.append_results(all_results)
-    """
-
-    def __init__(self):
-        self._results: List[TestResult] = []
-        self._lock = threading.RLock()
-        self._completed_ids: set = set()
-
-    def add(self, result: TestResult) -> None:
-        """Aggiunge risultato (thread-safe)"""
-        with self._lock:
-            self._results.append(result)
-            self._completed_ids.add(result.test_id)
-
-    def get_all(self) -> List[TestResult]:
-        """Ottiene tutti i risultati (copia)"""
-        with self._lock:
-            return self._results.copy()
-
-    def clear(self) -> None:
-        """Svuota il collector"""
-        with self._lock:
-            self._results.clear()
-            self._completed_ids.clear()
-
-    def is_completed(self, test_id: str) -> bool:
-        """Verifica se test e gia nel collector"""
-        with self._lock:
-            return test_id in self._completed_ids
-
-    @property
-    def count(self) -> int:
-        """Numero risultati raccolti"""
-        with self._lock:
-            return len(self._results)
-
-    def get_summary(self) -> Dict[str, int]:
-        """Statistiche sui risultati raccolti"""
-        with self._lock:
-            passed = sum(1 for r in self._results if r.esito == "PASS")
-            failed = sum(1 for r in self._results if r.esito == "FAIL")
-            errors = sum(1 for r in self._results if r.esito == "ERROR")
-            skipped = sum(1 for r in self._results if r.esito == "SKIP")
-
-            return {
-                "total": len(self._results),
-                "passed": passed,
-                "failed": failed,
-                "errors": errors,
-                "skipped": skipped
-            }
+# Import from clients subpackage
+from .clients.sheets_setup import GoogleSheetsSetup
+from .clients.thread_safe import ThreadSafeSheetsClient, ParallelResultsCollector

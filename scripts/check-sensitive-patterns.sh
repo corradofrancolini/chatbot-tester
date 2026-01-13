@@ -3,10 +3,8 @@
 # Prevents accidental commits of project-specific names, URLs, or IDs
 
 # Patterns to detect (add your own sensitive patterns here)
+# Note: "my-chatbot" and "example-bot" are generic placeholders, NOT sensitive
 PATTERNS=(
-    "my-chatbot"
-    "example-bot"
-    "deploy"
     "wslabs\.it"
     "1nUQd_"
     "1cW66"

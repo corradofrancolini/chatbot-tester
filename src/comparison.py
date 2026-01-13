@@ -177,10 +177,10 @@ class RunComparator:
         # Statistiche base
         result.total_tests_a = len(tests_a)
         result.total_tests_b = len(tests_b)
-        result.passed_a = sum(1 for t in data_a.values() if t.get('esito') == 'PASS')
-        result.passed_b = sum(1 for t in data_b.values() if t.get('esito') == 'PASS')
-        result.failed_a = sum(1 for t in data_a.values() if t.get('esito') == 'FAIL')
-        result.failed_b = sum(1 for t in data_b.values() if t.get('esito') == 'FAIL')
+        result.passed_a = sum(1 for t in data_a.values() if t.get('result') == 'PASS')
+        result.passed_b = sum(1 for t in data_b.values() if t.get('result') == 'PASS')
+        result.failed_a = sum(1 for t in data_a.values() if t.get('result') == 'FAIL')
+        result.failed_b = sum(1 for t in data_b.values() if t.get('result') == 'FAIL')
 
         # Test comuni
         common_tests = tests_a & tests_b
@@ -189,8 +189,8 @@ class RunComparator:
             old = data_a[test_id]
             new = data_b[test_id]
 
-            old_result = old.get('esito', '')
-            new_result = new.get('esito', '')
+            old_result = old.get('result', '')
+            new_result = new.get('result', '')
 
             change = TestChange(
                 test_id=test_id,
@@ -223,7 +223,7 @@ class RunComparator:
             change = TestChange(
                 test_id=test_id,
                 change_type=ChangeType.NEW_TEST,
-                new_result=new.get('esito', ''),
+                new_result=new.get('result', ''),
                 new_notes=new.get('notes', ''),
                 category=new.get('category', ''),
                 question=new.get('question', '')
@@ -236,7 +236,7 @@ class RunComparator:
             change = TestChange(
                 test_id=test_id,
                 change_type=ChangeType.REMOVED_TEST,
-                old_result=old.get('esito', ''),
+                old_result=old.get('result', ''),
                 old_notes=old.get('notes', ''),
                 category=old.get('category', ''),
                 question=old.get('question', '')
@@ -264,7 +264,7 @@ class RunComparator:
         Carica dati di una RUN.
 
         Returns:
-            Dict[test_id -> {esito, notes, category, question, ...}]
+            Dict[test_id -> {result, notes, category, question, ...}]
         """
         # Check cache
         if run_number in self._cache:
@@ -282,7 +282,7 @@ class RunComparator:
                         test_id = record.get('TEST ID', '')
                         if test_id:
                             data[test_id] = {
-                                'esito': record.get('ESITO', ''),
+                                'result': record.get('RESULT', record.get('ESITO', '')),  # Supporta sia RESULT che ESITO (legacy)
                                 'notes': record.get('NOTES', ''),
                                 'question': record.get('QUESTION', ''),
                                 'category': '',  # Non sempre presente
@@ -541,7 +541,7 @@ class FlakyTestDetector:
                     test_history[test_id] = []
 
                 test_history[test_id].append(
-                    (run_num, test_data.get('esito', ''))
+                    (run_num, test_data.get('result', ''))
                 )
 
         # Calcola flaky score per ogni test
@@ -602,7 +602,7 @@ class FlakyTestDetector:
             for test_id, test_data in data.items():
                 if test_id not in test_history:
                     test_history[test_id] = []
-                test_history[test_id].append(test_data.get('esito', ''))
+                test_history[test_id].append(test_data.get('result', ''))
 
         stable_pass = 0
         stable_fail = 0

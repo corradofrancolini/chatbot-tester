@@ -5,8 +5,10 @@
 # -----------------------------------------------------------------------------
 # Credenziali e Secrets (MAI committare!)
 # -----------------------------------------------------------------------------
+.env
 config/.env
 config/oauth_credentials.json
+config/service_account.json
 *.pem
 *.key
 **/token.json
@@ -88,6 +90,3 @@ htmlcov/
 projects/*/
 !projects/.gitkeep
 !projects/example-chatbot/
-!projects/efg-intranet/
-!projects/silicon-b/
-!projects/ws-corporate-ai/

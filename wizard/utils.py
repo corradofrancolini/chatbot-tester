@@ -62,6 +62,13 @@ class WizardState:
     ollama_enabled: bool = False
     ollama_model: str = "mistral"
 
+    # Evaluation
+    evaluation_enabled: bool = False
+    eval_semantic_threshold: float = 0.7
+    eval_judge_threshold: float = 0.6
+    eval_rag_threshold: float = 0.5
+    eval_auto_rag_context: bool = True
+
     # Tests
     tests: List[Dict[str, Any]] = field(default_factory=list)
 
@@ -83,6 +90,21 @@ class WizardState:
     def is_step_complete(self, step: int) -> bool:
         """Check if a step is complete."""
         return step in self.completed_steps
+
+    # Compatibility properties for new wizard
+    @property
+    def requires_login(self) -> bool:
+        """Alias for needs_login (new wizard uses this name)."""
+        return self.needs_login
+
+    @requires_login.setter
+    def requires_login(self, value: bool) -> None:
+        self.needs_login = value
+
+    @property
+    def sheets_enabled(self) -> bool:
+        """Alias for google_sheets_enabled."""
+        return self.google_sheets_enabled
 
 
 class StateManager:
@@ -141,7 +163,7 @@ class StateManager:
             return False
 
         state = self.load()
-        return state.current_step > 1 and len(state.completed_steps) < 9
+        return state.current_step > 1 and len(state.completed_steps) < 10
 
 
 # Validators
@@ -336,6 +358,37 @@ def check_ollama_model(model: str = "mistral") -> bool:
     return False
 
 
+def check_prerequisites() -> List[str]:
+    """
+    Run all prerequisite checks.
+
+    Returns:
+        List of issue descriptions (empty if all checks pass)
+    """
+    issues = []
+
+    # Python version
+    py_ok, py_version = check_python_version()
+    if not py_ok:
+        issues.append(f"Python {py_version} is below minimum (3.10)")
+
+    # Internet
+    if not check_internet():
+        issues.append("No internet connection")
+
+    # Disk space
+    disk_ok, disk_mb = check_disk_space(500)
+    if not disk_ok:
+        issues.append(f"Low disk space: {disk_mb}MB available (need 500MB)")
+
+    # Git (warning only)
+    git_ok, _ = check_git()
+    if not git_ok:
+        issues.append("Git not found (recommended)")
+
+    return issues
+
+
 # Network helpers
 
 def test_url_reachable(url: str, timeout: int = 10) -> Tuple[bool, int]:
@@ -419,6 +472,17 @@ def save_project_config(state: WizardState) -> None:
             'enabled': state.ollama_enabled,
             'model': state.ollama_model,
             'url': 'http://localhost:11434/api/generate'
+        },
+        'evaluation': {
+            'enabled': state.evaluation_enabled,
+            'semantic_threshold': state.eval_semantic_threshold,
+            'judge_threshold': state.eval_judge_threshold,
+            'rag_threshold': state.eval_rag_threshold,
+            'auto_rag_context': {
+                'enabled': state.eval_auto_rag_context,
+                'max_documents': 5,
+                'max_chars': 10000
+            }
         }
     }
 
@@ -428,6 +492,40 @@ def save_project_config(state: WizardState) -> None:
     config_file = project_dir / "project.yaml"
     with open(config_file, 'w') as f:
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+
+def load_project_config(project_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Load project configuration from project.yaml.
+
+    Returns:
+        Config dict or None if not found
+    """
+    import yaml
+
+    project_dir = get_project_dir(project_name)
+    config_file = project_dir / "project.yaml"
+
+    if not config_file.exists():
+        return None
+
+    try:
+        with open(config_file, 'r') as f:
+            config = yaml.safe_load(f)
+
+        # Flatten the config for easier access
+        return {
+            'project_name': config.get('project', {}).get('name', project_name),
+            'description': config.get('project', {}).get('description', ''),
+            'chatbot_url': config.get('chatbot', {}).get('url', ''),
+            'requires_login': config.get('chatbot', {}).get('requires_login', False),
+            'selectors': config.get('chatbot', {}).get('selectors', {}),
+            'google_sheets': config.get('google_sheets', {}),
+            'langsmith': config.get('langsmith', {}),
+            'ollama': config.get('ollama', {}),
+        }
+    except Exception:
+        return None
 
 
 def save_tests(project_name: str, tests: List[Dict[str, Any]]) -> None:

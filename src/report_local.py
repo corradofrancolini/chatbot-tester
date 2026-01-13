@@ -17,24 +17,7 @@ from dataclasses import dataclass, asdict
 from collections import Counter
 
 
-@dataclass
-class TestResultLocal:
-    """Test result for local report"""
-    test_id: str
-    date: str
-    mode: str
-    question: str
-    conversation: str
-    screenshot_path: str = ""
-    prompt_version: str = ""
-    model_version: str = ""
-    environment: str = ""
-    esito: str = ""
-    notes: str = ""
-    langsmith_url: str = ""
-    duration_ms: int = 0
-    category: str = ""
-    followups_count: int = 0
+from .models import TestResult
 
 
 @dataclass
@@ -88,7 +71,7 @@ class ReportGenerator:
         self.screenshots_dir.mkdir(exist_ok=True)
 
         # Results
-        self.results: List[TestResultLocal] = []
+        self.results: List[TestResult] = []
 
         # Timing
         self.start_time = datetime.utcnow()
@@ -108,7 +91,7 @@ class ReportGenerator:
             pass
         return 0
 
-    def add_result(self, result: TestResultLocal) -> None:
+    def add_result(self, result: TestResult) -> None:
         """Add a result"""
         self.results.append(result)
 
@@ -116,7 +99,7 @@ class ReportGenerator:
         if not self.mode and result.mode:
             self.mode = result.mode
 
-    def add_results(self, results: List[TestResultLocal]) -> None:
+    def add_results(self, results: List[TestResult]) -> None:
         """Add multiple results"""
         for r in results:
             self.add_result(r)
@@ -141,7 +124,7 @@ class ReportGenerator:
     def _generate_summary(self) -> Path:
         """Generate summary JSON"""
         # Calculate statistics
-        esiti = Counter(r.esito.upper() for r in self.results)
+        esiti = Counter(r.result.upper() for r in self.results)
 
         # Statistics by category
         categories: Dict[str, Dict[str, int]] = {}
@@ -150,9 +133,9 @@ class ReportGenerator:
             if cat not in categories:
                 categories[cat] = {'passed': 0, 'failed': 0, 'total': 0}
             categories[cat]['total'] += 1
-            if r.esito.upper() == 'PASS':
+            if r.result.upper() == 'PASS':
                 categories[cat]['passed'] += 1
-            elif r.esito.upper() == 'FAIL':
+            elif r.result.upper() == 'FAIL':
                 categories[cat]['failed'] += 1
 
         # Average response time
@@ -187,7 +170,7 @@ class ReportGenerator:
 
         fieldnames = [
             'test_id', 'date', 'mode', 'category', 'question',
-            'esito', 'duration_ms', 'followups_count', 'notes',
+            'result', 'duration_ms', 'followups_count', 'notes',
             'conversation', 'screenshot_path', 'langsmith_url',
             'prompt_version', 'model_version', 'environment'
         ]
@@ -203,12 +186,12 @@ class ReportGenerator:
                     'mode': r.mode,
                     'category': r.category,
                     'question': r.question,
-                    'esito': r.esito,
+                    'result': r.result,
                     'duration_ms': r.duration_ms,
                     'followups_count': r.followups_count,
                     'notes': r.notes,
                     'conversation': r.conversation[:1000],  # Truncate
-                    'screenshot_path': r.screenshot_path,
+                    'screenshot_path': r.screenshot_path or "",
                     'langsmith_url': r.langsmith_url,
                     'prompt_version': r.prompt_version,
                     'model_version': r.model_version,
@@ -220,7 +203,7 @@ class ReportGenerator:
     def _generate_html(self) -> Path:
         """Generate interactive HTML report"""
         # Statistics for header
-        esiti = Counter(r.esito.upper() for r in self.results)
+        esiti = Counter(r.result.upper() for r in self.results)
         total = len(self.results)
         passed = esiti.get('PASS', 0)
         failed = esiti.get('FAIL', 0)
@@ -242,7 +225,7 @@ class ReportGenerator:
                 'FAIL': 'fail',
                 'SKIP': 'skip',
                 'ERROR': 'error'
-            }.get(r.esito.upper(), '')
+            }.get(r.result.upper(), '')
 
             # Format conversation (escape HTML)
             conv_escaped = (r.conversation
@@ -263,11 +246,11 @@ class ReportGenerator:
                 langsmith_html = f'<a href="{r.langsmith_url}" target="_blank">[trace]</a>'
 
             rows_html += f"""
-            <tr class="{esito_class}" data-category="{r.category}" data-esito="{r.esito.upper()}">
+            <tr class="{esito_class}" data-category="{r.category}" data-esito="{r.result.upper()}">
                 <td>{r.test_id}</td>
                 <td>{r.category}</td>
                 <td class="question">{r.question}</td>
-                <td class="esito {esito_class}">{r.esito}</td>
+                <td class="esito {esito_class}">{r.result}</td>
                 <td>{r.duration_ms}ms</td>
                 <td class="icons">{screenshot_html} {langsmith_html}</td>
                 <td class="notes">{r.notes}</td>
@@ -401,17 +384,17 @@ class ReportGenerator:
             background: #f8fafc;
         }}
 
-        .esito {{
+        .result {{
             font-weight: 600;
             padding: 4px 10px;
             border-radius: 4px;
             display: inline-block;
         }}
 
-        .esito.pass {{ background: #dcfce7; color: #166534; }}
-        .esito.fail {{ background: #fee2e2; color: #991b1b; }}
-        .esito.skip {{ background: #fef3c7; color: #92400e; }}
-        .esito.error {{ background: #ede9fe; color: #5b21b6; }}
+        .result.pass {{ background: #dcfce7; color: #166534; }}
+        .result.fail {{ background: #fee2e2; color: #991b1b; }}
+        .result.skip {{ background: #fef3c7; color: #92400e; }}
+        .result.error {{ background: #ede9fe; color: #5b21b6; }}
 
         .question {{
             max-width: 300px;
@@ -521,7 +504,7 @@ class ReportGenerator:
             const search = searchText.value.toLowerCase();
 
             rows.forEach(row => {{
-                const rowEsito = row.dataset.esito;
+                const rowEsito = row.dataset.result;
                 const rowCategory = row.dataset.category;
                 const rowText = row.textContent.toLowerCase();
 

@@ -18,540 +18,21 @@ Usage:
     test_viz.render_terminal()
 """
 
-import re
-import csv
-import json
 import webbrowser
 from pathlib import Path
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Tuple, Union
-from datetime import datetime
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Data Classes
-# ═══════════════════════════════════════════════════════════════════════════════
-
-@dataclass
-class PromptRule:
-    """Una regola estratta dal prompt."""
-    type: str  # 'condition', 'always', 'never', 'preference'
-    text: str
-    category: Optional[str] = None
-
-
-@dataclass
-class PromptCapability:
-    """Una capability del prompt."""
-    name: str
-    description: str
-    can_do: bool = True  # True = can do, False = cannot do
-
-
-@dataclass
-class PromptStructure:
-    """Struttura parsata del prompt."""
-    raw_content: str
-    rules: List[PromptRule] = field(default_factory=list)
-    capabilities: List[PromptCapability] = field(default_factory=list)
-    sections: Dict[str, str] = field(default_factory=dict)
-    tone: Optional[str] = None
-    language: Optional[str] = None
-
-
-@dataclass
-class TestTrace:
-    """Trace di un singolo test."""
-    test_id: str
-    question: str
-    response: str
-    query_data: Optional[Dict] = None
-    tools_used: List[str] = field(default_factory=list)
-    sources: List[Dict[str, str]] = field(default_factory=list)
-    model: Optional[str] = None
-    duration_ms: int = 0
-    first_token_ms: int = 0
-    esito: str = "UNKNOWN"
-    notes: Optional[str] = None
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Prompt Parser
-# ═══════════════════════════════════════════════════════════════════════════════
-
-class PromptParser:
-    """Estrae struttura semantica dal testo del prompt."""
-
-    # Pattern per identificare regole - Italiano
-    RULE_PATTERNS_IT = {
-        'condition': [
-            r'(?<![a-zA-Z])[Ss]e\s+(?:l[\'aeo]\s+)?(.+?),?\s+(?:allora\s+)?(.+?)(?:\.|$)',
-            r'[Qq]uando\s+(.+?),?\s+(.+?)(?:\.|$)',
-            r'[Nn]el caso\s+(.+?),?\s+(.+?)(?:\.|$)',
-        ],
-        'always': [
-            r'[Ss]empre\s+(.+?)(?:\.|$)',
-            r'[Dd]evi sempre\s+(.+?)(?:\.|$)',
-            r'[Aa]ssicurati di\s+(.+?)(?:\.|$)',
-        ],
-        'never': [
-            r'[Mm]ai\s+(.+?)(?:\.|$)',
-            r'[Nn]on\s+(?:devi\s+)?(.+?)(?:\.|$)',
-            r'[Ee]vita(?:re)?\s+(.+?)(?:\.|$)',
-        ],
-        'preference': [
-            r'[Pp]referibilmente\s+(.+?)(?:\.|$)',
-            r'[Cc]erca di\s+(.+?)(?:\.|$)',
-            r'[Ss]arebbe meglio\s+(.+?)(?:\.|$)',
-        ]
-    }
-
-    # Pattern per identificare regole - English
-    RULE_PATTERNS_EN = {
-        'condition': [
-            r'IF\s+(.+?)\s*[→\-]+\s*(.+?)(?:\n|$)',  # IF ... → ...
-            r'[Ii]f\s+(.+?),?\s+(?:then\s+)?(.+?)(?:\.|$)',  # If ... then ...
-            r'[Ww]hen\s+(.+?),?\s+(.+?)(?:\.|$)',  # When ...
-        ],
-        'always': [
-            r'ALWAYS\s+(.+?)(?:\.|$)',
-            r'[Aa]lways\s+(.+?)(?:\.|$)',
-            r'MUST\s+(.+?)(?:\.|$)',
-            r'[Mm]ust\s+(.+?)(?:\.|$)',
-            r'[Ss]hould\s+(.+?)(?:\.|$)',
-            r'[Ee]nsure\s+(?:that\s+)?(.+?)(?:\.|$)',
-        ],
-        'never': [
-            r'NEVER\s+(.+?)(?:\.|$)',
-            r'[Nn]ever\s+(.+?)(?:\.|$)',
-            r'MUST NOT\s+(.+?)(?:\.|$)',
-            r'[Dd]o NOT\s+(.+?)(?:\.|$)',
-            r'[Dd]o not\s+(.+?)(?:\.|$)',
-            r'[Aa]void\s+(.+?)(?:\.|$)',
-            r'[Ss]hould not\s+(.+?)(?:\.|$)',
-        ],
-        'preference': [
-            r'[Pp]referably\s+(.+?)(?:\.|$)',
-            r'[Tt]ry to\s+(.+?)(?:\.|$)',
-            r'[Ii]t is better to\s+(.+?)(?:\.|$)',
-            r'[Ii]deally\s+(.+?)(?:\.|$)',
-        ],
-        'critical': [
-            r'CRITICAL(?:\s+RULE)?:\s*(.+?)(?:\n|$)',
-            r'[Cc]ritical(?:\s+rule)?:\s*(.+?)(?:\n|$)',
-            r'IMPORTANT:\s*(.+?)(?:\n|$)',
-            r'[Ii]mportant:\s*(.+?)(?:\n|$)',
-            r'WARNING:\s*(.+?)(?:\n|$)',
-        ]
-    }
-
-    # Pattern per capabilities - Italiano
-    CAPABILITY_PATTERNS_IT = {
-        'can_do': [
-            r'[Pp]uoi\s+(.+?)(?:\.|$)',
-            r'[Ss]ei in grado di\s+(.+?)(?:\.|$)',
-            r'[Hh]ai accesso a\s+(.+?)(?:\.|$)',
-        ],
-        'cannot_do': [
-            r'[Nn]on puoi\s+(.+?)(?:\.|$)',
-            r'[Nn]on hai accesso a\s+(.+?)(?:\.|$)',
-            r'[Nn]on sei in grado di\s+(.+?)(?:\.|$)',
-        ]
-    }
-
-    # Pattern per capabilities - English
-    CAPABILITY_PATTERNS_EN = {
-        'can_do': [
-            r'[Yy]ou can\s+(.+?)(?:\.|$)',
-            r'[Yy]ou are able to\s+(.+?)(?:\.|$)',
-            r'[Yy]ou have access to\s+(.+?)(?:\.|$)',
-            r'[Cc]an\s+(.+?)(?:\.|$)',
-        ],
-        'cannot_do': [
-            r'[Yy]ou cannot\s+(.+?)(?:\.|$)',
-            r'[Yy]ou can\'t\s+(.+?)(?:\.|$)',
-            r'[Yy]ou are not able to\s+(.+?)(?:\.|$)',
-            r'[Cc]annot\s+(.+?)(?:\.|$)',
-        ]
-    }
-
-    def parse(self, content: str) -> PromptStructure:
-        """Parsa il contenuto del prompt."""
-        structure = PromptStructure(raw_content=content)
-
-        # Prima identifica la lingua per usare i pattern corretti
-        structure.language = self._detect_language(content)
-
-        # Estrai sezioni markdown (## HEADING) - priorita alta per prompt strutturati
-        structure.sections = self._extract_sections(content)
-
-        # Estrai workflow steps (### Step N:)
-        workflow_steps = self._extract_workflow_steps(content)
-        if workflow_steps:
-            structure.sections['_workflow_steps'] = workflow_steps
-
-        # Estrai regole usando pattern della lingua corretta
-        structure.rules = self._extract_rules(content, structure.language)
-
-        # Estrai capabilities
-        structure.capabilities = self._extract_capabilities(content, structure.language)
-
-        # Identifica tone
-        structure.tone = self._detect_tone(content)
-
-        return structure
-
-    def _extract_rules(self, content: str, language: str = 'en') -> List[PromptRule]:
-        """Estrae regole dal prompt usando pattern specifici per lingua."""
-        rules = []
-        seen_texts = set()  # Per evitare duplicati
-
-        # Seleziona pattern in base alla lingua
-        if language == 'it':
-            patterns_dict = self.RULE_PATTERNS_IT
-        else:
-            patterns_dict = self.RULE_PATTERNS_EN
-
-        # Prima estrai regole da blocchi CRITICAL/IMPORTANT
-        critical_patterns = self.RULE_PATTERNS_EN.get('critical', [])
-        for pattern in critical_patterns:
-            for match in re.finditer(pattern, content, re.MULTILINE):
-                text = match.group(0).strip()
-                if len(text) > 15 and text not in seen_texts:
-                    seen_texts.add(text)
-                    rules.append(PromptRule(
-                        type='critical',
-                        text=text
-                    ))
-
-        # Poi estrai regole standard
-        for rule_type, patterns in patterns_dict.items():
-            if rule_type == 'critical':
-                continue  # Gia' gestito sopra
-            for pattern in patterns:
-                for match in re.finditer(pattern, content, re.MULTILINE):
-                    text = match.group(0).strip()
-                    # Ignora match troppo corti o che sono dentro code blocks
-                    if len(text) > 15 and text not in seen_texts:
-                        # Verifica che non sia in un code block
-                        if not self._is_in_code_block(content, match.start()):
-                            seen_texts.add(text)
-                            rules.append(PromptRule(
-                                type=rule_type,
-                                text=text
-                            ))
-
-        # Estrai regole da liste numerate con keyword
-        list_rules = self._extract_list_rules(content, language)
-        for rule in list_rules:
-            if rule.text not in seen_texts:
-                seen_texts.add(rule.text)
-                rules.append(rule)
-
-        return rules
-
-    def _is_in_code_block(self, content: str, position: int) -> bool:
-        """Verifica se una posizione e' dentro un code block."""
-        # Conta i ``` prima della posizione
-        code_markers = content[:position].count('```')
-        # Se dispari, siamo dentro un code block
-        return code_markers % 2 == 1
-
-    def _extract_list_rules(self, content: str, language: str) -> List[PromptRule]:
-        """Estrae regole da liste numerate/puntate."""
-        rules = []
-
-        # Pattern per liste con keyword importanti
-        if language == 'en':
-            keywords = {
-                'never': r'^\s*[\d\.\-\*]+\s*((?:NEVER|Never|Do NOT|Don\'t|Avoid).+?)$',
-                'always': r'^\s*[\d\.\-\*]+\s*((?:ALWAYS|Always|MUST|Must|Ensure).+?)$',
-                'critical': r'^\s*[\d\.\-\*]+\s*\*\*(.+?)\*\*',  # **bold** in lists
-            }
-        else:
-            keywords = {
-                'never': r'^\s*[\d\.\-\*]+\s*((?:Mai|Non|Evita).+?)$',
-                'always': r'^\s*[\d\.\-\*]+\s*((?:Sempre|Devi|Assicurati).+?)$',
-            }
-
-        for rule_type, pattern in keywords.items():
-            for match in re.finditer(pattern, content, re.MULTILINE):
-                text = match.group(1).strip().strip('*')
-                if len(text) > 10:
-                    rules.append(PromptRule(type=rule_type, text=text))
-
-        return rules
-
-    def _extract_capabilities(self, content: str, language: str = 'en') -> List[PromptCapability]:
-        """Estrae capabilities dal prompt."""
-        capabilities = []
-        seen = set()
-
-        # Seleziona pattern in base alla lingua
-        if language == 'it':
-            patterns_dict = self.CAPABILITY_PATTERNS_IT
-        else:
-            patterns_dict = self.CAPABILITY_PATTERNS_EN
-
-        for cap_type, patterns in patterns_dict.items():
-            for pattern in patterns:
-                for match in re.finditer(pattern, content, re.MULTILINE):
-                    text = match.group(1).strip()
-                    if len(text) > 5 and text not in seen:
-                        seen.add(text)
-                        capabilities.append(PromptCapability(
-                            name=text[:50],
-                            description=text,
-                            can_do=(cap_type == 'can_do')
-                        ))
-
-        # Estrai anche da sezioni strutturate
-        structured_caps = self._extract_structured_capabilities(content)
-        for cap in structured_caps:
-            if cap.description not in seen:
-                seen.add(cap.description)
-                capabilities.append(cap)
-
-        return capabilities
-
-    def _extract_structured_capabilities(self, content: str) -> List[PromptCapability]:
-        """Estrae capabilities da sezioni strutturate del prompt."""
-        capabilities = []
-
-        # Cerca sezioni come "## INPUT SOURCES", "## OUTPUT FORMAT", etc.
-        section_patterns = [
-            (r'##\s*INPUT\s*SOURCES?\s*\n(.*?)(?=\n##|\Z)', True, 'Input'),
-            (r'##\s*OUTPUT\s*FORMAT\s*\n(.*?)(?=\n##|\Z)', True, 'Output'),
-            (r'##\s*WORKFLOW\s*\n(.*?)(?=\n##|\Z)', True, 'Workflow'),
-            (r'##\s*GENERATION\s*\n(.*?)(?=\n##|\Z)', True, 'Generation'),
-        ]
-
-        for pattern, can_do, prefix in section_patterns:
-            match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-            if match:
-                section_content = match.group(1)
-                # Estrai items dalla sezione
-                items = re.findall(r'^\s*[\d\.\-\*]+\s*\*\*(.+?)\*\*', section_content, re.MULTILINE)
-                for item in items[:5]:  # Max 5 per sezione
-                    capabilities.append(PromptCapability(
-                        name=f"{prefix}: {item[:40]}",
-                        description=item,
-                        can_do=can_do
-                    ))
-
-        return capabilities
-
-    def _extract_workflow_steps(self, content: str) -> List[Dict[str, str]]:
-        """Estrae step del workflow (### Step N: ...)."""
-        steps = []
-
-        # Pattern per step numerati
-        pattern = r'###\s*Step\s*(\d+):\s*(.+?)(?=\n###|\n##|\Z)'
-        for match in re.finditer(pattern, content, re.DOTALL):
-            step_num = match.group(1)
-            step_content = match.group(2).strip()
-            # Estrai titolo (prima riga)
-            title_match = re.match(r'^([^\n]+)', step_content)
-            title = title_match.group(1) if title_match else f"Step {step_num}"
-            steps.append({
-                'number': step_num,
-                'title': title,
-                'content': step_content[:500]  # Limita contenuto
-            })
-
-        return steps
-
-    def _extract_sections(self, content: str) -> Dict[str, str]:
-        """Estrae sezioni markdown dal prompt."""
-        sections = {}
-        current_section = "intro"
-        current_content = []
-
-        for line in content.split('\n'):
-            # Match ## HEADING (level 2) per sezioni principali
-            if line.startswith('## '):
-                # Salva sezione precedente
-                if current_content:
-                    sections[current_section] = '\n'.join(current_content).strip()
-                # Nuova sezione
-                current_section = line[3:].strip().lower()
-                current_content = []
-            elif line.startswith('# ') and not line.startswith('## '):
-                # Titolo principale (level 1)
-                if current_content:
-                    sections[current_section] = '\n'.join(current_content).strip()
-                current_section = line.lstrip('#').strip().lower()
-                current_content = []
-            else:
-                current_content.append(line)
-
-        # Salva ultima sezione
-        if current_content:
-            sections[current_section] = '\n'.join(current_content).strip()
-
-        return sections
-
-    def _detect_tone(self, content: str) -> Optional[str]:
-        """Rileva il tone of voice dal prompt."""
-        tone_keywords = {
-            'formal': ['formal', 'formale', 'professional', 'professionale', 'cortese', 'polite'],
-            'informal': ['informal', 'informale', 'friendly', 'amichevole', 'colloquiale', 'conversational'],
-            'technical': ['technical', 'tecnico', 'precise', 'preciso', 'detailed', 'dettagliato', 'specific', 'specifico'],
-            'empathetic': ['empathetic', 'empatico', 'supportive', 'supportivo', 'understanding', 'comprensivo'],
-            'structured': ['workflow', 'step', 'phase', 'paragraph', 'xml', 'json', 'output format'],
-        }
-
-        content_lower = content.lower()
-        for tone, keywords in tone_keywords.items():
-            if any(kw in content_lower for kw in keywords):
-                return tone
-
-        return None
-
-    def _detect_language(self, content: str) -> str:
-        """Rileva la lingua del prompt."""
-        italian_words = ['sei', 'devi', 'puoi', 'quando', 'sempre', 'mai', 'utente']
-        english_words = ['you', 'must', 'should', 'when', 'always', 'never', 'user']
-
-        content_lower = content.lower()
-        italian_count = sum(1 for w in italian_words if w in content_lower)
-        english_count = sum(1 for w in english_words if w in content_lower)
-
-        return 'it' if italian_count > english_count else 'en'
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Test Data Extractor
-# ═══════════════════════════════════════════════════════════════════════════════
-
-class TestDataExtractor:
-    """Estrae dati di test dal report CSV."""
-
-    def __init__(self, project_name: str, base_dir: Optional[Path] = None):
-        self.project_name = project_name
-        if base_dir:
-            self.base_dir = Path(base_dir)
-        else:
-            self.base_dir = Path(__file__).parent.parent
-        self.reports_dir = self.base_dir / "reports" / project_name
-
-    def get_latest_run(self) -> Optional[int]:
-        """Trova l'ultima run disponibile."""
-        if not self.reports_dir.exists():
-            return None
-
-        run_dirs = list(self.reports_dir.glob("run_*"))
-        if not run_dirs:
-            return None
-
-        run_numbers = []
-        for d in run_dirs:
-            try:
-                num = int(d.name.split('_')[1])
-                run_numbers.append(num)
-            except (IndexError, ValueError):
-                pass
-
-        return max(run_numbers) if run_numbers else None
-
-    def get_test(self, run_number: int, test_id: str) -> Optional[TestTrace]:
-        """Estrae un singolo test dalla run."""
-        report_path = self.reports_dir / f"run_{run_number:03d}" / "report.csv"
-        if not report_path.exists():
-            return None
-
-        with open(report_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row.get('test_id') == test_id:
-                    return self._parse_row(row)
-
-        return None
-
-    def get_all_tests(self, run_number: int) -> List[TestTrace]:
-        """Estrae tutti i test da una run."""
-        report_path = self.reports_dir / f"run_{run_number:03d}" / "report.csv"
-        if not report_path.exists():
-            return []
-
-        tests = []
-        with open(report_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                trace = self._parse_row(row)
-                if trace:
-                    tests.append(trace)
-
-        return tests
-
-    def _parse_row(self, row: Dict[str, str]) -> Optional[TestTrace]:
-        """Parsa una riga del CSV in TestTrace."""
-        notes = row.get('notes', '')
-
-        # Estrai sezioni strutturate dalle notes
-        query_data = self._extract_section(notes, 'QUERY')
-        response = self._extract_section(notes, 'RESPONSE')
-        performance = self._extract_section(notes, 'PERFORMANCE')
-        tools_section = self._extract_section(notes, 'TOOLS')
-        sources_section = self._extract_section(notes, 'SOURCES')
-
-        # Parse performance
-        model = None
-        duration = 0
-        first_token = 0
-        if performance:
-            model_match = re.search(r'Model:\s*(.+)', performance)
-            if model_match:
-                model = model_match.group(1).strip()
-            dur_match = re.search(r'Duration:\s*(\d+)ms', performance)
-            if dur_match:
-                duration = int(dur_match.group(1))
-            ft_match = re.search(r'First Token:\s*(\d+)ms', performance)
-            if ft_match:
-                first_token = int(ft_match.group(1))
-
-        # Parse tools
-        tools = []
-        if tools_section:
-            tools = [t.strip() for t in tools_section.split('\n') if t.strip()]
-
-        # Parse sources
-        sources = []
-        if sources_section:
-            for line in sources_section.split('\n'):
-                if line.strip().startswith('•'):
-                    source_text = line.strip()[1:].strip()
-                    sources.append({'path': source_text})
-
-        return TestTrace(
-            test_id=row.get('test_id', ''),
-            question=row.get('question', ''),
-            response=response or row.get('conversation', ''),
-            query_data=self._parse_json_safe(query_data) if query_data else None,
-            tools_used=tools,
-            sources=sources,
-            model=model,
-            duration_ms=int(row.get('duration_ms', 0)) or duration,
-            first_token_ms=first_token,
-            esito=row.get('esito', 'UNKNOWN'),
-            notes=notes
-        )
-
-    def _extract_section(self, text: str, section_name: str) -> Optional[str]:
-        """Estrae una sezione dal testo delle notes."""
-        # Pattern che accetta "=== TOOLS ===" o "=== TOOLS (1) ==="
-        pattern = rf'=== {section_name}(?: \(\d+\))? ===\s*\n(.*?)(?===|$)'
-        match = re.search(pattern, text, re.DOTALL)
-        if match:
-            return match.group(1).strip()
-        return None
-
-    def _parse_json_safe(self, text: str) -> Optional[Dict]:
-        """Prova a parsare JSON, ritorna None se fallisce."""
-        try:
-            return json.loads(text)
-        except (json.JSONDecodeError, TypeError):
-            return None
+from typing import Optional, List, Dict, Any
+
+# Import from parsing subpackage
+from .parsing.prompt_parser import (
+    PromptParser,
+    PromptRule,
+    PromptCapability,
+    PromptStructure,
+)
+from .parsing.test_extractor import (
+    TestDataExtractor,
+    TestTrace,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -871,7 +352,7 @@ class HTMLRenderer:
         timeline_html = HTMLRenderer._trace_to_timeline(trace)
         comparison_html = HTMLRenderer._trace_to_comparison(trace, prompt_structure)
 
-        status_color = '#3fb950' if trace.esito == 'PASS' else '#f85149'
+        status_color = '#3fb950' if trace.result == 'PASS' else '#f85149'
 
         return f'''<!DOCTYPE html>
 <html lang="it">
@@ -1040,7 +521,7 @@ class HTMLRenderer:
     <div class="container">
         <h1>
             Test: {trace.test_id}
-            <span class="status">{trace.esito}</span>
+            <span class="status">{trace.result}</span>
         </h1>
 
         <div class="metrics">
@@ -1131,7 +612,7 @@ class HTMLRenderer:
         if trace.sources:
             items.append(('', 'Sources consultate', f'{len(trace.sources)} documenti'))
 
-        items.append((f'{trace.duration_ms}ms', 'Response completata', f'Esito: {trace.esito}'))
+        items.append((f'{trace.duration_ms}ms', 'Response completata', f'Esito: {trace.result}'))
 
         html_parts = ['<div class="timeline">']
         for time, label, detail in items:
@@ -1257,12 +738,12 @@ class TerminalRenderer:
     @classmethod
     def test_view(cls, trace: TestTrace, prompt_structure: Optional[PromptStructure] = None) -> str:
         """Genera vista terminale del test."""
-        status_color = cls.GREEN if trace.esito == 'PASS' else cls.RED
+        status_color = cls.GREEN if trace.result == 'PASS' else cls.RED
 
         lines = [
             '',
             f'{cls.BOLD}{cls.BLUE}TEST VISUALIZER: {trace.test_id}{cls.RESET} '
-            f'{status_color}[{trace.esito}]{cls.RESET}',
+            f'{status_color}[{trace.result}]{cls.RESET}',
             f'{cls.DIM}{"=" * 60}{cls.RESET}',
             '',
             f'{cls.DIM}Duration:{cls.RESET} {trace.duration_ms}ms  '
@@ -1301,7 +782,7 @@ class TerminalRenderer:
             lines.append(f'       .......... Tools: {", ".join(trace.tools_used)}')
         if trace.sources:
             lines.append(f'       .......... Sources: {len(trace.sources)} docs')
-        lines.append(f'  {trace.duration_ms}ms .......... Response [{trace.esito}]')
+        lines.append(f'  {trace.duration_ms}ms .......... Response [{trace.result}]')
 
         lines.append('')
         return '\n'.join(lines)
