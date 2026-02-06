@@ -127,6 +127,7 @@ class TestResult:
     # LangSmith integration
     langsmith_report: str = ""
     langsmith_url: str = ""
+    vector_store: str = ""
 
     # Timing
     timing: str = ""  # "TTFR → Total" format

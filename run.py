@@ -3435,7 +3435,7 @@ async def run_test_session(
                         model_version=result.model_version,
                         vector_store=result.vector_store,
                         environment=run_config.env if run_config else "DEV",
-                        esito="",  # Vuoto - compilato dal reviewer
+                        result="",  # Vuoto - compilato dal reviewer
                         notes=result.test_case.notes,  # Note predefinite (es. intent)
                         langsmith_report=result.langsmith_report,
                         langsmith_url=result.langsmith_url,
@@ -3498,8 +3498,8 @@ async def run_test_session(
 
         # Riepilogo
         ui.section(t('test_execution.summary'))
-        passed = sum(1 for r in results if r.esito == 'PASS')
-        failed = sum(1 for r in results if r.esito == 'FAIL')
+        passed = sum(1 for r in results if r.result == 'PASS')
+        failed = sum(1 for r in results if r.result == 'FAIL')
         ui.stats_row({
             t('test_execution.total'): len(results),
             t('test_execution.passed'): passed,

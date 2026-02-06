@@ -374,21 +374,37 @@ class BrowserManager:
                     # Aggiorna il conteggio per prossimi messaggi
                     self._last_message_count = current_count
 
-                    # Ottieni testo ultimo messaggio (escludendo feedback form)
+                    # Ottieni testo ultimo messaggio completo
+                    # Il selettore bot_messages può matchare singoli elementi dentro il messaggio
+                    # Dobbiamo risalire al container per catturare tutto il contenuto
                     messages = self._page.locator(self.selectors.bot_messages)
                     last_message = messages.last
 
-                    # Prova a estrarre solo il contenuto (.llm__inner), escludendo feedback
-                    inner_content = last_message.locator(".llm__inner")
-                    if await inner_content.count() > 0:
-                        texts = []
-                        for i in range(await inner_content.count()):
-                            t = await inner_content.nth(i).text_content()
-                            if t:
-                                texts.append(t.strip())
-                        text = "\n".join(texts)
-                    else:
-                        text = await last_message.text_content()
+                    text = None
+                    try:
+                        # Strategia 1: Risali al container .llm__message--assistant
+                        # e cattura tutto il testo del .llm__text-body al suo interno
+                        message_container = last_message.locator("xpath=ancestor::*[contains(@class, 'llm__message--assistant')]").first
+                        if await message_container.count() > 0:
+                            # Trova tutti i .llm__text-body nel container
+                            text_bodies = message_container.locator(".llm__text-body")
+                            if await text_bodies.count() > 0:
+                                texts = []
+                                for i in range(await text_bodies.count()):
+                                    t = await text_bodies.nth(i).inner_text()
+                                    if t and t.strip():
+                                        texts.append(t.strip())
+                                text = "\n\n".join(texts) if texts else None
+
+                        # Strategia 2: Fallback - prendi inner_text del singolo elemento
+                        if not text:
+                            text = await last_message.inner_text()
+                    except Exception as e:
+                        # Fallback finale
+                        try:
+                            text = await last_message.inner_text()
+                        except:
+                            text = await last_message.text_content()
 
                     # Calculate timing metrics
                     end_time = asyncio.get_event_loop().time()

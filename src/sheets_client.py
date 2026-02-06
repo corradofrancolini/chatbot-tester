@@ -591,7 +591,7 @@ class GoogleSheetsClient(BaseClient):
             def fmt_score(val):
                 return f"{val:.0%}" if val is not None else ""
 
-            # 23 colonne: TEST ID, DATE, MODE, QUESTION, CONVERSATION, SCREENSHOT,
+            # 24 colonne: TEST ID, DATE, MODE, QUESTION, EXPECTED ANSWER, CONVERSATION, SCREENSHOT,
             # SCREENSHOT URL, PROMPT VER, MODEL VER, ENV, TIMING, RESULT, BASELINE, NOTES, LS REPORT, LS TRACE LINK,
             # SEMANTIC, JUDGE, GROUND, FAITH, RELEV, OVERALL, JUDGE REASON
             row = [
@@ -599,6 +599,7 @@ class GoogleSheetsClient(BaseClient):
                 result.date,
                 result.mode,
                 result.question,
+                result.expected or "",                  # EXPECTED ANSWER: golden answer dal test set
                 result.conversation,
                 screenshot_formula,                     # SCREENSHOT: immagine inline
                 screenshot_view_url,                    # SCREENSHOT URL: link alta risoluzione
@@ -678,10 +679,10 @@ class GoogleSheetsClient(BaseClient):
                 def fmt_score(val):
                     return f"{val:.0%}" if val is not None else ""
 
-                # 23 colonne
+                # 24 colonne
                 rows.append([
-                    r.test_id, r.date, r.mode, r.question, r.conversation,
-                    screenshot_formula, screenshot_view_url,
+                    r.test_id, r.date, r.mode, r.question, r.expected or "",
+                    r.conversation, screenshot_formula, screenshot_view_url,
                     r.prompt_version, r.model_version,
                     r.environment or "DEV",           # ENV: default DEV
                     r.timing,                         # TIMING: "TTFR → Total"

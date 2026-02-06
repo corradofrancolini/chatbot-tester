@@ -9,12 +9,13 @@ from dataclasses import dataclass
 from typing import List, Dict, Optional
 
 
-# Standard report columns (23 columns total)
+# Standard report columns (24 columns total)
 COLUMNS = [
     "TEST ID",
     "DATE",
     "MODE",
     "QUESTION",
+    "EXPECTED ANSWER",  # Golden answer (from test set, if provided)
     "CONVERSATION",
     "SCREENSHOT",      # Inline image (thumbnail)
     "SCREENSHOT URL",  # High-res link
@@ -43,6 +44,7 @@ COLUMN_WIDTHS = [
     140,   # DATE
     80,    # MODE
     250,   # QUESTION
+    300,   # EXPECTED ANSWER
     400,   # CONVERSATION
     200,   # SCREENSHOT
     200,   # SCREENSHOT URL

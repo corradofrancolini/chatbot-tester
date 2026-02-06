@@ -372,8 +372,30 @@ jobs:
               echo "Container $CIRCLE_NODE_INDEX of $CIRCLE_NODE_TOTAL"
               echo "My tests: $MY_TEST_IDS"
             else
-              echo "No test_ids specified, will run << parameters.tests >> tests"
-              echo "export MY_TEST_IDS=" >> $BASH_ENV
+              # Estrai test IDs dal file JSON e splitta tra container
+              TESTS_FILE="projects/<< parameters.project >>/<< parameters.tests_file >>"
+              if [ -f "$TESTS_FILE" ]; then
+                echo "Extracting test IDs from $TESTS_FILE"
+                # Estrai tutti gli ID dal JSON
+                cat "$TESTS_FILE" | python3 -c "import json,sys; tests=json.load(sys.stdin); print('\n'.join(t['id'] for t in tests))" > /tmp/all_tests.txt
+
+                TOTAL_TESTS=$(wc -l < /tmp/all_tests.txt | tr -d ' ')
+                echo "Total tests in file: $TOTAL_TESTS"
+
+                # Usa circleci tests split per distribuire
+                cat /tmp/all_tests.txt | circleci tests split > /tmp/my_tests.txt
+
+                # Converti back to comma-separated
+                MY_TEST_IDS=$(cat /tmp/my_tests.txt | tr '\n' ',' | sed 's/,$//')
+                echo "export MY_TEST_IDS=$MY_TEST_IDS" >> $BASH_ENV
+
+                MY_COUNT=$(wc -l < /tmp/my_tests.txt | tr -d ' ')
+                echo "Container $CIRCLE_NODE_INDEX of $CIRCLE_NODE_TOTAL: running $MY_COUNT tests"
+                echo "My tests: $MY_TEST_IDS"
+              else
+                echo "Warning: Tests file not found: $TESTS_FILE"
+                echo "export MY_TEST_IDS=" >> $BASH_ENV
+              fi
             fi
 
       - run:

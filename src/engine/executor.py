@@ -442,12 +442,13 @@ class TestExecutor:
                 date=date_str,
                 mode=self.ctx.current_mode.value.upper(),
                 question=execution.test_case.question,
+                expected=getattr(execution.test_case, 'expected_answer', '') or "",  # Golden answer
                 conversation=conv_str[:5000],  # Sheets limit
                 screenshot_urls=screenshot_urls,
                 prompt_version=execution.prompt_version,
                 model_version=execution.model_version,
                 environment=self.run_config.env if self.run_config else "DEV",
-                result="",  # Empty - for reviewer
+                result=execution.result,  # PASS/FAIL from evaluation
                 notes="",  # Empty - reviewer notes
                 langsmith_report=execution.langsmith_report,
                 langsmith_url=execution.langsmith_url,

@@ -16,46 +16,69 @@
 
 ---
 
-## 1Password CLI - Secrets Management
+## Environment Variables - Secrets Management
 
-**IMPORTANTE**: Tutte le API keys e credentials devono essere gestite tramite 1Password CLI. Mai hardcodare secrets in file o ~/.zshrc.
+**IMPORTANTE**: Tutte le API keys e credentials sono gestite tramite file `.env` locale. Mai committare secrets o hardcodarli nel codice.
 
-### Items in 1Password (vault: Personal)
+### Variabili Disponibili
 
-| Item | Campo | Variabile |
-|------|-------|-----------|
-| LangSmith | api-key | `LANGSMITH_API_KEY` |
-| Anthropic | api-key | `ANTHROPIC_API_KEY` |
-| OpenAI | api-key | `OPENAI_API_KEY` |
-| Google API | api-key | `GOOGLE_API_KEY` |
-| CircleCI | token | `CIRCLECI_TOKEN` |
+| Variabile | Servizio | Uso |
+|-----------|----------|-----|
+| `LANGSMITH_API_KEY` | LangSmith | Tracing e osservabilità |
+| `ANTHROPIC_API_KEY` | Anthropic | Claude API per evaluation |
+| `OPENAI_API_KEY` | OpenAI | GPT models (opzionale) |
+| `GOOGLE_API_KEY` | Google API | Google Sheets integration |
+| `CIRCLECI_TOKEN` | CircleCI | Trigger automatici da MCP |
 
-### Comandi disponibili
+### Setup Iniziale
 
 ```bash
-# Genera .env dal template
-env-inject
+# 1. Copia il template
+cp config/.env.template config/.env
 
-# Esegui comando con secrets (senza file .env su disco)
-opr python run.py -p silicon-b -m auto
+# 2. Modifica config/.env con le tue API keys reali
+# NOTA: Non committare mai config/.env (è già in .gitignore)
 
-# Carica API keys globali nella shell
-load-secrets
-
-# Leggi singolo secret
-opread "op://Personal/OpenAI/api-key"
+# 3. Le variabili vengono caricate automaticamente da src/config_loader.py
+python run.py -p silicon-b --health-check
 ```
 
-### Aggiungere nuove API keys
+### Aggiungere Nuove API Keys
 
-1. Crea item in 1Password: `op item create --category="API Credential" --title="NomeServizio" --vault="Personal" "api-key=xxx"`
-2. Aggiungi a `config/.env.template`: `NOME_VAR=op://Personal/NomeServizio/api-key`
-3. Se serve globalmente, aggiungi a `load-secrets()` in `~/.zshrc`
+1. Aggiungi la variabile a `config/.env.template`:
+   ```bash
+   NEW_SERVICE_KEY=your_new_service_key_here
+   ```
 
-### File
+2. Aggiungi la stessa variabile al tuo `config/.env` locale con il valore reale
 
-- `config/.env.template` - Template con riferimenti `op://` (committabile)
-- `config/.env` - File generato con valori reali (in .gitignore)
+3. Se serve per setup globale, aggiungi anche a `~/.env` (caricato da `~/.zshrc`)
+
+### File e Sicurezza
+
+| File | Status | Scopo |
+|------|--------|-------|
+| `config/.env.template` | ✅ Committabile | Template con placeholder, safe da condividere |
+| `config/.env` | ❌ In .gitignore | Contiene API keys reali, mai committare |
+
+### Verifica Setup
+
+```bash
+# Controlla che le variabili siano caricate
+echo $ANTHROPIC_API_KEY
+
+# Test con health check
+python run.py -p silicon-b --health-check
+```
+
+### .env Globale vs Locale
+
+| File | Scope | Caricato da |
+|------|-------|-------------|
+| `~/.env` | Globale per tutti i progetti | `~/.zshrc` all'avvio della shell |
+| `config/.env` | Locale solo per chatbot-tester | `src/config_loader.py` all'avvio del tool |
+
+**Best practice**: Usa `~/.env` per API keys condivise tra progetti, `config/.env` per keys specifiche del chatbot-tester.
 
 ---
 
@@ -573,26 +596,94 @@ gaps = coverage.find_gaps()
 
 Il server MCP (`mcp_server/server.py`) espone i tool per Claude Desktop.
 
-### Tool Categories
+**URL:** `https://chatbot-tester-mcp.fly.dev`
+**Versione:** 1.4.0
 
-| Tool | Funzione | Trigger phrases |
-|------|----------|-----------------|
+### Tool Disponibili (30 totali)
+
+#### Discovery & Help
+
+| Tool | Funzione | Esempio |
+|------|----------|---------|
+| `get_help` | Guida interattiva | "Come funziona?", "Aiuto" |
 | `list_projects` | Mostra progetti | "Quali progetti?", "Lista progetti" |
-| `list_tests` | Mostra test di un progetto | "Mostra i test", "Quanti test ci sono?" |
-| `trigger_circleci` | Avvia pipeline | "Lancia i test", "Esegui i test" |
+| `suggest_project` | Suggerisce progetto da testare | "Cosa dovrei testare?" |
+| `list_test_sets` | Mostra test set disponibili | "Quali test set ha silicon-b?" |
+| `list_tests` | Mostra test con filtro | "Mostra i test", "Quanti test ci sono?" |
+| `list_runs` | Elenca RUN su Sheets | "Quali RUN esistono?" |
+| `novita` | Mostra changelog versioni | "Novità?", "Cosa c'è di nuovo?" |
+
+#### Execution & Control
+
+| Tool | Funzione | Esempio |
+|------|----------|---------|
+| `trigger_circleci` | Avvia pipeline CircleCI | "Lancia i test", "Esegui silicon-b" |
+| `start_test_session` | Avvia sessione guidata | "Inizia sessione test" |
+| `prepare_test_run` | Riepilogo pre-esecuzione | "Prepara run per silicon-b" |
+| `execute_test_run` | Esegue dopo conferma | "Esegui la run preparata" |
+| `add_test` | Aggiunge nuovo test | "Aggiungi un test" |
+
+#### Pipeline Status
+
+| Tool | Funzione | Esempio |
+|------|----------|---------|
+| `get_pipeline_status` | Stato pipeline recenti | "Stato pipeline?" |
+| `get_workflow_status` | Dettaglio workflow | "Dettaglio workflow X" |
+| `check_pipeline_status` | Controlla pipeline in corso | "La pipeline sta ancora girando?" |
+
+#### Results & Analysis
+
+| Tool | Funzione | Esempio |
+|------|----------|---------|
 | `get_run_results` | Risultati da Sheets | "Come è andata?", "Risultati run 38" |
-| `compare_runs` | Confronta due RUN | "Confronta 37 con 38", "Differenze?" |
+| `show_results` | Visualizza formattato | "Mostra risultati run 45" |
 | `get_failed_tests` | Test falliti | "Quali sono falliti?", "Errori?" |
+| `compare_runs` | Confronta due RUN | "Confronta 37 con 38" |
+| `get_regressions` | Regressioni PASS→FAIL | "Cosa si è rotto?" |
 | `detect_flaky_tests` | Test instabili | "Test flaky", "Instabili?" |
-| `get_regressions` | Regressioni | "Cosa si è rotto?", "Regressioni?" |
+
+#### Analytics & Diagnostics (v1.4.0)
+
+| Tool | Funzione | Esempio |
+|------|----------|---------|
+| `get_performance_report` | Report performance | "Performance run 45?" |
+| `get_performance_alerts` | Alert su soglie | "Ci sono alert?" |
+| `analyze_coverage` | Copertura per categoria | "Copertura test silicon-b" |
+| `get_stability_report` | Stabilità suite | "Quanto è stabile la suite?" |
+| `diagnose_prompt` | Diagnosi errori | "Perché TEST_001 fallisce?" |
+| `calibrate_thresholds` | Suggerisce soglie | "Calibra le soglie" |
+| `export_report` | Export Excel/HTML/CSV | "Esporta run 45 in Excel" |
+| `debug_trace` | Analisi trace LangSmith | "Analizza trace abc-123" |
+
+#### Utilities
+
+| Tool | Funzione | Esempio |
+|------|----------|---------|
 | `notify_corrado` | Invia messaggio Telegram | "Avvisa Corrado che..." |
+
+### Configurazione Claude Desktop
+
+File: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "chatbot-tester": {
+      "url": "https://chatbot-tester-mcp.fly.dev/sse",
+      "headers": {
+        "Authorization": "Bearer <API_KEY>"
+      }
+    }
+  }
+}
+```
 
 ### Aggiungere un Tool
 
-1. Aggiungi `Tool()` nella lista in `list_tools()` (~riga 270)
-2. Aggiungi `elif name == "tool_name":` in `call_tool()` (~riga 1190)
-3. Crea funzione `async def handle_tool_name(arguments):` in fondo
-4. Test: `fly deploy` e riavvia Claude Desktop
+1. Aggiungi `Tool()` nella lista in `list_tools()` in `mcp_server/tools.py`
+2. Aggiungi handler in `handle_tool()`
+3. Deploy: `cd mcp_server && fly deploy`
+4. Riavvia Claude Desktop
 
 ---
 
